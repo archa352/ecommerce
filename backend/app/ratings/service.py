@@ -5,11 +5,17 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError
-from app.core.logging import get_logger
+from app.catalogue.uploads import store_image
+from app.core.exceptions import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationError,
+)
 from app.core.pagination import PageParams
 from app.ratings.constants import (
     ALREADY_REVIEWED,
+    MAX_IMAGES_PER_REVIEW,
     NOT_DELIVERED,
     NOT_REVIEW_AUTHOR,
     REVIEW_NOT_FOUND,
@@ -22,8 +28,6 @@ from app.ratings.schemas import (
     ReviewModerate,
     ReviewUpdate,
 )
-
-logger = get_logger("ratings")
 
 
 class ReviewService:
@@ -63,17 +67,12 @@ class ReviewService:
 
         try:
             await self.reviews.add(review)
+            await self._close_request(order_id, customer_id)
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
             raise ConflictError(ALREADY_REVIEWED) from exc
 
-        logger.info(
-            "ratings.review_created id=%s tenant_id=%s product_id=%s",
-            review.id,
-            self.tenant_id,
-            review.product_id,
-        )
         return review
 
     async def list_for_product(
@@ -127,12 +126,6 @@ class ReviewService:
         review.is_approved = data.is_approved
 
         await self.session.commit()
-        logger.info(
-            "ratings.review_moderated id=%s tenant_id=%s is_approved=%s",
-            review.id,
-            self.tenant_id,
-            review.is_approved,
-        )
         return review
 
     async def delete(self, review_id: UUID, customer_id: UUID) -> None:
@@ -140,6 +133,48 @@ class ReviewService:
 
         await self.reviews.delete(review)
         await self.session.commit()
+
+    async def _close_request(self, order_id: UUID | None, customer_id: UUID) -> None:
+        from app.ratings.requests import ReviewRequestService
+
+        await self.session.flush()
+        await ReviewRequestService(self.session, self.tenant_id).complete_if_done(
+            order_id, customer_id
+        )
+
+    async def add_uploaded_image(
+        self,
+        review_id: UUID,
+        customer_id: UUID,
+        *,
+        filename: str,
+        content_type: str,
+        data: bytes,
+        alt_text: str | None,
+    ) -> Review:
+        """Attach a photo the author uploads (JPEG/PNG/WebP, size-capped)."""
+        review = await self._owned_by(review_id, customer_id)
+        if len(review.images) >= MAX_IMAGES_PER_REVIEW:
+            raise ValidationError(
+                f"A review can have at most {MAX_IMAGES_PER_REVIEW} photos"
+            )
+
+        url = await store_image(self.tenant_id, filename, content_type, data)
+        review.images.append(
+            ReviewImage(tenant_id=self.tenant_id, image_url=url, alt_text=alt_text)
+        )
+        await self.session.commit()
+
+        return await self._get(review.id)
+
+    async def delete_image(self, review_id: UUID, image_id: UUID, customer_id: UUID) -> Review:
+        review = await self._owned_by(review_id, customer_id)
+        image = next((img for img in review.images if img.id == image_id), None)
+        if image is None:
+            raise NotFoundError("Review image not found")
+        review.images.remove(image)
+        await self.session.commit()
+        return await self._get(review.id)
 
     async def _get(self, review_id: UUID) -> Review:
         review = await self.reviews.get(review_id)

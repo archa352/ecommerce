@@ -6,8 +6,11 @@ from decimal import Decimal
 
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import Category, InventoryItem, Product, ProductVariant
+from app.catalogue.pricing import effective_price, is_on_sale
 from app.catalogue.schemas import (
     CategoryStorefrontRead,
+    FilterOptionsRead,
+    FilterValueCount,
     InventoryStatus,
     ProductImageStorefrontRead,
     ProductStorefrontRead,
@@ -15,6 +18,7 @@ from app.catalogue.schemas import (
     StorefrontOption,
     VariantRead,
     VariantStorefrontRead,
+    render_size_chart,
 )
 
 
@@ -51,6 +55,11 @@ def admin_variant(variant: ProductVariant) -> VariantRead:
         name=variant.name,
         price=variant.price,
         status=CatalogueStatus(variant.status),
+        sale_price=variant.sale_price,
+        sale_starts_at=variant.sale_starts_at,
+        sale_ends_at=variant.sale_ends_at,
+        effective_price=effective_price(variant),
+        is_on_sale=is_on_sale(variant),
         options=variant_options(variant),
         inventory=(
             inventory_status(variant.inventory) if variant.inventory else None
@@ -68,12 +77,15 @@ def _public_variants(product: Product) -> list[ProductVariant]:
 
 def storefront_variant(variant: ProductVariant) -> VariantStorefrontRead:
     sellable = sellable_quantity(variant.inventory)
+    on_sale = is_on_sale(variant)
     return VariantStorefrontRead(
         id=variant.id,
         product_id=variant.product_id,
         sku=variant.sku,
         name=variant.name,
-        price=variant.price,
+        price=effective_price(variant),
+        compare_at_price=variant.price if on_sale else None,
+        sale_ends_at=variant.sale_ends_at if on_sale else None,
         options=variant_options(variant),
         in_stock=sellable > 0,
         available_quantity=sellable,
@@ -100,7 +112,7 @@ def storefront_options(product: Product) -> list[StorefrontOption]:
 def _price_range(
     variants: list[ProductVariant],
 ) -> tuple[Decimal | None, Decimal | None]:
-    prices = [variant.price for variant in variants]
+    prices = [effective_price(variant) for variant in variants]
     if not prices:
         return None, None
     return min(prices), max(prices)
@@ -121,14 +133,20 @@ def storefront_summary(product: Product) -> ProductSummaryStorefrontRead:
 
     return ProductSummaryStorefrontRead(
         id=product.id,
+        slug=product.slug,
         category_id=product.category_id,
         name=product.name,
         short_description=product.short_description,
         brand=product.brand,
+        fabric=product.fabric,
+        occasion=product.occasion,
+        sleeve=product.sleeve,
+        neckline=product.neckline,
         is_featured=product.is_featured,
         primary_image=_primary_image(product),
         price_from=price_from,
         price_to=price_to,
+        on_sale=any(is_on_sale(v) for v in variants),
         in_stock=any(sellable_quantity(v.inventory) > 0 for v in variants),
     )
 
@@ -139,11 +157,20 @@ def storefront_product(product: Product, category: Category) -> ProductStorefron
 
     return ProductStorefrontRead(
         id=product.id,
+        slug=product.slug,
         category=CategoryStorefrontRead.model_validate(category),
         name=product.name,
         short_description=product.short_description,
         description=product.description,
         brand=product.brand,
+        fabric=product.fabric,
+        occasion=product.occasion,
+        sleeve=product.sleeve,
+        neckline=product.neckline,
+        fabric_details=product.fabric_details,
+        washing_instructions=product.washing_instructions,
+        country_of_origin=product.country_of_origin,
+        size_chart=render_size_chart(product.size_chart),
         is_featured=product.is_featured,
         seo_title=product.seo_title,
         seo_description=product.seo_description,
@@ -154,5 +181,15 @@ def storefront_product(product: Product, category: Category) -> ProductStorefron
         variants=[storefront_variant(variant) for variant in variants],
         price_from=price_from,
         price_to=price_to,
+        on_sale=any(is_on_sale(v) for v in variants),
         in_stock=any(sellable_quantity(v.inventory) > 0 for v in variants),
+    )
+
+
+def filter_options_read(options: dict[str, list[tuple[str, int]]]) -> FilterOptionsRead:
+    return FilterOptionsRead(
+        **{
+            name: [FilterValueCount(value=value, count=count) for value, count in values]
+            for name, values in options.items()
+        }
     )

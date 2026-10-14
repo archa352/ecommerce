@@ -5,9 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser
+from app.auth.permissions import effective_permissions
 from app.auth.schemas import (
     LogoutPayload,
     PasswordLoginPayload,
+    ProfileUpdate,
     RefreshPayload,
     StaffOtpVerifyPayload,
     TenantResponse,
@@ -25,8 +27,16 @@ from app.core.responses import ApiResponse, ok
 from app.tenants.models import Tenant
 from app.tenants.resolver import CurrentTenant
 from app.users.erasure import AccountErasureService
+from app.users.service import UserService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def _profile(user) -> UserProfile:
+    profile = UserProfile.model_validate(user)
+    return profile.model_copy(
+        update={"permissions": sorted(effective_permissions(user.role, user.permissions))}
+    )
 admin_router = APIRouter(prefix="/admin/auth", tags=["Admin Auth"])
 staff_router = APIRouter(prefix="/staff/auth", tags=["Staff Auth"])
 
@@ -113,7 +123,9 @@ async def admin_login(
         window_seconds=settings.login_rate_limit_window_seconds,
     )
 
-    tokens = await AuthService(session, tenant).admin_login(data.identifier, data.password)
+    tokens = await AuthService(session, tenant).admin_login(
+        data.identifier, data.password, request=request
+    )
 
     await rate_limit.reset(key)
     return ok(tokens, message="Login successful")
@@ -140,7 +152,9 @@ async def staff_login(
         window_seconds=settings.login_rate_limit_window_seconds,
     )
 
-    tokens = await AuthService(session, tenant).staff_login(data.identifier, data.password)
+    tokens = await AuthService(session, tenant).staff_login(
+        data.identifier, data.password, request=request
+    )
 
     await rate_limit.reset(key)
     return ok(tokens, message="Login successful")
@@ -229,7 +243,21 @@ async def logout(
     summary="The authenticated user's profile",
 )
 async def get_me(current_user: CurrentUser) -> ApiResponse[UserProfile]:
-    return ok(UserProfile.model_validate(current_user), message="Authenticated user")
+    return ok(_profile(current_user), message="Authenticated user")
+
+
+@router.patch(
+    "/me",
+    response_model=ApiResponse[UserProfile],
+    summary="Edit your name or email",
+)
+async def update_me(
+    data: ProfileUpdate,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[UserProfile]:
+    user = await UserService(session).update_profile(current_user, data)
+    return ok(_profile(user), message="Profile updated")
 
 
 @router.delete(

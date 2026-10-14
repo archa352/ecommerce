@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser, CurrentUserOptional
+from app.catalogue.constants import MAX_PRODUCT_ATTRIBUTE_LENGTH
 from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -41,10 +42,29 @@ async def search_and_filter_storefront_products(
         description="Global search query",
     ),
     category_id: uuid.UUID | None = Query(
-        default=None, description="Filter by category UUID"
+        default=None,
+        description="Filter by category UUID, including its sub-categories",
     ),
     gender: str | None = Query(default=None, description="Filter by gender"),
     brand: str | None = Query(default=None, description="Filter by brand"),
+    fabric: str | None = Query(
+        default=None, max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH, description="Filter by fabric"
+    ),
+    occasion: str | None = Query(
+        default=None,
+        max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH,
+        description="Filter by occasion",
+    ),
+    sleeve: str | None = Query(
+        default=None,
+        max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH,
+        description="Filter by sleeve type",
+    ),
+    neckline: str | None = Query(
+        default=None,
+        max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH,
+        description="Filter by neckline",
+    ),
     min_price: Decimal | None = Query(default=None, ge=0, description="Minimum price"),
     max_price: Decimal | None = Query(default=None, ge=0, description="Maximum price"),
     color: str | None = Query(default=None, description="Filter by color"),
@@ -84,6 +104,10 @@ async def search_and_filter_storefront_products(
         category_id=category_id,
         gender=gender,
         brand=brand,
+        fabric=fabric,
+        occasion=occasion,
+        sleeve=sleeve,
+        neckline=neckline,
         min_price=min_price,
         max_price=max_price,
         color=color,

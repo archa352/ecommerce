@@ -1,8 +1,12 @@
 import uuid
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
+    Date,
+    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -32,16 +36,28 @@ from app.catalogue.constants import (
 )
 from app.models.base import Base, TimestampMixin
 from app.orders.constants import (
+    MAX_COURIER_NAME_LENGTH,
     MAX_IDEMPOTENCY_KEY_LENGTH,
     MAX_ORDER_NUMBER_LENGTH,
+    MAX_TRACKING_DESCRIPTION_LENGTH,
+    MAX_TRACKING_LOCATION_LENGTH,
+    MAX_TRACKING_NUMBER_LENGTH,
+    MAX_TRACKING_URL_LENGTH,
     ORDER_NUMBER_START,
+    GstType,
     OrderStatus,
+    PaymentMethod,
     PaymentStatus,
+    TrackingSource,
 )
+from app.payments.constants import PaymentPurpose
 from app.payments.models import Payment
 
 _ORDER_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in OrderStatus)
 _PAYMENT_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
+_PAYMENT_METHOD_VALUES = ", ".join(f"'{method.value}'" for method in PaymentMethod)
+_GST_TYPE_VALUES = ", ".join(f"'{kind.value}'" for kind in GstType)
+_SOURCE_VALUES = ", ".join(f"'{source.value}'" for source in TrackingSource)
 
 ORDER_NUMBER_SEQUENCE = Sequence(
     "order_number_seq", start=ORDER_NUMBER_START, metadata=Base.metadata
@@ -79,10 +95,31 @@ class Order(Base, TimestampMixin):
         CheckConstraint("tax_amount >= 0", name="tax_not_negative"),
         CheckConstraint("discount_amount >= 0", name="discount_not_negative"),
         CheckConstraint("discount_amount <= subtotal", name="discount_not_more_than_subtotal"),
+        CheckConstraint("cod_fee >= 0", name="cod_fee_not_negative"),
         CheckConstraint(
-            "total_amount = subtotal - discount_amount + shipping_amount + tax_amount",
+            "advance_amount >= 0 AND advance_amount <= total_amount",
+            name="advance_within_total",
+        ),
+        CheckConstraint(
+            "total_amount = subtotal - discount_amount + shipping_amount + cod_fee + tax_amount",
             name="total_matches_components",
         ),
+        CheckConstraint(
+            "cgst_amount >= 0 AND sgst_amount >= 0 AND igst_amount >= 0",
+            name="gst_not_negative",
+        ),
+        CheckConstraint(
+            "(gst_type IS NULL AND cgst_amount = 0 AND sgst_amount = 0 AND igst_amount = 0) "
+            "OR (gst_type IS NOT NULL AND cgst_amount + sgst_amount + igst_amount = tax_amount)",
+            name="gst_split_matches_tax",
+        ),
+        CheckConstraint(
+            f"payment_method IN ({_PAYMENT_METHOD_VALUES})", name="payment_method_valid"
+        ),
+        CheckConstraint(
+            f"gst_type IS NULL OR gst_type IN ({_GST_TYPE_VALUES})", name="gst_type_valid"
+        ),
+        Index("ix_orders_tenant_id_tracking_number", "tenant_id", "tracking_number"),
         Index("ix_orders_tenant_id_customer_id", "tenant_id", "customer_id"),
         Index("ix_orders_tenant_id_status", "tenant_id", "status"),
         Index("ix_orders_tenant_id_payment_status", "tenant_id", "payment_status"),
@@ -176,17 +213,100 @@ class Order(Base, TimestampMixin):
         String(MAX_CITY_LENGTH), nullable=False
     )
 
-    payment: Mapped["Payment | None"] = relationship(
+    # Where order updates go; the account email, or the one a guest typed in.
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Placed through guest checkout (the customer row was found or made by phone).
+    is_guest: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    payment_method: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=PaymentMethod.CASH_ON_DELIVERY.value,
+        server_default=PaymentMethod.CASH_ON_DELIVERY.value,
+    )
+
+    # COD handling fee charged on this order, part of the total.
+    cod_fee: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
+    )
+
+    # Part of a COD order paid before dispatch; the rest is cash at the door.
+    advance_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
+    )
+
+    # GST split of tax_amount. NULL gst_type marks legacy tax with unknown classification.
+    cgst_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
+    )
+    sgst_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
+    )
+    igst_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
+    )
+    gst_type: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    place_of_supply: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    seller_gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)
+
+    estimated_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    # Why the parcel came back: the reason's label as chosen when the order was
+    # marked RETURNED (a snapshot, so renaming a reason never rewrites history).
+    return_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    return_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    courier_name: Mapped[str | None] = mapped_column(
+        String(MAX_COURIER_NAME_LENGTH), nullable=True
+    )
+    tracking_number: Mapped[str | None] = mapped_column(
+        String(MAX_TRACKING_NUMBER_LENGTH), nullable=True
+    )
+    tracking_url: Mapped[str | None] = mapped_column(
+        String(MAX_TRACKING_URL_LENGTH), nullable=True
+    )
+
+    payments: Mapped[list["Payment"]] = relationship(
         "Payment",
         primaryjoin=lambda: and_(
             Order.id == Payment.order_id,
             Order.tenant_id == Payment.tenant_id,
         ),
         foreign_keys=lambda: [Payment.order_id, Payment.tenant_id],
-        uselist=False,
+        order_by=lambda: Payment.created_at,
         lazy="selectin",
         viewonly=True,
     )
+
+    tracking_events: Mapped[list["OrderTrackingEvent"]] = relationship(
+        "OrderTrackingEvent",
+        primaryjoin=lambda: and_(
+            Order.id == OrderTrackingEvent.order_id,
+            Order.tenant_id == OrderTrackingEvent.tenant_id,
+        ),
+        foreign_keys=lambda: [OrderTrackingEvent.order_id, OrderTrackingEvent.tenant_id],
+        order_by=lambda: (OrderTrackingEvent.occurred_at, OrderTrackingEvent.created_at),
+        lazy="selectin",
+        viewonly=True,
+    )
+
+    @property
+    def payment(self) -> Payment | None:
+        """The cash-on-delivery payment: the whole amount, or the balance after an advance."""
+        for payment in self.payments:
+            if payment.purpose != PaymentPurpose.ADVANCE.value:
+                return payment
+        return None
+
+    @property
+    def advance_payment(self) -> Payment | None:
+        for payment in self.payments:
+            if payment.purpose == PaymentPurpose.ADVANCE.value:
+                return payment
+        return None
 
     items: Mapped[list["OrderItem"]] = relationship(
         "OrderItem",
@@ -269,3 +389,70 @@ class OrderItem(Base, TimestampMixin):
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
+
+    # GST frozen at purchase. NULL on orders placed before GST lines existed.
+    hsn_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    gst_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    discount_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=True
+    )
+    taxable_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=True
+    )
+    tax_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=True
+    )
+
+
+class OrderTrackingEvent(Base, TimestampMixin):
+    """One step in an order's journey: a status change or a courier scan."""
+
+    __tablename__ = "order_tracking_events"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "order_id"],
+            ["orders.tenant_id", "orders.id"],
+            name="fk_order_tracking_events_tenant_order_orders",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(f"source IN ({_SOURCE_VALUES})", name="source_valid"),
+        CheckConstraint(
+            f"status IS NULL OR status IN ({_ORDER_STATUS_VALUES})", name="status_valid"
+        ),
+        Index(
+            "ix_order_tracking_events_tenant_id_order_id_occurred_at",
+            "tenant_id",
+            "order_id",
+            "occurred_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    # The order status this event moved to; NULL for a courier scan or note.
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    description: Mapped[str] = mapped_column(
+        String(MAX_TRACKING_DESCRIPTION_LENGTH), nullable=False
+    )
+
+    location: Mapped[str | None] = mapped_column(
+        String(MAX_TRACKING_LOCATION_LENGTH), nullable=True
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(10), nullable=False, default=TrackingSource.SYSTEM.value
+    )
+
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

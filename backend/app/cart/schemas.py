@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -42,3 +43,10 @@ class CartRead(BaseModel):
     items: list[CartItemRead] = []
     subtotal: Decimal = Decimal("0.00")
     item_count: int = 0
+    expires_at: datetime | None = Field(
+        default=None, description="When the cart empties if nobody touches it again"
+    )
+    guest_token: str | None = Field(
+        default=None,
+        description="Returned once, when a guest cart is created. Send it back as X-Cart-Token.",
+    )

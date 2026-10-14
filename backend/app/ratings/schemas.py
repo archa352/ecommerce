@@ -83,3 +83,36 @@ class RatingSummaryRead(BaseModel):
     average_rating: float
     total_reviews: int
     rating_distribution: dict[int, int]
+
+
+class PendingReviewRead(BaseModel):
+    """A delivered product the customer has not reviewed yet."""
+
+    order_id: uuid.UUID
+    order_number: str
+    product_id: uuid.UUID
+    product_name: str
+    variant_name: str
+
+
+class ReviewRequestRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    order_id: uuid.UUID
+    customer_id: uuid.UUID
+    status: str
+    send_after: datetime
+    sent_at: datetime | None = None
+    created_at: datetime
+
+
+class ReviewRequestQuery(PageParams):
+    status: str | None = Field(
+        default=None, pattern="^(PENDING|SENT|COMPLETED|CANCELLED)$"
+    )
+
+
+class ReviewRequestDispatchRead(BaseModel):
+    sent: int
+    completed: int

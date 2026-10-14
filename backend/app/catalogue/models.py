@@ -17,21 +17,29 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.catalogue.constants import (
+    GST_RATE_PRECISION,
+    GST_RATE_SCALE,
     MAX_ALT_TEXT_LENGTH,
     MAX_BRAND_LENGTH,
+    MAX_COUNTRY_LENGTH,
     MAX_DESCRIPTION_LENGTH,
+    MAX_GST_RATE,
+    MAX_HSN_CODE_LENGTH,
     MAX_IMAGE_URL_LENGTH,
     MAX_NAME_LENGTH,
     MAX_OPTION_NAME_LENGTH,
     MAX_OPTION_VALUE_LENGTH,
+    MAX_PRODUCT_ATTRIBUTE_LENGTH,
+    MAX_PRODUCT_INFO_LENGTH,
     MAX_SEO_DESCRIPTION_LENGTH,
     MAX_SEO_TITLE_LENGTH,
     MAX_SHORT_DESCRIPTION_LENGTH,
     MAX_SKU_LENGTH,
+    MAX_SLUG_LENGTH,
     PRICE_PRECISION,
     PRICE_SCALE,
     CatalogueStatus,
@@ -44,15 +52,26 @@ _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
 _REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
 _GENDER_VALUES = ", ".join(f"'{gender.value}'" for gender in ProductGender)
 
+_GST_RATE_IN_RANGE = f"gst_rate IS NULL OR (gst_rate >= 0 AND gst_rate <= {MAX_GST_RATE})"
+
 
 class Category(Base, TimestampMixin):
     __tablename__ = "categories"
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_categories_tenant_id_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "parent_id"],
+            ["categories.tenant_id", "categories.id"],
+            name="fk_categories_tenant_parent_categories",
+            ondelete="NO ACTION",
+        ),
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
+        CheckConstraint("parent_id IS NULL OR parent_id <> id", name="parent_not_self"),
+        CheckConstraint(_GST_RATE_IN_RANGE, name="gst_rate_in_range"),
         Index("ix_categories_tenant_id_status", "tenant_id", "status"),
+        Index("ix_categories_tenant_id_parent_id", "tenant_id", "parent_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -67,6 +86,8 @@ class Category(Base, TimestampMixin):
         nullable=False,
     )
 
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
     name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
 
     description: Mapped[str | None] = mapped_column(
@@ -77,6 +98,13 @@ class Category(Base, TimestampMixin):
         String(20),
         nullable=False,
         default=CatalogueStatus.ACTIVE.value,
+    )
+
+    # GST defaults for every product in the category; a product may override them.
+    hsn_code: Mapped[str | None] = mapped_column(String(MAX_HSN_CODE_LENGTH), nullable=True)
+
+    gst_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(GST_RATE_PRECISION, GST_RATE_SCALE), nullable=True
     )
 
 
@@ -94,11 +122,17 @@ class Product(Base, TimestampMixin):
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         CheckConstraint(f"gender IS NULL OR gender IN ({_GENDER_VALUES})", name="gender_valid"),
+        CheckConstraint(_GST_RATE_IN_RANGE, name="gst_rate_in_range"),
         Index("ix_products_tenant_id_category_id", "tenant_id", "category_id"),
         Index("ix_products_tenant_id_status", "tenant_id", "status"),
         Index("ix_products_tenant_id_is_featured", "tenant_id", "is_featured"),
         Index("ix_products_tenant_id_brand", "tenant_id", "brand"),
         Index("ix_products_tenant_id_gender", "tenant_id", "gender"),
+        Index("ix_products_tenant_id_fabric", "tenant_id", "fabric"),
+        Index("ix_products_tenant_id_occasion", "tenant_id", "occasion"),
+        Index("ix_products_tenant_id_sleeve", "tenant_id", "sleeve"),
+        Index("ix_products_tenant_id_neckline", "tenant_id", "neckline"),
+        UniqueConstraint("tenant_id", "slug", name="uq_products_tenant_id_slug"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -116,6 +150,10 @@ class Product(Base, TimestampMixin):
     category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
+
+    # SEO-friendly URL part, unique per store. Made from the name on creation and
+    # kept stable afterwards (renaming a product does not break shared links).
+    slug: Mapped[str] = mapped_column(String(MAX_SLUG_LENGTH), nullable=False)
 
     short_description: Mapped[str | None] = mapped_column(
         String(MAX_SHORT_DESCRIPTION_LENGTH), nullable=True
@@ -137,6 +175,41 @@ class Product(Base, TimestampMixin):
     # gender isn't meaningful for every product line, and defaulting every
     # existing/ungendered product to a specific value would misclassify it.
     gender: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # Filterable product-level attributes, nullable for the same reason as gender.
+    fabric: Mapped[str | None] = mapped_column(
+        String(MAX_PRODUCT_ATTRIBUTE_LENGTH), nullable=True
+    )
+    occasion: Mapped[str | None] = mapped_column(
+        String(MAX_PRODUCT_ATTRIBUTE_LENGTH), nullable=True
+    )
+    sleeve: Mapped[str | None] = mapped_column(
+        String(MAX_PRODUCT_ATTRIBUTE_LENGTH), nullable=True
+    )
+    neckline: Mapped[str | None] = mapped_column(
+        String(MAX_PRODUCT_ATTRIBUTE_LENGTH), nullable=True
+    )
+
+    # Product-page information blocks.
+    fabric_details: Mapped[str | None] = mapped_column(
+        String(MAX_PRODUCT_INFO_LENGTH), nullable=True
+    )
+    washing_instructions: Mapped[str | None] = mapped_column(
+        String(MAX_PRODUCT_INFO_LENGTH), nullable=True
+    )
+    country_of_origin: Mapped[str | None] = mapped_column(
+        String(MAX_COUNTRY_LENGTH), nullable=True
+    )
+
+    # {"unit": "in", "measurements": [...], "rows": [{"size": "S", "values": {...}}]}
+    size_chart: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Overrides the category's GST defaults when set.
+    hsn_code: Mapped[str | None] = mapped_column(String(MAX_HSN_CODE_LENGTH), nullable=True)
+
+    gst_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(GST_RATE_PRECISION, GST_RATE_SCALE), nullable=True
+    )
 
     is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -183,6 +256,54 @@ class Product(Base, TimestampMixin):
         lazy="selectin",
         viewonly=True,
     )
+
+
+class ProductRelation(Base, TimestampMixin):
+    """A hand-picked "you may also like" link from one product to another."""
+
+    __tablename__ = "product_relations"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "product_id",
+            "related_product_id",
+            name="uq_product_relations_tenant_product_related",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "product_id"],
+            ["products.tenant_id", "products.id"],
+            name="fk_product_relations_tenant_product_products",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "related_product_id"],
+            ["products.tenant_id", "products.id"],
+            name="fk_product_relations_tenant_related_products",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("product_id <> related_product_id", name="not_self_related"),
+        CheckConstraint("position >= 0", name="position_not_negative"),
+        Index("ix_product_relations_tenant_id_product_id", "tenant_id", "product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    related_product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class ProductOption(Base, TimestampMixin):
@@ -239,6 +360,13 @@ class ProductVariant(Base, TimestampMixin):
         CheckConstraint("length(trim(name)) > 0", name="name_not_blank"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         CheckConstraint("price >= 0", name="price_not_negative"),
+        CheckConstraint(
+            "sale_price IS NULL OR sale_price >= 0", name="sale_price_not_negative"
+        ),
+        CheckConstraint(
+            "sale_starts_at IS NULL OR sale_ends_at IS NULL OR sale_starts_at < sale_ends_at",
+            name="sale_window_ordered",
+        ),
         Index("ix_product_variants_tenant_id_product_id", "tenant_id", "product_id"),
     )
 
@@ -264,6 +392,18 @@ class ProductVariant(Base, TimestampMixin):
 
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=CatalogueStatus.DRAFT.value
+    )
+
+    # A scheduled sale: `sale_price` is charged inside the window and `price`
+    # outside it, so the regular price comes back on its own when it ends.
+    sale_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=True
+    )
+    sale_starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sale_ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     option_values: Mapped[list["ProductVariantOption"]] = relationship(
@@ -483,3 +623,38 @@ class InventoryMovement(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ProductAttributeValue(Base, TimestampMixin):
+    """One allowed value of a filterable attribute, e.g. fabric = "Cotton".
+
+    Products still store the value as text, so values that were typed in before
+    this list existed keep working.
+    """
+
+    __tablename__ = "product_attribute_values"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_product_attribute_values_tenant_id_id"),
+        Index(
+            "uq_product_attribute_values_tenant_attribute_value",
+            "tenant_id",
+            "attribute",
+            text("lower(value)"),
+            unique=True,
+        ),
+        CheckConstraint(
+            "attribute IN ('fabric', 'occasion', 'sleeve', 'neckline')", name="attribute_valid"
+        ),
+        CheckConstraint("length(trim(value)) > 0", name="value_not_blank"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    attribute: Mapped[str] = mapped_column(String(20), nullable=False)
+    value: Mapped[str] = mapped_column(String(MAX_PRODUCT_ATTRIBUTE_LENGTH), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -52,7 +52,13 @@ async def variant(client, admin_headers) -> dict:
 async def make_order(client):
     """Factory: `await make_order(headers, variant_id, quantity=2)` -> order."""
 
-    async def _make(headers, variant_id, quantity: int = 2) -> dict:
+    async def _make(
+        headers,
+        variant_id,
+        quantity: int = 2,
+        payment_method: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict:
         added = await client.post(
             f"{CART}/items",
             json={"variant_id": variant_id, "quantity": quantity},
@@ -65,9 +71,13 @@ async def make_order(client):
         )
         assert saved.status_code == 201, saved.text
 
-        placed = await client.post(
-            CHECKOUT, json={"address_id": saved.json()["data"]["id"]}, headers=headers
-        )
+        payload = {"address_id": saved.json()["data"]["id"]}
+        if payment_method is not None:
+            payload["payment_method"] = payment_method
+        request_headers = dict(headers)
+        if idempotency_key is not None:
+            request_headers["Idempotency-Key"] = idempotency_key
+        placed = await client.post(CHECKOUT, json=payload, headers=request_headers)
         assert placed.status_code == 201, placed.text
         return placed.json()["data"]
 

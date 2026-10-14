@@ -16,7 +16,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
@@ -37,10 +37,20 @@ class Coupon(Base, TimestampMixin):
             f"discount_type IN ({_DISCOUNT_TYPE_VALUES})",
             name="discount_type_valid",
         ),
-        CheckConstraint("discount_value > 0", name="discount_value_positive"),
         CheckConstraint(
-            "discount_type != 'PERCENTAGE' OR discount_value <= 100",
+            "discount_type = 'FREE_SHIPPING' OR discount_value > 0",
+            name="discount_value_positive",
+        ),
+        CheckConstraint(
+            "discount_type NOT IN ('PERCENTAGE', 'BOGO') OR discount_value <= 100",
             name="percentage_max_100",
+        ),
+        CheckConstraint(
+            "discount_type <> 'BOGO' OR (buy_quantity >= 1 AND get_quantity >= 1)",
+            name="bogo_has_quantities",
+        ),
+        CheckConstraint(
+            "min_quantity IS NULL OR min_quantity >= 1", name="min_quantity_positive"
         ),
         CheckConstraint(
             "min_order_amount IS NULL OR min_order_amount >= 0",
@@ -115,6 +125,66 @@ class Coupon(Base, TimestampMixin):
     times_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Applied at checkout without a code (the code is then just its name).
+    is_automatic: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    # Only for a customer with no earlier (non-cancelled) order.
+    first_order_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    # Volume rule: at least this many eligible units in the cart.
+    min_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # BOGO: buy this many, get this many discounted.
+    buy_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    get_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Days the coupon works on, 0 = Monday ... 6 = Sunday (shop's local time).
+    # NULL = every day.
+    valid_weekdays: Mapped[list[int] | None] = mapped_column(JSONB, nullable=True)
+
+
+class CouponCategory(Base, TimestampMixin):
+    """Limits a coupon to products in these categories (and their sub-categories)."""
+
+    __tablename__ = "coupon_categories"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "coupon_id", "category_id", name="uq_coupon_categories_coupon_category"
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "coupon_id"],
+            ["coupons.tenant_id", "coupons.id"],
+            name="fk_coupon_categories_tenant_coupon_coupons",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "category_id"],
+            ["categories.tenant_id", "categories.id"],
+            name="fk_coupon_categories_tenant_category_categories",
+            ondelete="CASCADE",
+        ),
+        Index("ix_coupon_categories_tenant_id_coupon_id", "tenant_id", "coupon_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    coupon_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
 
 class CouponUsage(Base, TimestampMixin):

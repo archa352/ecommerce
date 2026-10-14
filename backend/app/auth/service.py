@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from fastapi import Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -88,10 +89,10 @@ class AuthService:
         )
         return tokens
 
-    async def admin_login(self, identifier: str, password: str) -> TokenPair:
-        user = await self._verify_password_user(
-            identifier, password, roles=frozenset({UserRole.ADMIN.value})
-        )
+    async def admin_login(
+        self, identifier: str, password: str, *, request: Request | None = None
+    ) -> TokenPair:
+        user = await self._audited_login(identifier, password, UserRole.ADMIN, request)
         await self.challenges.expire_pending_for_user(
             tenant_id=self.tenant.id, user_id=user.id
         )
@@ -108,10 +109,10 @@ class AuthService:
         )
         return tokens
 
-    async def staff_login(self, identifier: str, password: str) -> TokenPair:
-        user = await self._verify_password_user(
-            identifier, password, roles=frozenset({UserRole.STAFF.value})
-        )
+    async def staff_login(
+        self, identifier: str, password: str, *, request: Request | None = None
+    ) -> TokenPair:
+        user = await self._audited_login(identifier, password, UserRole.STAFF, request)
         await self.challenges.expire_pending_for_user(
             tenant_id=self.tenant.id, user_id=user.id
         )
@@ -212,6 +213,38 @@ class AuthService:
             logger.info("auth.logout user_id=%s tenant_id=%s", stored.user_id, self.tenant.id)
 
         await self.session.commit()
+
+    async def _audited_login(
+        self, identifier: str, password: str, role: UserRole, request: Request | None
+    ) -> User:
+        """Record admin/staff login outcomes without persisting submitted credentials."""
+        from app.audit.service import record_login
+
+        roles = frozenset({role.value})
+        try:
+            user = await self._verify_password_user(identifier, password, roles=roles)
+        except AuthenticationError:
+            known = await self._find_user(identifier, roles=roles)
+            await record_login(
+                self.session,
+                self.tenant.id,
+                user=known,
+                portal=role.value.lower(),
+                success=False,
+                request=request,
+            )
+            await self.session.commit()
+            raise
+
+        await record_login(
+            self.session,
+            self.tenant.id,
+            user=user,
+            portal=role.value.lower(),
+            success=True,
+            request=request,
+        )
+        return user
 
     async def _verify_password_user(
         self, identifier: str, password: str, *, roles: frozenset[str]

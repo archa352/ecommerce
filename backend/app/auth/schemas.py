@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.auth.constants import OTP_LENGTH
 from app.auth.phone import normalize_phone
-from app.core.schemas import StrictModel
+from app.core.schemas import PartialUpdate, StrictModel
 
 MAX_PASSWORD_LENGTH = 256
 MIN_PASSWORD_LENGTH = 8
@@ -71,6 +71,32 @@ class UserProfile(BaseModel):
     role: str
     status: str
     is_verified: bool
+    permissions: list[str] = Field(
+        default_factory=list, description="Effective admin permissions (empty for customers)"
+    )
+
+    @field_validator("permissions", mode="before")
+    @classmethod
+    def _none_is_empty(cls, value):
+        return value or []
+
+
+class ProfileUpdate(PartialUpdate):
+    """What a signed-in user may change about themselves.
+
+    The phone number is the login identity and is verified by OTP, so it is
+    not editable here.
+    """
+
+    name: str | None = Field(default=None, max_length=150)
+    email: EmailStr | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _blank_name_is_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip() or None
 
 
 class TenantResponse(BaseModel):

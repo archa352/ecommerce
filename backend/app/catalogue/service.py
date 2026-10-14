@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.constants import (
     MAX_OPTIONS_PER_PRODUCT,
+    MAX_SLUG_LENGTH,
     MIN_PRODUCT_IMAGES,
     CatalogueStatus,
     InventoryReason,
@@ -28,6 +29,7 @@ from app.catalogue.repository import (
     InventoryRepository,
     ProductImageRepository,
     ProductOptionRepository,
+    ProductRelationRepository,
     ProductRepository,
     VariantOptionRepository,
     VariantRepository,
@@ -44,17 +46,28 @@ from app.catalogue.schemas import (
     VariantOptionValue,
     VariantUpdate,
 )
-from app.core.exceptions import ConflictError, NotFoundError
-from app.core.logging import get_logger
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import PageParams
-
-logger = get_logger("catalogue")
+from app.core.slugs import slugify, with_suffix
 
 PRODUCT_NOT_FOUND = "Product not found"
 CATEGORY_NOT_FOUND = "Category not found"
 VARIANT_NOT_FOUND = "Variant not found"
 IMAGE_NOT_FOUND = "Product image not found"
 LAST_IMAGE = "A product must have at least one image"
+PARENT_NOT_FOUND = "Parent category not found"
+
+
+def _check_sale(price, sale_price, starts_at, ends_at) -> None:
+    """A scheduled sale must undercut the regular price and run forwards in time."""
+    if sale_price is None:
+        if starts_at is not None or ends_at is not None:
+            raise ValidationError("A sale window needs a sale price")
+        return
+    if price is not None and sale_price >= price:
+        raise ValidationError("The sale price must be lower than the regular price")
+    if starts_at is not None and ends_at is not None and starts_at >= ends_at:
+        raise ValidationError("The sale must start before it ends")
 
 
 class CategoryService:
@@ -64,11 +77,26 @@ class CategoryService:
         self.categories = CategoryRepository(session, tenant_id)
         self.products = ProductRepository(session, tenant_id)
 
+    async def _require_parent(self, parent_id: UUID) -> Category:
+        """A sub-category's parent must exist in this tenant and not be archived."""
+        parent = await self.categories.get(parent_id)
+        if parent is None:
+            raise NotFoundError(PARENT_NOT_FOUND)
+        if parent.status == CatalogueStatus.ARCHIVED.value:
+            raise ConflictError("Parent category is archived and cannot take sub-categories")
+        return parent
+
     async def create(self, data: CategoryCreate) -> Category:
+        if data.parent_id is not None:
+            await self._require_parent(data.parent_id)
+
         category = Category(
+            parent_id=data.parent_id,
             name=data.name,
             description=data.description,
             status=data.status.value,
+            hsn_code=data.hsn_code,
+            gst_rate=data.gst_rate,
         )
         try:
             await self.categories.add(category)
@@ -77,9 +105,6 @@ class CategoryService:
             await self.session.rollback()
             raise ConflictError("Unable to create category") from exc
 
-        logger.info(
-            "catalogue.category_created id=%s tenant_id=%s", category.id, self.tenant_id
-        )
         return category
 
     async def get(self, category_id: UUID) -> Category:
@@ -95,9 +120,22 @@ class CategoryService:
         return category
 
     async def list(
-        self, params: PageParams, *, active_only: bool = False
+        self,
+        params: PageParams,
+        *,
+        active_only: bool = False,
+        status: CatalogueStatus | None = None,
+        include_archived: bool = False,
+        parent_id: UUID | None = None,
+        top_level: bool = False,
     ) -> tuple[list[Category], int]:
-        stmt = self.categories.list_select(active_only=active_only)
+        stmt = self.categories.list_select(
+            active_only=active_only,
+            status=status,
+            include_archived=include_archived,
+            parent_id=parent_id,
+            top_level=top_level,
+        )
         rows, total = await self.categories.paginate(stmt, params)
         return list(rows), total
 
@@ -108,6 +146,16 @@ class CategoryService:
         if changes.get("status") is not None:
             changes["status"] = changes["status"].value
 
+        new_parent = changes.get("parent_id")
+        if new_parent is not None:
+            await self._require_parent(new_parent)
+            # Moving a category under itself or one of its own descendants
+            # would turn the tree into a loop.
+            if await self.categories.is_within(new_parent, category.id):
+                raise ConflictError(
+                    "A category cannot be moved under itself or one of its sub-categories"
+                )
+
         for field, value in changes.items():
             setattr(category, field, value)
 
@@ -117,9 +165,6 @@ class CategoryService:
             await self.session.rollback()
             raise ConflictError("Unable to update category") from exc
 
-        logger.info(
-            "catalogue.category_updated id=%s tenant_id=%s", category.id, self.tenant_id
-        )
         return category
 
     async def delete(self, category_id: UUID) -> None:
@@ -132,12 +177,12 @@ class CategoryService:
         if await self.products.has_products_in_category(category.id):
             raise ConflictError("Category still has active products and cannot be deleted")
 
+        if await self.categories.has_live_children(category.id):
+            raise ConflictError("Category still has sub-categories and cannot be deleted")
+
         category.status = CatalogueStatus.ARCHIVED.value
         await self.session.commit()
 
-        logger.info(
-            "catalogue.category_archived id=%s tenant_id=%s", category_id, self.tenant_id
-        )
 
 
 class ProductService:
@@ -147,6 +192,7 @@ class ProductService:
         self.products = ProductRepository(session, tenant_id)
         self.categories = CategoryRepository(session, tenant_id)
         self.images = ProductImageRepository(session, tenant_id)
+        self.relations = ProductRelationRepository(session, tenant_id)
 
     async def _require_category(self, category_id: UUID) -> Category:
         category = await self.categories.get(category_id)
@@ -159,15 +205,31 @@ class ProductService:
     async def create(self, data: ProductCreate) -> Product:
         """Create a product together with its images in one transaction."""
         await self._require_category(data.category_id)
+        slug = (
+            await self._require_free_slug(data.slug)
+            if data.slug
+            else await self._unique_slug(data.name)
+        )
 
         product = Product(
             category_id=data.category_id,
             name=data.name,
+            slug=slug,
             short_description=data.short_description,
             description=data.description,
             brand=data.brand,
             status=data.status.value,
             gender=data.gender.value if data.gender is not None else None,
+            fabric=data.fabric,
+            occasion=data.occasion,
+            sleeve=data.sleeve,
+            neckline=data.neckline,
+            fabric_details=data.fabric_details,
+            washing_instructions=data.washing_instructions,
+            country_of_origin=data.country_of_origin,
+            size_chart=data.size_chart.to_storage() if data.size_chart else None,
+            hsn_code=data.hsn_code,
+            gst_rate=data.gst_rate,
             is_featured=data.is_featured,
             seo_title=data.seo_title,
             seo_description=data.seo_description,
@@ -194,12 +256,6 @@ class ProductService:
             await self.session.rollback()
             raise ConflictError("Unable to create product") from exc
 
-        logger.info(
-            "catalogue.product_created id=%s tenant_id=%s images=%s",
-            product.id,
-            self.tenant_id,
-            len(data.images),
-        )
         return await self.get(product.id)
 
     async def get(self, product_id: UUID) -> Product:
@@ -207,6 +263,36 @@ class ProductService:
         if product is None:
             raise NotFoundError(PRODUCT_NOT_FOUND)
         return product
+
+    async def _slug_taken(self, slug: str, exclude: UUID | None = None) -> bool:
+        stmt = select(Product.id).where(Product.tenant_id == self.tenant_id, Product.slug == slug)
+        if exclude is not None:
+            stmt = stmt.where(Product.id != exclude)
+        return await self.session.scalar(stmt) is not None
+
+    async def _require_free_slug(self, slug: str, exclude: UUID | None = None) -> str:
+        if await self._slug_taken(slug, exclude):
+            raise ConflictError(
+                f"The product URL '{slug}' is already used", error_code="SLUG_TAKEN"
+            )
+        return slug
+
+    async def _unique_slug(self, name: str) -> str:
+        """A slug from the name; a second 'Cotton Kurta' becomes cotton-kurta-2."""
+        base = slugify(name, MAX_SLUG_LENGTH, fallback="product")
+        slug, n = base, 1
+        while await self._slug_taken(slug):
+            n += 1
+            slug = with_suffix(base, n, MAX_SLUG_LENGTH)
+        return slug
+
+    async def get_public_by_slug(self, slug: str) -> Product:
+        product_id = await self.session.scalar(
+            select(Product.id).where(Product.tenant_id == self.tenant_id, Product.slug == slug)
+        )
+        if product_id is None:
+            raise NotFoundError(PRODUCT_NOT_FOUND)
+        return await self.get_public(product_id)
 
     async def get_public(self, product_id: UUID) -> Product:
         """Fetch a product only when it is ACTIVE and its category is too."""
@@ -228,11 +314,16 @@ class ProductService:
         category_id: UUID | None = None,
         search: str | None = None,
         brand: str | None = None,
+        fabric: str | None = None,
+        occasion: str | None = None,
+        sleeve: str | None = None,
+        neckline: str | None = None,
         featured: bool | None = None,
         min_price=None,
         max_price=None,
         sort: ProductSort = ProductSort.NAME_ASC,
         active_only: bool = False,
+        status: CatalogueStatus | None = None,
     ) -> tuple[list[Product], int]:
         if category_id is not None:
             category = await self.categories.get(category_id)
@@ -243,11 +334,16 @@ class ProductService:
             category_id=category_id,
             search=search,
             brand=brand,
+            fabric=fabric,
+            occasion=occasion,
+            sleeve=sleeve,
+            neckline=neckline,
             featured=featured,
             min_price=min_price,
             max_price=max_price,
             sort=sort,
             active_only=active_only,
+            status=status,
         )
         rows, total = await self.products.paginate(stmt, params)
         return list(rows), total
@@ -265,6 +361,16 @@ class ProductService:
         if changes.get("gender") is not None:
             changes["gender"] = changes["gender"].value
 
+        if "slug" in changes:
+            if not changes["slug"]:
+                raise ValidationError("A product URL cannot be empty")
+            await self._require_free_slug(changes["slug"], exclude=product.id)
+
+        if "size_chart" in changes:
+            changes["size_chart"] = (
+                data.size_chart.to_storage() if data.size_chart is not None else None
+            )
+
         for field, value in changes.items():
             setattr(product, field, value)
 
@@ -274,10 +380,77 @@ class ProductService:
             await self.session.rollback()
             raise ConflictError("Unable to update product") from exc
 
-        logger.info(
-            "catalogue.product_updated id=%s tenant_id=%s", product.id, self.tenant_id
-        )
         return await self.get(product.id)
+
+    async def related(self, product_id: UUID) -> list[tuple[Product, int]]:
+        """The hand-picked related products, with their display positions."""
+        await self.get(product_id)
+        related: list[tuple[Product, int]] = []
+        for link in await self.relations.for_product(product_id):
+            other = await self.products.get(link.related_product_id)
+            if other is not None:
+                related.append((other, link.position))
+        return related
+
+    async def set_related(
+        self, product_id: UUID, related_ids: list[UUID]
+    ) -> list[tuple[Product, int]]:
+        """Replace the related list wholesale; order is display order."""
+        await self.get(product_id)
+
+        if product_id in related_ids:
+            raise ValidationError("A product cannot be related to itself")
+        for related_id in related_ids:
+            if await self.products.get(related_id) is None:
+                raise NotFoundError(f"Related product {related_id} not found")
+
+        await self.relations.replace(product_id, related_ids)
+        await self.session.commit()
+
+        return await self.related(product_id)
+
+    async def related_for_storefront(
+        self, product_id: UUID, *, limit: int
+    ) -> tuple[list[Product], list[Product]]:
+        """("you may also like", "customers also bought") for a public product.
+
+        The first list is the hand-picked one, topped up with the newest
+        products of the same category; the second comes from real orders.
+        """
+        product = await self.get_public(product_id)
+
+        links = await self.relations.for_product(product_id)
+        picked_ids = [link.related_product_id for link in links]
+        liked = (await self.products.live_products(picked_ids))[:limit]
+        if len(liked) < limit:
+            liked += await self.products.live_in_category(
+                product.category_id,
+                exclude=[product_id, *(p.id for p in liked)],
+                limit=limit - len(liked),
+            )
+
+        bought_ids = await self.products.bought_together(product_id, limit=limit * 2)
+        bought = (await self.products.live_products(bought_ids))[:limit]
+        return liked, bought
+
+    async def filter_options(
+        self, *, active_only: bool, category_id: UUID | None = None
+    ) -> dict[str, list[tuple[str, int]]]:
+        """Every fabric/occasion/sleeve/neckline value in use, with how many products have it."""
+        if category_id is not None and await self.categories.get(category_id) is None:
+            raise NotFoundError(CATEGORY_NOT_FOUND)
+
+        return {
+            name: await self.products.attribute_values(
+                column, active_only=active_only, category_id=category_id
+            )
+            for name, column in (
+                ("fabric", Product.fabric),
+                ("occasion", Product.occasion),
+                ("sleeve", Product.sleeve),
+                ("neckline", Product.neckline),
+            )
+        }
 
     async def delete(self, product_id: UUID) -> None:
         """Archive the product and its variants in one transaction."""
@@ -288,7 +461,7 @@ class ProductService:
 
         product.status = CatalogueStatus.ARCHIVED.value
 
-        archived = await self.session.execute(
+        await self.session.execute(
             update(ProductVariant)
             .where(
                 ProductVariant.tenant_id == self.tenant_id,
@@ -300,12 +473,6 @@ class ProductService:
 
         await self.session.commit()
 
-        logger.info(
-            "catalogue.product_archived id=%s tenant_id=%s variants_archived=%s",
-            product_id,
-            self.tenant_id,
-            archived.rowcount or 0,
-        )
 
 
 class VariantService:
@@ -367,12 +534,17 @@ class VariantService:
         if await self.variants.get_by_sku(sku) is not None:
             raise ConflictError("A variant with this SKU already exists")
 
+        _check_sale(data.price, data.sale_price, data.sale_starts_at, data.sale_ends_at)
+
         variant = ProductVariant(
             product_id=product_id,
             sku=sku,
             name=data.name,
             price=data.price,
             status=data.status.value,
+            sale_price=data.sale_price,
+            sale_starts_at=data.sale_starts_at,
+            sale_ends_at=data.sale_ends_at,
         )
 
         try:
@@ -402,9 +574,6 @@ class VariantService:
             await self.session.rollback()
             raise ConflictError("A variant with this SKU already exists") from exc
 
-        logger.info(
-            "catalogue.variant_created id=%s tenant_id=%s", variant.id, self.tenant_id
-        )
         return await self.get(variant.id)
 
     async def get(self, variant_id: UUID) -> ProductVariant:
@@ -436,6 +605,18 @@ class VariantService:
         if changes.get("status") is not None:
             changes["status"] = changes["status"].value
 
+        if "sale_price" in changes and changes["sale_price"] is None:
+            # Ending a sale early clears its window too.
+            changes.setdefault("sale_starts_at", None)
+            changes.setdefault("sale_ends_at", None)
+
+        _check_sale(
+            changes.get("price", variant.price),
+            changes.get("sale_price", variant.sale_price),
+            changes.get("sale_starts_at", variant.sale_starts_at),
+            changes.get("sale_ends_at", variant.sale_ends_at),
+        )
+
         for field, value in changes.items():
             setattr(variant, field, value)
 
@@ -452,9 +633,6 @@ class VariantService:
             await self.session.rollback()
             raise ConflictError("A variant with this SKU already exists") from exc
 
-        logger.info(
-            "catalogue.variant_updated id=%s tenant_id=%s", variant.id, self.tenant_id
-        )
         return await self.get(variant.id)
 
     async def delete(self, variant_id: UUID) -> None:
@@ -467,9 +645,6 @@ class VariantService:
         variant.status = CatalogueStatus.ARCHIVED.value
         await self.session.commit()
 
-        logger.info(
-            "catalogue.variant_archived id=%s tenant_id=%s", variant_id, self.tenant_id
-        )
 
 
 class ProductImageService:
@@ -555,12 +730,6 @@ class ProductImageService:
             await self.session.rollback()
             raise ConflictError("Unable to add product image") from exc
 
-        logger.info(
-            "catalogue.product_image_created id=%s product_id=%s tenant_id=%s",
-            image.id,
-            product_id,
-            self.tenant_id,
-        )
         return image
 
     async def update(self, image_id: UUID, data: ProductImageUpdate) -> ProductImage:
@@ -581,9 +750,6 @@ class ProductImageService:
                 "Another image was set as primary, please retry"
             ) from exc
 
-        logger.info(
-            "catalogue.product_image_updated id=%s tenant_id=%s", image.id, self.tenant_id
-        )
         return image
 
     async def set_primary(self, image_id: UUID) -> ProductImage:
@@ -597,9 +763,6 @@ class ProductImageService:
             await self.session.rollback()
             raise ConflictError("Another image was set as primary, please retry") from exc
 
-        logger.info(
-            "catalogue.product_image_primary id=%s tenant_id=%s", image.id, self.tenant_id
-        )
         return image
 
     async def reorder(
@@ -617,12 +780,6 @@ class ProductImageService:
 
         await self.session.commit()
 
-        logger.info(
-            "catalogue.product_images_reordered product_id=%s tenant_id=%s count=%s",
-            product_id,
-            self.tenant_id,
-            len(data.images),
-        )
         return await self.list_for_product(product_id)
 
     async def delete(self, image_id: UUID) -> None:
@@ -648,9 +805,6 @@ class ProductImageService:
 
         await self.session.commit()
 
-        logger.info(
-            "catalogue.product_image_deleted id=%s tenant_id=%s", image_id, self.tenant_id
-        )
 
 
 class InventoryService:
@@ -714,12 +868,6 @@ class InventoryService:
         self._record(variant_id, delta, InventoryReason.ADJUSTMENT, note=note)
         await self.session.commit()
 
-        logger.info(
-            "inventory.set variant_id=%s tenant_id=%s quantity=%s",
-            variant_id,
-            self.tenant_id,
-            quantity,
-        )
         return await self._require_item(variant_id)
 
     async def adjust(
@@ -740,12 +888,6 @@ class InventoryService:
         self._record(variant_id, delta, reason, reference, note)
         await self.session.commit()
 
-        logger.info(
-            "inventory.adjusted variant_id=%s tenant_id=%s delta=%s",
-            variant_id,
-            self.tenant_id,
-            delta,
-        )
         return await self._require_item(variant_id)
 
     async def set_threshold(self, variant_id: UUID, threshold: int) -> InventoryItem:
@@ -771,6 +913,25 @@ class InventoryService:
             )
 
         self._record(variant_id, 0, InventoryReason.RESERVATION, reference)
+        await self._save(commit)
+        return await self._require_item(variant_id)
+
+    async def restock(
+        self,
+        variant_id: UUID,
+        quantity: int,
+        reference: str | None = None,
+        *,
+        note: str | None = None,
+        commit: bool = True,
+    ) -> InventoryItem:
+        """Put shipped stock back on the shelf, e.g. a parcel returned undelivered."""
+        await self._require_item(variant_id)
+
+        if not await self.inventory.adjust_available(variant_id, quantity):
+            raise ConflictError("Could not restock this variant")
+
+        self._record(variant_id, quantity, InventoryReason.RESTOCK, reference, note)
         await self._save(commit)
         return await self._require_item(variant_id)
 

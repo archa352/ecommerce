@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from app.core.money import ZERO
-from app.pricing.models import ShippingSettings, TaxSettings
-from app.pricing.schemas import ShippingSettingsRead, TaxSettingsRead
+from app.pricing.models import GstSettings, PincodeRule, ShippingSettings, TaxSettings
+from app.pricing.schemas import (
+    GstSettingsRead,
+    PincodeRuleRead,
+    ShippingSettingsRead,
+    TaxSettingsRead,
+)
 
 
 def shipping_read(settings: ShippingSettings | None) -> ShippingSettingsRead:
@@ -18,6 +23,9 @@ def shipping_read(settings: ShippingSettings | None) -> ShippingSettingsRead:
         shipping_amount=settings.shipping_amount,
         free_shipping_minimum=settings.free_shipping_minimum,
         is_active=settings.is_active,
+        min_delivery_days=settings.min_delivery_days,
+        max_delivery_days=settings.max_delivery_days,
+        restrict_to_listed_pincodes=settings.restrict_to_listed_pincodes,
     )
 
 
@@ -27,4 +35,31 @@ def tax_read(settings: TaxSettings | None) -> TaxSettingsRead:
 
     return TaxSettingsRead(
         tax_percentage=settings.tax_percentage, is_active=settings.is_active
+    )
+
+
+def pincode_read(rule: PincodeRule) -> PincodeRuleRead:
+    return PincodeRuleRead(
+        pincode=rule.pincode,
+        is_serviceable=rule.is_serviceable,
+        cod_available=rule.cod_available,
+        min_delivery_days=rule.min_delivery_days,
+        max_delivery_days=rule.max_delivery_days,
+        shipping_amount=rule.shipping_amount,
+        city=rule.city,
+        state=rule.state,
+    )
+
+
+def gst_read(settings: GstSettings | None) -> GstSettingsRead:
+    if settings is None:
+        return GstSettingsRead()
+    return GstSettingsRead(
+        gstin=settings.gstin,
+        legal_name=settings.legal_name,
+        address=settings.address,
+        state=settings.state,
+        state_code=settings.state_code,
+        invoice_prefix=settings.invoice_prefix,
+        shipping_sac_code=settings.shipping_sac_code,
     )

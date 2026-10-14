@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.auth.constants import UserRole, UserStatus
@@ -64,6 +65,20 @@ class User(Base, TimestampMixin):
     )
 
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # STAFF only: granted admin permissions. NULL = legacy staff access
+    # (see app/auth/permissions.py); ADMIN ignores it.
+    permissions: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
+    # CUSTOMER only: labels the store gives a customer (VIP, frequent returner...).
+    tags: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
+    # CUSTOMER only: set when the store blocks this customer from placing new
+    # orders (as account or guest). Past orders and history are untouched.
+    order_blocked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    order_block_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     @property
     def is_active(self) -> bool:

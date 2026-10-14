@@ -4,13 +4,14 @@ from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, case, desc, func, select
+from sqlalchemy import and_, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.constants import UserRole
 from app.catalogue.models import InventoryItem, Product, ProductVariant
 from app.core.money import money
-from app.orders.constants import OrderStatus
+from app.orders.constants import FULFILMENT_STATUSES, OrderStatus
+from app.orders.constants import PaymentStatus as OrderPaymentStatus
 from app.orders.models import Order, OrderItem
 from app.payments.constants import PaymentStatus
 from app.payments.models import Payment
@@ -58,12 +59,6 @@ class DashboardService:
         yesterday_start = today_start - timedelta(days=1)
         prev_month_start = (month_start - timedelta(days=1)).replace(day=1)
 
-        completed_statuses = [
-            OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED,
-            OrderStatus.DELIVERED,
-        ]
-
         async def get_sales_stats(
             start_dt: datetime,
             end_dt: datetime,
@@ -78,7 +73,8 @@ class DashboardService:
                 Order.tenant_id == self.tenant_id,
                 Order.created_at >= start_dt,
                 Order.created_at < end_dt,
-                Order.status.in_(completed_statuses),
+                Order.status.in_(FULFILMENT_STATUSES),
+                Order.payment_status == OrderPaymentStatus.PAID.value,
             )
 
             res = (await self.session.execute(stmt)).one()
@@ -120,7 +116,8 @@ class DashboardService:
             ),
         ).where(
             Order.tenant_id == self.tenant_id,
-            Order.status.in_(completed_statuses),
+            Order.status.in_(FULFILMENT_STATUSES),
+            Order.payment_status == OrderPaymentStatus.PAID.value,
         )
 
         total_res = (await self.session.execute(total_stmt)).one()
@@ -208,9 +205,8 @@ class DashboardService:
             )
         ) or 0
 
-        # There is no "RETURNED" order status in this domain -- a return only
-        # ever shows up as its payment being refunded, so that is the source
-        # of truth for "returned orders" here.
+        # A "returned order" is one whose payment was refunded, or a parcel
+        # that came back undelivered (RETURNED status).
         returned_orders_count = (
             await self.session.scalar(
                 select(func.count(func.distinct(Order.id)))
@@ -224,7 +220,10 @@ class DashboardService:
                 )
                 .where(
                     Order.tenant_id == self.tenant_id,
-                    Payment.status == PaymentStatus.REFUNDED,
+                    or_(
+                        Payment.status == PaymentStatus.REFUNDED,
+                        Order.status == OrderStatus.RETURNED,
+                    ),
                 )
             )
         ) or 0
@@ -442,11 +441,7 @@ class DashboardService:
         start_date = (
             datetime.now(timezone.utc).date() - timedelta(days=days)
         )
-        completed_statuses = [
-            OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED,
-            OrderStatus.DELIVERED,
-        ]
+        completed_statuses = list(FULFILMENT_STATUSES)
 
         stmt = (
             select(
@@ -487,11 +482,7 @@ class DashboardService:
         limit: int = 10,
     ) -> list[dict]:
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
-        completed_statuses = [
-            OrderStatus.PROCESSING,
-            OrderStatus.SHIPPED,
-            OrderStatus.DELIVERED,
-        ]
+        completed_statuses = list(FULFILMENT_STATUSES)
 
         stmt = (
             select(

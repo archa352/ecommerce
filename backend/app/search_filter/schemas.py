@@ -17,6 +17,10 @@ class ProductFilters:
     category_id: uuid.UUID | None = None
     gender: str | None = None
     brand: str | None = None
+    fabric: str | None = None
+    occasion: str | None = None
+    sleeve: str | None = None
+    neckline: str | None = None
     min_price: Decimal | None = None
     max_price: Decimal | None = None
     color: str | None = None
@@ -40,6 +44,10 @@ class ProductDiscoveryItem(BaseModel):
     name: str
     brand: str | None = None
     gender: str | None = None
+    fabric: str | None = None
+    occasion: str | None = None
+    sleeve: str | None = None
+    neckline: str | None = None
     category_id: uuid.UUID
     price: Decimal | None = None
     min_price: Decimal | None = None

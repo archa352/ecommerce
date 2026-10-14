@@ -84,7 +84,25 @@ class Settings(BaseSettings):
     coupon_apply_rate_limit_attempts: int = 15
     review_rate_limit_attempts: int = 10
     search_rate_limit_attempts: int = 120
+    guest_cart_rate_limit_attempts: int = 30
+    guest_checkout_rate_limit_attempts: int = 10
+    order_tracking_rate_limit_attempts: int = 20
     commerce_rate_limit_window_seconds: int = 60
+
+    review_request_delay_days: int = 2
+    cart_retention_days: int = 30
+    store_utc_offset_minutes: int = 330
+
+    # These credentials are only exposed as integration status; no external
+    # shipping, email or alternate payment API is called by this integration.
+    ccavenue_merchant_id: str | None = None
+    ccavenue_access_code: str | None = None
+    ccavenue_working_key: str | None = None
+    shiprocket_email: str | None = None
+    shiprocket_password: str | None = None
+    msg91_admin_otp_template_id: str | None = None
+    email_provider_api_key: str | None = None
+    whatsapp_provider_api_key: str | None = None
 
     storage_local_path: str = "var/uploads"
     storage_public_base_url: str = "/media"

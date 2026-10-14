@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.constants import UserRole
+from app.auth.permissions import Permission
 from app.auth.security import decode_token
 from app.core.database import get_db
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
@@ -85,3 +86,27 @@ require_admin = _require_roles(UserRole.ADMIN)
 require_staff = _require_roles(UserRole.ADMIN, UserRole.STAFF)
 
 require_customer = _require_roles(UserRole.CUSTOMER)
+
+
+def require_permission(
+    permission: Permission, *, legacy_staff: bool = False
+) -> Callable[..., Coroutine[Any, Any, User]]:
+    """ADMIN always passes; STAFF needs the permission.
+
+    `legacy_staff=True` marks an endpoint unconfigured (NULL-permission) staff
+    could already use, so their existing access is kept.
+    """
+
+    async def dependency(current_user: CurrentUser) -> User:
+        if current_user.role == UserRole.ADMIN.value:
+            return current_user
+        if current_user.role == UserRole.STAFF.value:
+            granted = current_user.permissions
+            if granted is None:
+                if legacy_staff:
+                    return current_user
+            elif permission.value in granted:
+                return current_user
+        raise PermissionDeniedError("Insufficient permissions")
+
+    return dependency

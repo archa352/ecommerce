@@ -398,6 +398,76 @@ async def test_concurrent_orders_cannot_exceed_the_global_usage_limit(
     assert len(usages) == 1
 
 
+async def test_concurrent_automatic_coupon_redemption_refreshes_usage_limit(
+    engine,
+    session,
+    tenant,
+    make_user,
+    save_address,
+    new_variant,
+    add_to_cart,
+    monkeypatch,
+):
+    """A stale automatic-coupon candidate cannot pass the cap after waiting on its lock."""
+    import asyncio
+
+    from app.coupons.service import CouponService
+    from app.orders.service import CheckoutService
+
+    coupon = await _make_coupon(
+        session,
+        tenant,
+        code="AUTO-RACE",
+        usage_limit=1,
+        is_automatic=True,
+        discount_value=Decimal("10.00"),
+    )
+
+    racers = []
+    for i in range(2):
+        user = await make_user(tenant=tenant, phone=f"+91982222930{i}")
+        headers = headers_for(user)
+        variant = await new_variant()
+        await add_to_cart(headers, variant["id"], 1)
+        address = await save_address(headers)
+        racers.append((user, address))
+
+    # Force both checkouts to load and evaluate the automatic candidate before
+    # either is allowed to acquire the coupon lock.
+    ready = asyncio.Event()
+    arrivals = 0
+    original = CouponService.best_automatic
+
+    async def synchronized_candidates(self, *args, **kwargs):
+        nonlocal arrivals
+        result = await original(self, *args, **kwargs)
+        arrivals += 1
+        if arrivals == 2:
+            ready.set()
+        await ready.wait()
+        return result
+
+    monkeypatch.setattr(CouponService, "best_automatic", synchronized_candidates)
+
+    async def checkout(db, index):
+        user, address = racers[index]
+        return await CheckoutService(db, tenant.id, user.id).place_order(
+            UUID(address["id"])
+        )
+
+    results = await run_concurrently(engine, 2, checkout)
+    orders = succeeded(results)
+    assert len(orders) == 2
+    assert sum(order.coupon_code == "AUTO-RACE" for order in orders) == 1
+
+    await session.refresh(coupon)
+    assert coupon.times_used == 1
+    usages = (
+        await session.scalars(select(CouponUsage).where(CouponUsage.coupon_id == coupon.id))
+    ).all()
+    assert len(usages) == 1
+
+
 async def test_duplicate_redemption_for_the_same_order_is_prevented(
     session, tenant, make_user
 ):

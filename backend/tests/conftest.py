@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-import contextlib
+import os
+import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
+import pytest
 import pytest_asyncio
+import redis.asyncio as redis
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.auth.constants import UserRole, UserStatus
 from app.auth.security import create_access_token, hash_password
 from app.core import cache
+from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.exceptions import AuthenticationError
@@ -21,10 +26,6 @@ from app.users.models import User
 from tests.helpers import shared_data
 
 settings = get_settings()
-
-TEST_DATABASE_URL = settings.test_database_url or (
-    settings.database_url.rsplit("/", 1)[0] + "/tws_ecommerce_test"
-)
 
 _SHARED = shared_data()
 
@@ -49,44 +50,163 @@ def pytest_collection_modifyitems(items) -> None:
             item._nodeid = f"{module}{separator}{_readable(name)}"
 
 
-def _admin_url(url: str) -> str:
-    parts = urlsplit(url)
-    return urlunsplit(parts._replace(path="/postgres"))
+def _required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise pytest.UsageError(f"{name} must be set explicitly for backend tests")
+    return value
 
 
-def _database_name(url: str) -> str:
-    return urlsplit(url).path.lstrip("/")
+def _required_int(name: str) -> int:
+    try:
+        return int(_required_env(name))
+    except ValueError as exc:
+        raise pytest.UsageError(f"{name} must be an integer") from exc
 
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def _create_test_database() -> AsyncGenerator[None, None]:
-    name = _database_name(TEST_DATABASE_URL)
-    admin = create_async_engine(_admin_url(TEST_DATABASE_URL), isolation_level="AUTOCOMMIT")
-
-    async with admin.connect() as connection:
-        await connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
-        await connection.exec_driver_sql(f'CREATE DATABASE "{name}"')
-    await admin.dispose()
-
-    yield
-
-    admin = create_async_engine(_admin_url(TEST_DATABASE_URL), isolation_level="AUTOCOMMIT")
-    async with admin.connect() as connection:
-        await connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
-    await admin.dispose()
+@dataclass(frozen=True)
+class TestTargets:
+    database_url: str
+    database_name: str
+    server_addr: str
+    server_port: int
+    redis_url: str
+    redis_marker: str
 
 
-@pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def engine(_create_test_database):
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=None)
-    yield engine
-    await engine.dispose()
+@pytest.fixture(scope="session", autouse=True)
+def _test_targets() -> TestTargets:
+    database_url = _required_env("TEST_DATABASE_URL")
+    db = make_url(database_url)
+    app_db = make_url(settings.database_url)
+    allowed_host = _required_env("TEST_DATABASE_ALLOWED_HOST")
+    allowed_port = _required_int("TEST_DATABASE_ALLOWED_PORT")
+    allowed_name = _required_env("TEST_DATABASE_ALLOWED_NAME")
+    server_addr = _required_env("TEST_DATABASE_ALLOWED_SERVER_ADDR")
+    server_port = _required_int("TEST_DATABASE_ALLOWED_SERVER_PORT")
+
+    if (
+        db.drivername != "postgresql+asyncpg"
+        or not db.host
+        or not db.database
+        or not db.port
+        or db.query
+    ):
+        raise pytest.UsageError("TEST_DATABASE_URL must name an explicit PostgreSQL host, port and database")
+    if (db.host, db.port, db.database) != (allowed_host, allowed_port, allowed_name):
+        raise pytest.UsageError("TEST_DATABASE_URL is not on the explicit database allowlist")
+    if db.database == app_db.database:
+        raise pytest.UsageError("Test database must differ from the application database")
+    if not (1 <= allowed_port <= 65535 and 1 <= server_port <= 65535):
+        raise pytest.UsageError("Invalid allowed PostgreSQL port")
+
+    redis_url = _required_env("TEST_REDIS_URL")
+    target = urlsplit(redis_url)
+    app_redis = urlsplit(settings.redis_url)
+    allowed_redis = (
+        _required_env("TEST_REDIS_ALLOWED_HOST"),
+        _required_int("TEST_REDIS_ALLOWED_PORT"),
+        _required_int("TEST_REDIS_ALLOWED_DB"),
+    )
+    try:
+        redis_db = int(target.path.lstrip("/"))
+    except ValueError as exc:
+        raise pytest.UsageError("TEST_REDIS_URL must specify a numeric database") from exc
+    if (
+        target.scheme not in {"redis", "rediss"}
+        or not target.hostname
+        or target.port is None
+        or target.query
+        or target.fragment
+        or not target.path.startswith("/")
+        or target.path.count("/") != 1
+        or (target.hostname, target.port, redis_db) != allowed_redis
+    ):
+        raise pytest.UsageError("TEST_REDIS_URL is not on the explicit Redis allowlist")
+    if (target.hostname, target.port) == (app_redis.hostname, app_redis.port or 6379):
+        raise pytest.UsageError("Tests require a dedicated Redis server, separate from the application")
+    if not 0 <= redis_db <= 15:
+        raise pytest.UsageError("Invalid test Redis database number")
+
+    return TestTargets(
+        database_url=database_url,
+        database_name=allowed_name,
+        server_addr=server_addr,
+        server_port=server_port,
+        redis_url=redis_url,
+        redis_marker=_required_env("TEST_REDIS_INSTANCE_ID"),
+    )
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
+async def _isolated_redis(_test_targets: TestTargets) -> AsyncGenerator[None, None]:
+    if cache._client is not None:
+        raise pytest.UsageError("An application Redis client was initialized before test isolation")
+    client = redis.Redis.from_url(_test_targets.redis_url, decode_responses=True)
+    try:
+        marker = await client.get("zeen:test:instance-id")
+        if marker != _test_targets.redis_marker:
+            raise pytest.UsageError("Dedicated test Redis instance marker did not match")
+        original_cache_get_redis = cache.get_redis
+        original_rate_get_redis = rate_limit.get_redis
+        original_prefix = rate_limit.KEY_PREFIX
+        cache.get_redis = lambda: client
+        rate_limit.get_redis = lambda: client
+        rate_limit.KEY_PREFIX = f"ratelimit:test:{uuid.uuid4().hex}"
+        try:
+            yield
+        finally:
+            rate_limit.KEY_PREFIX = original_prefix
+            rate_limit.get_redis = original_rate_get_redis
+            cache.get_redis = original_cache_get_redis
+    finally:
+        await client.aclose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def engine(_test_targets: TestTargets, _isolated_redis):
+    # Each test gets a newly named schema. Existing databases and schemas are
+    # never dropped, truncated or recreated by the fixture.
+    schema = f"zeen_test_{uuid.uuid4().hex}"
+    setup_engine = create_async_engine(_test_targets.database_url)
+    try:
+        async with setup_engine.begin() as connection:
+            actual = (await connection.exec_driver_sql(
+                "SELECT current_database(), host(inet_server_addr()), inet_server_port()"
+            )).one()
+            if actual != (
+                _test_targets.database_name,
+                _test_targets.server_addr,
+                _test_targets.server_port,
+            ):
+                raise pytest.UsageError("PostgreSQL target does not match the verified allowlist")
+            await connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    finally:
+        await setup_engine.dispose()
+
+    engine = create_async_engine(
+        _test_targets.database_url,
+        connect_args={"server_settings": {"search_path": schema}},
+    )
+    try:
+        async with engine.begin() as connection:
+            actual = (await connection.exec_driver_sql(
+                "SELECT current_database(), host(inet_server_addr()), inet_server_port()"
+            )).one()
+            if actual != (
+                _test_targets.database_name,
+                _test_targets.server_addr,
+                _test_targets.server_port,
+            ):
+                raise pytest.UsageError("PostgreSQL target changed before schema setup")
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def session(engine) -> AsyncGenerator[AsyncSession, None]:
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
 
     factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
@@ -117,13 +237,6 @@ async def client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 async def other_client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     async for c in _client_for(session, ACME_DOMAIN):
         yield c
-
-
-@pytest_asyncio.fixture(autouse=True, loop_scope="session")
-async def _flush_rate_limiter() -> AsyncGenerator[None, None]:
-    with contextlib.suppress(Exception):
-        await cache.get_redis().flushdb()
-    yield
 
 
 @dataclass

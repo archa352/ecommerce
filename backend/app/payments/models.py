@@ -1,8 +1,11 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -16,10 +19,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
 from app.models.base import Base, TimestampMixin
-from app.payments.constants import PaymentProvider, PaymentStatus
+from app.payments.constants import PaymentProvider, PaymentPurpose, PaymentStatus
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in PaymentProvider)
+_PURPOSE_VALUES = ", ".join(f"'{purpose.value}'" for purpose in PaymentPurpose)
 
 
 class Payment(Base, TimestampMixin):
@@ -38,10 +42,12 @@ class Payment(Base, TimestampMixin):
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         CheckConstraint(f"provider IN ({_PROVIDER_VALUES})", name="provider_valid"),
         CheckConstraint("amount >= 0", name="amount_not_negative"),
+        CheckConstraint(f"purpose IN ({_PURPOSE_VALUES})", name="purpose_valid"),
         Index(
-            "uq_payments_one_paid_per_order",
+            "uq_payments_one_paid_per_order_purpose",
             "tenant_id",
             "order_id",
+            "purpose",
             unique=True,
             postgresql_where=text("status = 'PAID'"),
         ),
@@ -72,5 +78,16 @@ class Payment(Base, TimestampMixin):
     provider: Mapped[str] = mapped_column(
         String(20), nullable=False, default=PaymentProvider.COD.value
     )
+    remitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    remittance_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    purpose: Mapped[str] = mapped_column(
+        String(10), nullable=False, default=PaymentPurpose.FULL.value,
+        server_default=PaymentPurpose.FULL.value,
+    )
     razorpay_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     razorpay_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Set and committed before making the external create-order request. If
+    # its response is lost, retries must not create a second gateway order.
+    razorpay_order_creation_started: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )

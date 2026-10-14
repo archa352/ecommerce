@@ -16,6 +16,8 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
+from app.catalogue.pricing import effective_price_sql
+from app.catalogue.repository import attribute_matches, category_subtree
 from app.core.pagination import PageParams
 from app.core.repository import TenantScopedRepository, escape_like
 from app.orders.constants import OrderStatus
@@ -67,9 +69,9 @@ class SearchFilterRepository(TenantScopedRepository[SearchHistory]):
 
         conditions = []
         if filters.min_price is not None:
-            conditions.append(variant.price >= filters.min_price)
+            conditions.append(effective_price_sql(variant) >= filters.min_price)
         if filters.max_price is not None:
-            conditions.append(variant.price <= filters.max_price)
+            conditions.append(effective_price_sql(variant) <= filters.max_price)
         if filters.color:
             conditions.append(
                 self._option_matches(variant, COLOR_OPTION, filters.color)
@@ -145,8 +147,8 @@ class SearchFilterRepository(TenantScopedRepository[SearchHistory]):
         stmt = (
             select(
                 Product,
-                func.min(ProductVariant.price).label("min_price"),
-                func.max(ProductVariant.price).label("max_price"),
+                func.min(effective_price_sql()).label("min_price"),
+                func.max(effective_price_sql()).label("max_price"),
                 average_rating.label("rating"),
             )
             .join(
@@ -171,13 +173,26 @@ class SearchFilterRepository(TenantScopedRepository[SearchHistory]):
                 stmt = stmt.where(self._token_matches(token))
 
         if filters.category_id:
-            stmt = stmt.where(Product.category_id == filters.category_id)
+            stmt = stmt.where(
+                Product.category_id.in_(
+                    category_subtree(self.tenant_id, filters.category_id)
+                )
+            )
 
         if filters.brand:
             stmt = stmt.where(func.lower(Product.brand) == filters.brand.lower())
 
         if filters.gender:
             stmt = stmt.where(func.lower(Product.gender) == filters.gender.lower())
+
+        for column, value in (
+            (Product.fabric, filters.fabric),
+            (Product.occasion, filters.occasion),
+            (Product.sleeve, filters.sleeve),
+            (Product.neckline, filters.neckline),
+        ):
+            if value and value.strip():
+                stmt = stmt.where(attribute_matches(column, value))
 
         matching_variant = self._has_matching_variant(filters)
         if matching_variant is not None:
@@ -195,7 +210,7 @@ class SearchFilterRepository(TenantScopedRepository[SearchHistory]):
 
     def _ordered(self, stmt: Select, sort: SearchSort, units_sold) -> Select:
         """Price sorts key off the price the card shows -- the cheapest live variant."""
-        from_price = func.min(ProductVariant.price)
+        from_price = func.min(effective_price_sql())
 
         if sort is SearchSort.PRICE_LOW:
             return stmt.order_by(from_price, Product.created_at.desc())

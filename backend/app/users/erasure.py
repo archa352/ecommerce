@@ -12,13 +12,10 @@ from app.addresses.models import Address
 from app.auth.constants import UserStatus
 from app.auth.repository import RefreshTokenRepository
 from app.cart.models import Cart, CartItem
-from app.core.logging import get_logger
 from app.ratings.models import Review
 from app.search_filter.models import SearchHistory
 from app.users.models import User
 from app.wishlist.models import Wishlist, WishlistItem
-
-logger = get_logger("users.erasure")
 
 # +999 is reserved for trials, so a scrubbed number can never route anywhere,
 # and it still satisfies the E.164 check constraint on the column.
@@ -40,14 +37,12 @@ class AccountErasureService:
     async def erase(self, user: User) -> None:
         await self._forget_shopping(user.id)
         await self._detach_reviews(user.id)
+        await self._forget_contact(user.id)
         await self._anonymise(user)
 
         await self.tokens.revoke_all_for_user(user.id)
         await self.session.commit()
 
-        logger.info(
-            "users.account_erased user_id=%s tenant_id=%s", user.id, self.tenant_id
-        )
 
     async def _forget_shopping(self, user_id: UUID) -> None:
         """Carts, wishlists, addresses and search history are the person's alone."""
@@ -108,10 +103,40 @@ class AccountErasureService:
             .values(user_id=None)
         )
 
+    async def _forget_contact(self, user_id: UUID) -> None:
+        """Orders keep the delivery record, but not the contact email or review prompts."""
+        from app.customers.models import CustomerNote
+        from app.orders.models import Order
+        from app.ratings.models import ReviewRequest, ReviewRequestStatus
+
+        await self.session.execute(
+            delete(CustomerNote).where(
+                CustomerNote.tenant_id == self.tenant_id, CustomerNote.customer_id == user_id
+            )
+        )
+
+        await self.session.execute(
+            update(Order)
+            .where(Order.tenant_id == self.tenant_id, Order.customer_id == user_id)
+            .values(contact_email=None)
+        )
+        await self.session.execute(
+            update(ReviewRequest)
+            .where(
+                ReviewRequest.tenant_id == self.tenant_id,
+                ReviewRequest.customer_id == user_id,
+                ReviewRequest.status.in_(
+                    [ReviewRequestStatus.PENDING.value, ReviewRequestStatus.SENT.value]
+                ),
+            )
+            .values(status=ReviewRequestStatus.CANCELLED.value)
+        )
+
     async def _anonymise(self, user: User) -> None:
         """Orders keep their delivery details -- tax law requires the record."""
         user.phone = _erased_phone()
         user.email = None
         user.name = None
+        user.tags = None
         user.status = UserStatus.DELETED.value
         user.is_verified = False

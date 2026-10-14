@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, select, update
 
 from app.cart.models import Cart, CartItem, CartStatus
 from app.catalogue.models import Product, ProductImage, ProductVariant
@@ -18,10 +19,40 @@ class CartRepository(TenantScopedRepository[Cart]):
             Cart.status == CartStatus.ACTIVE.value,
         )
 
-    async def create(self, customer_id: UUID) -> Cart:
-        return await self.add(
-            Cart(customer_id=customer_id, status=CartStatus.ACTIVE.value)
+    async def get_active_guest(self, token_hash: str) -> Cart | None:
+        return await self.find_one(
+            Cart.guest_token_hash == token_hash,
+            Cart.status == CartStatus.ACTIVE.value,
         )
+
+    async def create(
+        self, customer_id: UUID | None = None, *, guest_token_hash: str | None = None
+    ) -> Cart:
+        return await self.add(
+            Cart(
+                customer_id=customer_id,
+                guest_token_hash=guest_token_hash,
+                status=CartStatus.ACTIVE.value,
+            )
+        )
+
+
+async def expire_stale_carts(session, cutoff: datetime) -> int:
+    """Expire every ACTIVE cart idle since before `cutoff`, across all tenants.
+
+    Items go first so an expired cart holds nothing; the cart row stays as
+    a record. Returns how many carts were expired. The caller commits.
+    """
+    stale = select(Cart.id).where(
+        Cart.status == CartStatus.ACTIVE.value, Cart.last_activity_at < cutoff
+    )
+    await session.execute(delete(CartItem).where(CartItem.cart_id.in_(stale)))
+    result = await session.execute(
+        update(Cart)
+        .where(Cart.status == CartStatus.ACTIVE.value, Cart.last_activity_at < cutoff)
+        .values(status=CartStatus.EXPIRED.value)
+    )
+    return result.rowcount or 0
 
 
 class CartItemRepository(TenantScopedRepository[CartItem]):

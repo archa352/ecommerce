@@ -105,10 +105,17 @@ async def address(save_address, customer_auth) -> dict:
 async def place_order(client):
     """Factory: `await place_order(headers, address_id, coupon_code=None)`."""
 
-    async def _place(headers, address_id, coupon_code: str | None = None):
+    async def _place(
+        headers,
+        address_id,
+        coupon_code: str | None = None,
+        payment_method: str | None = None,
+    ):
         payload = {"address_id": str(address_id)}
         if coupon_code is not None:
             payload["coupon_code"] = coupon_code
+        if payment_method is not None:
+            payload["payment_method"] = payment_method
         return await client.post(CHECKOUT, json=payload, headers=headers)
 
     return _place
@@ -118,9 +125,18 @@ async def place_order(client):
 async def preview_checkout(client):
     """Factory: `await preview_checkout(headers, coupon_code=None)`."""
 
-    async def _preview(headers, coupon_code: str | None = None):
+    async def _preview(
+        headers, coupon_code: str | None = None, payment_method: str | None = None
+    ):
         params = {"coupon_code": coupon_code} if coupon_code is not None else {}
-        return await client.post(f"{CHECKOUT}/preview", params=params, headers=headers)
+        request = (
+            {"json": {"payment_method": payment_method}}
+            if payment_method is not None
+            else {}
+        )
+        return await client.post(
+            f"{CHECKOUT}/preview", params=params, headers=headers, **request
+        )
 
     return _preview
 

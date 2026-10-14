@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
+from enum import Enum
 
 from sqlalchemy import (
     CheckConstraint,
+    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -163,3 +166,59 @@ class ReviewImage(Base, TimestampMixin):
         foreign_keys=lambda: [ReviewImage.review_id, ReviewImage.tenant_id],
         back_populates="images",
     )
+
+
+class ReviewRequestStatus(str, Enum):
+    PENDING = "PENDING"  # waiting for send_after
+    SENT = "SENT"  # the customer has been asked
+    COMPLETED = "COMPLETED"  # every product on the order has a review
+    CANCELLED = "CANCELLED"
+
+
+_REQUEST_STATUS_VALUES = ", ".join(f"'{s.value}'" for s in ReviewRequestStatus)
+
+
+class ReviewRequest(Base, TimestampMixin):
+    """An automatic "how was it?" prompt, one per delivered order."""
+
+    __tablename__ = "review_requests"
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "order_id", name="uq_review_requests_tenant_order"),
+        ForeignKeyConstraint(
+            ["tenant_id", "order_id"],
+            ["orders.tenant_id", "orders.id"],
+            name="fk_review_requests_tenant_order_orders",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "customer_id"],
+            ["users.tenant_id", "users.id"],
+            name="fk_review_requests_tenant_customer_users",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(f"status IN ({_REQUEST_STATUS_VALUES})", name="status_valid"),
+        Index("ix_review_requests_status_send_after", "status", "send_after"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, default=ReviewRequestStatus.PENDING.value
+    )
+
+    send_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

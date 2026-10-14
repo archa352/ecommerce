@@ -97,6 +97,50 @@ class TopSellingProductItem(BaseModel):
     revenue_generated: Decimal
 
 
+class AttentionCounts(BaseModel):
+    new_orders: int
+    awaiting_packing: int
+    awaiting_shipment: int
+    in_transit: int
+    advance_pending: int
+
+
+class DayComparison(BaseModel):
+    today_orders: int
+    today_revenue: Decimal
+    yesterday_orders: int
+    yesterday_revenue: Decimal
+    last_week_orders: int
+    last_week_revenue: Decimal
+    orders_vs_yesterday_pct: float | None
+    revenue_vs_yesterday_pct: float | None
+    orders_vs_last_week_pct: float | None
+    revenue_vs_last_week_pct: float | None
+
+
+class PeriodKpis(BaseModel):
+    """Last 30 days."""
+
+    revenue: Decimal
+    orders: int
+    average_order_value: Decimal
+    return_rate: float | None
+    cancellation_rate: float | None
+    cod_orders: int
+    prepaid_orders: int
+    cod_share_pct: float | None
+    new_customers: int
+    returning_customers: int
+
+
+class DashboardInsights(BaseModel):
+    attention: AttentionCounts
+    comparison: DayComparison
+    last_30_days: PeriodKpis
+    visitors_today: int | None = None
+    visitors_note: str = "Visitor counts need a web-analytics integration (not configured)."
+
+
 class DashboardOverviewResponse(BaseModel):
     sales: SalesOverview
     orders: OrderStatusSummary
@@ -105,3 +149,4 @@ class DashboardOverviewResponse(BaseModel):
     customers: CustomerOverview
     payments: PaymentOverview
     recent_orders: list[RecentOrderSummary]
+    insights: DashboardInsights | None = None
