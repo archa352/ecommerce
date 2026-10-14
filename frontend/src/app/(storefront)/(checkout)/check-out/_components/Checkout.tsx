@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'react-toastify';
 
 import { useCart } from '@/context/CartContext';
-import { deleteAddress, placeOrder, previewCheckoutFor } from '@/lib/orders/actions';
+import { confirmOnlinePayment, deleteAddress, placeOrder, previewCheckoutFor } from '@/lib/orders/actions';
 import { initialCheckoutState } from '@/lib/orders/state';
+import { payWithRazorpay } from '@/lib/payments/razorpay';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { Address } from '@/types/addresses';
-import type { CheckoutPreview } from '@/types/orders';
+import { PAYMENT_METHOD_LABELS, type CheckoutPreview, type PaymentMethod } from '@/types/orders';
 
 import AddressFormModal from './AddressFormModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
@@ -80,11 +81,12 @@ function CodIcon() {
   );
 }
 
-function GooglePayIcon() {
+function BankIcon() {
   return (
-    <span style={{ background: '#4285F4' }} className={styles.methodBadge}>
-      G
-    </span>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M3 9.5 12 4l9 5.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 10v7M9.5 10v7M14.5 10v7M19 10v7M3 20h18" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -249,7 +251,38 @@ function ShippingSection({ preview }: { preview: CheckoutPreview | null }) {
 // PAYMENT SECTION
 // -----------------------------------
 
-function PaymentSection() {
+const PAYMENT_OPTIONS: { method: PaymentMethod; description: string }[] = [
+  { method: 'UPI', description: 'Google Pay, PhonePe, Paytm or any UPI app' },
+  { method: 'CREDIT_CARD', description: 'Visa, Mastercard, RuPay, AMEX, etc.' },
+  { method: 'DEBIT_CARD', description: 'Visa, Mastercard, RuPay, Maestro, etc.' },
+  { method: 'NET_BANKING', description: 'All major Indian banks' },
+  { method: 'CASH_ON_DELIVERY', description: 'Pay when your order is delivered' },
+];
+
+function PaymentMethodIcon({ method }: { method: PaymentMethod }) {
+  if (method === 'UPI') return <UpiIcon />;
+
+  return (
+    <span className={styles.methodIcon}>
+      {method === 'NET_BANKING' ? <BankIcon /> : method === 'CASH_ON_DELIVERY' ? <CodIcon /> : <CardIcon />}
+    </span>
+  );
+}
+
+function PaymentSection({
+  selected,
+  onSelect,
+  disabled,
+  codUnavailableReason,
+  codFee,
+}: {
+  selected: PaymentMethod;
+  onSelect: (method: PaymentMethod) => void;
+  disabled: boolean;
+  /** Set when the backend says this order cannot be paid in cash. */
+  codUnavailableReason: string | null;
+  codFee: string | null;
+}) {
   return (
     <section>
       <div className={styles.sectionHeader}>
@@ -259,37 +292,43 @@ function PaymentSection() {
       </div>
 
       <div className={styles.card}>
-        <div className={`${styles.row} ${styles.rowDisabled}`}>
-          <input type="radio" name="payment_method" className={styles.radio} disabled aria-label="Credit or debit card" />
-          <span className={styles.methodIcon}>
-            <CardIcon />
-          </span>
-          <div className={styles.methodBody}>
-            <p className={styles.methodTitle}>
-              Credit / Debit Card <span className={styles.comingSoon}>Coming soon</span>
-            </p>
-            <p className={styles.methodDesc}>Visa, Mastercard, RuPay, AMEX, etc.</p>
-          </div>
-          <div className={styles.cardNetworks}>
-            <span>VISA</span>
-            <span>MC</span>
-            <span>AMEX</span>
-          </div>
-        </div>
+        {PAYMENT_OPTIONS.map(({ method, description }) => {
+          const isCod = method === 'CASH_ON_DELIVERY';
+          const unavailable = isCod && codUnavailableReason !== null;
+          const isSelected = selected === method;
+
+          return (
+            <label
+              key={method}
+              className={`${styles.row} ${isSelected ? styles.rowSelected : ''} ${unavailable ? styles.rowDisabled : ''}`}>
+              <input
+                type="radio"
+                name="payment_method_choice"
+                className={styles.radio}
+                checked={isSelected}
+                disabled={disabled || unavailable}
+                onChange={() => onSelect(method)}
+              />
+              <PaymentMethodIcon method={method} />
+              <div className={styles.methodBody}>
+                <p className={styles.methodTitle}>{PAYMENT_METHOD_LABELS[method]}</p>
+                <p className={styles.methodDesc}>
+                  {unavailable ? codUnavailableReason : isCod && codFee ? `${description} (+${codFee} fee)` : description}
+                </p>
+              </div>
+              {(method === 'CREDIT_CARD' || method === 'DEBIT_CARD') && (
+                <div className={styles.cardNetworks}>
+                  <span>VISA</span>
+                  <span>MC</span>
+                  <span>RUPAY</span>
+                </div>
+              )}
+            </label>
+          );
+        })}
 
         <div className={`${styles.row} ${styles.rowDisabled}`}>
-          <input type="radio" name="payment_method" className={styles.radio} disabled aria-label="Google Pay" />
-          <GooglePayIcon />
-          <div className={styles.methodBody}>
-            <p className={styles.methodTitle}>
-              Google Pay <span className={styles.comingSoon}>Coming soon</span>
-            </p>
-            <p className={styles.methodDesc}>Pay with Google Pay</p>
-          </div>
-        </div>
-
-        <div className={`${styles.row} ${styles.rowDisabled}`}>
-          <input type="radio" name="payment_method" className={styles.radio} disabled aria-label="PayPal" />
+          <input type="radio" name="payment_method_choice" className={styles.radio} disabled aria-label="PayPal" />
           <PayPalIcon />
           <div className={styles.methodBody}>
             <p className={styles.methodTitle}>
@@ -298,29 +337,13 @@ function PaymentSection() {
             <p className={styles.methodDesc}>Pay with PayPal</p>
           </div>
         </div>
-
-        <div className={`${styles.row} ${styles.rowDisabled}`}>
-          <input type="radio" name="payment_method" className={styles.radio} disabled aria-label="UPI" />
-          <UpiIcon />
-          <div className={styles.methodBody}>
-            <p className={styles.methodTitle}>
-              UPI <span className={styles.comingSoon}>Coming soon</span>
-            </p>
-            <p className={styles.methodDesc}>Pay via UPI (PhonePe, Google Pay, Paytm, etc.)</p>
-          </div>
-        </div>
-
-        <div className={styles.row}>
-          <input type="radio" name="payment_method" className={styles.radio} checked readOnly aria-label="Cash on delivery" />
-          <span className={styles.methodIcon}>
-            <CodIcon />
-          </span>
-          <div className={styles.methodBody}>
-            <p className={styles.methodTitle}>Cash on Delivery</p>
-            <p className={styles.methodDesc}>Pay when your order is delivered</p>
-          </div>
-        </div>
       </div>
+
+      {selected !== 'CASH_ON_DELIVERY' && (
+        <p className={styles.methodDesc} style={{ marginTop: 10 }}>
+          You&apos;ll pay securely through Razorpay after placing the order.
+        </p>
+      )}
 
       <label className={styles.billingRow}>
         <input type="checkbox" defaultChecked disabled />
@@ -371,13 +394,74 @@ export default function Checkout({
   const [idempotencyKey] = useState(generateIdempotencyKey);
   const [placeState, placeFormAction, placePending] = useActionState(placeOrder, initialCheckoutState);
 
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
+  const [paying, setPaying] = useState(false);
+  const [confirming, startConfirm] = useTransition();
+  const openedForRef = useRef<string | null>(null);
+
+  const codUnavailableReason =
+    preview?.cod && !preview.cod.available ? (preview.cod.message ?? 'Not available for this order') : null;
+  const codFee = preview?.cod_fee && Number(preview.cod_fee) > 0 ? formatMoney(preview.cod_fee, STOREFRONT_CURRENCY) : null;
+
+  // Cash can stop being allowed once an address or coupon changes the order.
+  useEffect(() => {
+    if (codUnavailableReason && paymentMethod === 'CASH_ON_DELIVERY') setPaymentMethod('UPI');
+  }, [codUnavailableReason, paymentMethod]);
+
+  // The total can depend on the method (a cash-on-delivery fee), so re-price
+  // whenever the preview on screen was priced for a different one.
+  useEffect(() => {
+    if (!preview?.payment_method || preview.payment_method === paymentMethod) return;
+
+    let stale = false;
+    previewCheckoutFor(selectedAddressId, preview.coupon_code, paymentMethod).then(result => {
+      if (!stale && result.preview) setPreview(result.preview);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [paymentMethod, preview?.payment_method, preview?.coupon_code, selectedAddressId]);
+
+  // The order is placed and waits on Razorpay: open Checkout once for it.
+  useEffect(() => {
+    if (placeState.status !== 'pay' || !placeState.payment) return;
+    const request = placeState.payment;
+    if (openedForRef.current === request.razorpayOrderId) return;
+    openedForRef.current = request.razorpayOrderId;
+
+    const orderPage = `/order-success/${request.orderId}`;
+    setPaying(true);
+
+    payWithRazorpay(request, { onAttemptFailed: message => toast.error(message) })
+      .then(outcome => {
+        if (outcome.kind === 'dismissed') {
+          toast.info('Payment not completed. Your order is saved -- you can pay for it from the order page.');
+          router.push(orderPage);
+          return;
+        }
+
+        startConfirm(async () => {
+          const result = await confirmOnlinePayment(request.orderId, outcome.verification);
+          if (result.status === 'error') {
+            toast.error(result.message ?? 'We could not confirm your payment yet.');
+            router.push(orderPage);
+          }
+        });
+      })
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : 'Could not open the payment window.');
+        router.push(orderPage);
+      })
+      .finally(() => setPaying(false));
+  }, [placeState, router]);
+
   async function handleApplyCoupon() {
     const code = couponInput.trim();
     if (!code) return;
 
     setCouponPending(true);
     setCouponError(null);
-    const result = await previewCheckoutFor(selectedAddressId, code);
+    const result = await previewCheckoutFor(selectedAddressId, code, paymentMethod);
     setCouponPending(false);
 
     if (result.error) {
@@ -391,7 +475,7 @@ export default function Checkout({
 
   async function handleRemoveCoupon() {
     setCouponPending(true);
-    const result = await previewCheckoutFor(selectedAddressId, null);
+    const result = await previewCheckoutFor(selectedAddressId, null, paymentMethod);
     setCouponPending(false);
     setCouponError(null);
     setPreview(result.preview);
@@ -437,6 +521,13 @@ export default function Checkout({
   }
 
   const canPlaceOrder = Boolean(selectedAddressId) && cartItems.length > 0;
+  const busy = placePending || paying || confirming || placeState.status === 'pay';
+  const isOnline = paymentMethod !== 'CASH_ON_DELIVERY';
+
+  let submitLabel = isOnline ? `Pay ${formatMoney(preview?.total_amount, STOREFRONT_CURRENCY)}` : 'Place Order';
+  if (placePending) submitLabel = 'Placing order…';
+  else if (confirming) submitLabel = 'Confirming payment…';
+  else if (paying || placeState.status === 'pay') submitLabel = 'Waiting for payment…';
 
   return (
     <div className={styles.page}>
@@ -446,6 +537,7 @@ export default function Checkout({
         <input type="hidden" name="address_id" value={selectedAddressId ?? ''} />
         <input type="hidden" name="coupon_code" value={preview?.coupon_code ?? ''} />
         <input type="hidden" name="idempotency_key" value={idempotencyKey} />
+        <input type="hidden" name="payment_method" value={paymentMethod} />
 
         <nav className={styles.breadcrumb} aria-label="Checkout progress">
           <Link href="/cart-items">Cart</Link>
@@ -460,21 +552,27 @@ export default function Checkout({
         <h1 className={styles.heading}>Checkout</h1>
         <p className={styles.subtitle}>Complete your order securely and easily.</p>
 
-        {cartItems.length === 0 && <div className={styles.error}>Your cart is empty -- add something before checking out.</div>}
+        {cartItems.length === 0 && !busy && <div className={styles.error}>Your cart is empty -- add something before checking out.</div>}
 
         <div className={styles.grid}>
           <div className={styles.main}>
             <AddressSection
               addresses={addresses}
               selectedId={selectedAddressId}
-              disabled={placePending}
+              disabled={busy}
               onSelect={setSelectedAddressId}
               onEdit={openEditModal}
               onDeleteRequest={handleConfirmDeleteAddress}
               onAddNew={openAddModal}
             />
             <ShippingSection preview={preview} />
-            <PaymentSection />
+            <PaymentSection
+              selected={paymentMethod}
+              onSelect={setPaymentMethod}
+              disabled={busy}
+              codUnavailableReason={codUnavailableReason}
+              codFee={codFee}
+            />
           </div>
 
           <div className={styles.sidebar}>
@@ -488,7 +586,8 @@ export default function Checkout({
               couponPending={couponPending}
               couponError={couponError}
               canPlaceOrder={canPlaceOrder}
-              placeOrderPending={placePending}
+              placeOrderPending={busy}
+              submitLabel={submitLabel}
               placeOrderError={placeState.status === 'error' ? placeState.message : null}
             />
           </div>

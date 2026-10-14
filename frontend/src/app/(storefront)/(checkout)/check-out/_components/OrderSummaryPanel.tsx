@@ -109,6 +109,7 @@ export default function OrderSummaryPanel({
   canPlaceOrder,
   placeOrderPending,
   placeOrderError,
+  submitLabel,
 }: {
   cartItems: CartItem[];
   preview: CheckoutPreview | null;
@@ -121,6 +122,8 @@ export default function OrderSummaryPanel({
   canPlaceOrder: boolean;
   placeOrderPending: boolean;
   placeOrderError: string | null;
+  /** What the button says: "Place Order", "Pay ₹1,179.99", or what is in progress. */
+  submitLabel: string;
 }) {
   const [couponOpen, setCouponOpen] = useState(true);
   const [couponsModalOpen, setCouponsModalOpen] = useState(false);
@@ -128,6 +131,7 @@ export default function OrderSummaryPanel({
   const appliedCode = preview?.coupon_code ?? null;
   const discount = preview ? Number(preview.discount_amount) : 0;
   const shippingAmount = preview ? Number(preview.shipping_amount) : 0;
+  const codFee = preview?.cod_fee ? Number(preview.cod_fee) : 0;
 
   function selectCoupon(code: string) {
     onCouponInputChange(code);
@@ -241,6 +245,13 @@ export default function OrderSummaryPanel({
             <span>{shippingAmount > 0 ? formatMoney(preview?.shipping_amount, STOREFRONT_CURRENCY) : 'Free'}</span>
           </div>
 
+          {codFee > 0 && (
+            <div className={styles.summaryRow}>
+              <span>Cash on Delivery Fee</span>
+              <span>{formatMoney(preview?.cod_fee, STOREFRONT_CURRENCY)}</span>
+            </div>
+          )}
+
           <div className={styles.summaryRow}>
             <span>Estimated Tax</span>
             <span>{formatMoney(preview?.tax_amount, STOREFRONT_CURRENCY)}</span>
@@ -293,7 +304,7 @@ export default function OrderSummaryPanel({
       </div>
 
       <button type="submit" className={styles.placeOrderBtn} disabled={!canPlaceOrder || placeOrderPending}>
-        {placeOrderPending ? 'Placing order…' : 'Place Order'}
+        {submitLabel}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

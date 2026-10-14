@@ -5,10 +5,17 @@ import { redirect } from 'next/navigation';
 
 import { addressApi } from '@/lib/api/addresses';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
-import { checkoutApi, couponApi, orderApi } from '@/lib/api/orders';
+import { checkoutApi, couponApi, orderApi, paymentApi } from '@/lib/api/orders';
 import { getActionAccessToken } from '@/lib/auth/session';
 import type { CheckoutState } from '@/lib/orders/state';
-import type { CheckoutPreview } from '@/types/orders';
+import { pendingOnlinePayment } from '@/lib/payments/online';
+import {
+  ONLINE_PAYMENT_METHODS,
+  type CheckoutPreview,
+  type Order,
+  type PaymentMethod,
+  type RazorpayVerification,
+} from '@/types/orders';
 
 function toState(error: unknown): CheckoutState {
   if (error instanceof ApiError) {
@@ -115,13 +122,23 @@ export async function applyCoupon(_previous: CheckoutState, formData: FormData):
   }
 }
 
+const PAYMENT_METHODS: readonly PaymentMethod[] = [...ONLINE_PAYMENT_METHODS, 'CASH_ON_DELIVERY'];
+
+function paymentMethodFrom(formData: FormData): PaymentMethod {
+  const value = String(formData.get('payment_method') ?? '');
+  return (PAYMENT_METHODS as readonly string[]).includes(value) ? (value as PaymentMethod) : 'CASH_ON_DELIVERY';
+}
+
 /**
  * Place the order.
  *
- * Only the address and an optional coupon are sent. Every price is computed
- * by the backend from the cart, so nothing about money crosses from here.
- * The idempotency key makes a double submit safe: the original order comes
- * back rather than a second one being created.
+ * Only the address, an optional coupon and the payment method are sent.
+ * Every price is computed by the backend from the cart, so nothing about
+ * money crosses from here. The idempotency key makes a double submit safe:
+ * the original order comes back rather than a second one being created.
+ *
+ * Cash goes straight to the confirmation page. Anything paid online comes
+ * back as `pay`, carrying what the browser needs to open Razorpay Checkout.
  */
 export async function placeOrder(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
   const token = await getActionAccessToken();
@@ -132,12 +149,12 @@ export async function placeOrder(_previous: CheckoutState, formData: FormData): 
 
   const couponCode = String(formData.get('coupon_code') ?? '').trim() || null;
   const idempotencyKey = String(formData.get('idempotency_key') ?? '') || crypto.randomUUID();
+  const paymentMethod = paymentMethodFrom(formData);
 
-  let orderId: string;
+  let order: Order;
 
   try {
-    const order = await checkoutApi.placeOrder(token, { addressId, couponCode, idempotencyKey });
-    orderId = order.id;
+    order = await checkoutApi.placeOrder(token, { addressId, couponCode, idempotencyKey, paymentMethod });
   } catch (error) {
     return toState(error);
   }
@@ -146,7 +163,31 @@ export async function placeOrder(_previous: CheckoutState, formData: FormData): 
   revalidatePath('/cart-items');
   revalidatePath('/', 'layout');
 
+  const payment = pendingOnlinePayment(order);
+  if (payment) return { status: 'pay', message: null, payment };
+
   // The real order id from the backend, never a fabricated one.
+  redirect(`/order-success/${order.id}`);
+}
+
+/**
+ * Confirm what Razorpay Checkout reported. The backend checks Razorpay's
+ * signature before anything is marked paid; this only carries it there.
+ */
+export async function confirmOnlinePayment(
+  orderId: string,
+  verification: RazorpayVerification,
+): Promise<CheckoutState> {
+  const token = await getActionAccessToken();
+
+  try {
+    await paymentApi.verifyRazorpay(token, verification);
+  } catch (error) {
+    return toState(error);
+  }
+
+  revalidatePath(`/order-success/${orderId}`);
+  revalidatePath('/my-orders');
   redirect(`/order-success/${orderId}`);
 }
 
@@ -239,6 +280,7 @@ export async function previewCheckout(couponCode: string | null): Promise<Checko
 export async function previewCheckoutFor(
   addressId: string | null,
   couponCode: string | null,
+  paymentMethod?: PaymentMethod,
 ): Promise<{ preview: CheckoutPreview | null; error: string | null }> {
   const token = await getActionAccessToken();
   if (!token) return { preview: null, error: 'Sign in to continue.' };
@@ -247,6 +289,7 @@ export async function previewCheckoutFor(
     const preview = await checkoutApi.preview(token, {
       addressId: addressId ?? undefined,
       couponCode: couponCode ?? undefined,
+      paymentMethod,
     });
     return { preview, error: null };
   } catch (error) {

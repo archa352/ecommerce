@@ -72,3 +72,5 @@ class Payment(Base, TimestampMixin):
     provider: Mapped[str] = mapped_column(
         String(20), nullable=False, default=PaymentProvider.COD.value
     )
+    razorpay_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    razorpay_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

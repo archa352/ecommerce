@@ -1,6 +1,14 @@
 import { apiRequest, apiRequestPage } from '@/lib/api/client';
 import type { Page, PageParams } from '@/types/api';
-import type { CheckoutPreview, CouponApplyResult, Order, OrderSummary, Payment } from '@/types/orders';
+import type {
+  CheckoutPreview,
+  CouponApplyResult,
+  Order,
+  OrderSummary,
+  Payment,
+  PaymentMethod,
+  RazorpayVerification,
+} from '@/types/orders';
 
 export const checkoutApi = {
   /**
@@ -9,11 +17,17 @@ export const checkoutApi = {
    * The only place discount, shipping, tax and total can be read before an
    * order exists. Passing an address lets the backend price delivery to it.
    */
-  preview(token: string, options: { addressId?: string; couponCode?: string } = {}): Promise<CheckoutPreview> {
+  preview(
+    token: string,
+    options: { addressId?: string; couponCode?: string; paymentMethod?: PaymentMethod } = {},
+  ): Promise<CheckoutPreview> {
     return apiRequest<CheckoutPreview>('/checkout/preview', {
       method: 'POST',
       query: { coupon_code: options.couponCode },
-      body: { address_id: options.addressId ?? null },
+      body: {
+        address_id: options.addressId ?? null,
+        ...(options.paymentMethod ? { payment_method: options.paymentMethod } : {}),
+      },
       token,
       cache: 'no-store',
     });
@@ -25,15 +39,25 @@ export const checkoutApi = {
    * Takes only the address and an optional coupon: every price is computed
    * server-side from the cart, so nothing about money is sent from here.
    * The idempotency key makes a retry safe -- the original order comes back
-   * rather than a duplicate being created.
+   * rather than a duplicate being created. Any method but cash comes back
+   * with a pending Razorpay payment on the order, ready to open Checkout.
    */
   placeOrder(
     token: string,
-    input: { addressId: string; couponCode?: string | null; idempotencyKey: string },
+    input: {
+      addressId: string;
+      couponCode?: string | null;
+      idempotencyKey: string;
+      paymentMethod?: PaymentMethod;
+    },
   ): Promise<Order> {
     return apiRequest<Order>('/checkout', {
       method: 'POST',
-      body: { address_id: input.addressId, coupon_code: input.couponCode ?? null },
+      body: {
+        address_id: input.addressId,
+        coupon_code: input.couponCode ?? null,
+        payment_method: input.paymentMethod ?? 'CASH_ON_DELIVERY',
+      },
       headers: { 'Idempotency-Key': input.idempotencyKey },
       token,
       cache: 'no-store',
@@ -85,5 +109,18 @@ export const paymentApi = {
    */
   get(token: string, paymentId: string): Promise<Payment> {
     return apiRequest<Payment>(`/payments/${paymentId}`, { token, cache: 'no-store' });
+  },
+
+  /**
+   * Hand Razorpay's signed result to the backend, which checks the signature
+   * with the store's secret and only then marks the payment paid.
+   */
+  verifyRazorpay(token: string | null, verification: RazorpayVerification): Promise<Payment> {
+    return apiRequest<Payment>('/payments/razorpay/verify', {
+      method: 'POST',
+      body: verification,
+      token,
+      cache: 'no-store',
+    });
   },
 };

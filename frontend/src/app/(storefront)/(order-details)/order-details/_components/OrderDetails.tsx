@@ -11,15 +11,12 @@ import { mediaUrl } from '@/lib/media';
 import { formatDate, formatMoney } from '@/lib/format';
 import { cancelOrder } from '@/lib/orders/actions';
 import { initialCheckoutState } from '@/lib/orders/state';
-import { CANCELLABLE_STATUSES, type Order, type OrderStatus, type PaymentProvider, type PaymentStatus } from '@/types/orders';
+import { paymentMethodLabel } from '@/lib/payments/online';
+import { CANCELLABLE_STATUSES, type Order, type OrderStatus, type PaymentStatus } from '@/types/orders';
 
 import styles from './OrderDetails.module.css';
 
 export type OrderItemImages = Record<string, { url: string; alt_text: string | null } | undefined>;
-
-const PAYMENT_METHOD_LABELS: Record<PaymentProvider, string> = {
-  COD: 'Cash on Delivery',
-};
 
 /** The order's real lifecycle, in order. Cancelled is a separate branch, not a step on this line. */
 const TRACK_STEPS: { status: OrderStatus; label: string }[] = [
@@ -112,7 +109,7 @@ export default function OrderDetails({ order, images }: { order: Order; images: 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   const address = order.delivery_address;
-  const paymentMethod = order.payment ? PAYMENT_METHOD_LABELS[order.payment.provider] ?? order.payment.provider : '—';
+  const paymentMethod = paymentMethodLabel(order);
   const currentStepIndex = TRACK_STEPS.findIndex(step => step.status === order.status);
   const canCancel = CANCELLABLE_STATUSES.includes(order.status);
 

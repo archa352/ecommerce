@@ -1,13 +1,11 @@
 import Link from 'next/link';
 
 import { formatMoney } from '@/lib/format';
-import type { Order, PaymentProvider } from '@/types/orders';
+import { paymentMethodLabel, pendingOnlinePayment } from '@/lib/payments/online';
+import type { Order } from '@/types/orders';
 
 import styles from './OrderSuccess.module.css';
-
-const PAYMENT_METHOD_LABELS: Record<PaymentProvider, string> = {
-  COD: 'Cash on Delivery',
-};
+import PayNowButton from './PayNowButton';
 
 function CheckIcon() {
   return (
@@ -38,18 +36,34 @@ function ArrowIcon() {
  * `order`, nothing here is a placeholder.
  */
 export default function OrderSuccess({ order }: { order: Order }) {
-  const paymentLabel = order.payment ? PAYMENT_METHOD_LABELS[order.payment.provider] ?? order.payment.provider : '—';
+  const paymentLabel = paymentMethodLabel(order);
+  const awaitingPayment = pendingOnlinePayment(order);
+  const paidOnline = order.payment?.provider === 'RAZORPAY' && order.payment_status === 'PAID';
 
   return (
     <div className={styles.page}>
       <div className={styles.container}>
         <CheckIcon />
 
-        <h1 className={styles.heading}>Order Placed Successfully</h1>
-        <p className={styles.thanks}>Thank you for your order!</p>
-        <p className={styles.subtext}>
-          Your order has been successfully placed. We&apos;ll keep you updated on your order status.
-        </p>
+        {awaitingPayment ? (
+          <>
+            <h1 className={styles.heading}>Complete Your Payment</h1>
+            <p className={styles.thanks}>Your order is saved, but not paid yet.</p>
+            <p className={styles.subtext}>
+              Pay now to confirm order #{order.order_number}. If money was taken from your account, it will show here
+              within a few minutes -- please don&apos;t pay twice.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className={styles.heading}>Order Placed Successfully</h1>
+            <p className={styles.thanks}>Thank you for your order!</p>
+            <p className={styles.subtext}>
+              {paidOnline ? 'We have received your payment and your order is confirmed. ' : 'Your order has been successfully placed. '}
+              We&apos;ll keep you updated on your order status.
+            </p>
+          </>
+        )}
 
         <div className={styles.infoCard}>
           <div className={styles.infoItem}>
@@ -67,13 +81,24 @@ export default function OrderSuccess({ order }: { order: Order }) {
         </div>
 
         <div className={styles.actions}>
-          <Link href={`/invoice/${order.id}`} className={styles.primaryBtn}>
-            View My Order
-            <ArrowIcon />
-          </Link>
-          <Link href="/" className={styles.secondaryBtn}>
-            Continue Shopping
-          </Link>
+          {awaitingPayment ? (
+            <>
+              <PayNowButton request={awaitingPayment} className={styles.primaryBtn} />
+              <Link href={`/invoice/${order.id}`} className={styles.secondaryBtn}>
+                View My Order
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href={`/invoice/${order.id}`} className={styles.primaryBtn}>
+                View My Order
+                <ArrowIcon />
+              </Link>
+              <Link href="/" className={styles.secondaryBtn}>
+                Continue Shopping
+              </Link>
+            </>
+          )}
         </div>
 
         <p className={styles.caption}>
