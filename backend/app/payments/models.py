@@ -74,3 +74,4 @@ class Payment(Base, TimestampMixin):
     )
     razorpay_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     razorpay_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    razorpay_refund_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)

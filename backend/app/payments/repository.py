@@ -33,3 +33,12 @@ class PaymentRepository(TenantScopedRepository[Payment]):
         return await self.find_one(
             Payment.order_id == order_id, Payment.status == status.value
         )
+
+    async def get_for_update(self, payment_id: UUID) -> Payment | None:
+        """Lock the payment row; callers lock its order first."""
+        return await self.session.scalar(
+            self.base_select()
+            .where(Payment.id == payment_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )

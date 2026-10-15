@@ -78,7 +78,7 @@ export const orderApi = {
     return apiRequest<Order>(`/orders/${orderId}`, { token, cache: 'no-store' });
   },
 
-  /** Allowed only while the order is pending, confirmed or processing. */
+  /** Allowed only while `order.can_cancel` is true: before processing, and not yet paid online. */
   cancel(token: string, orderId: string): Promise<Order> {
     return apiRequest<Order>(`/orders/${orderId}/cancel`, {
       method: 'POST',

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,7 +15,13 @@ from app.cart.repository import CartItemRepository, CartRepository
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.config import get_settings
+from app.core.exceptions import (
+    ConflictError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from app.core.logging import get_logger
 from app.core.money import ZERO, money
 from app.core.pagination import PageParams
@@ -22,18 +29,22 @@ from app.coupons.models import Coupon
 from app.coupons.service import CouponService
 from app.orders.constants import (
     ALLOWED_TRANSITIONS,
+    ONLINE_PAYMENT_METHODS,
     ORDER_NUMBER_PREFIX,
     OrderStatus,
+    PaymentMethod,
     PaymentStatus,
 )
 from app.orders.models import ORDER_NUMBER_SEQUENCE, Order, OrderItem
 from app.orders.repository import OrderRepository
 from app.orders.schemas import CheckoutItem, CheckoutPreview
+from app.payments import razorpay
 from app.payments.constants import PaymentProvider
 from app.payments.constants import PaymentStatus as CashStatus
 from app.payments.models import Payment
 from app.payments.repository import PaymentRepository
 from app.pricing.service import ShippingService, TaxService
+from app.tenants.constants import DEFAULT_CURRENCY
 
 logger = get_logger("orders")
 
@@ -41,7 +52,7 @@ ORDER_NOT_FOUND = "Order not found"
 ADDRESS_NOT_FOUND = "Address not found"
 CART_EMPTY = "Your cart is empty"
 
-CUSTOMER_CANCELLABLE_STATUSES = frozenset({OrderStatus.PENDING, OrderStatus.CONFIRMED})
+MIN_ONLINE_PAYMENT_AMOUNT = Decimal("1.00")
 
 
 class CheckoutService:
@@ -67,6 +78,7 @@ class CheckoutService:
         self,
         address_id: UUID | None = None,
         coupon_code: str | None = None,
+        payment_method: PaymentMethod | None = None,
     ) -> CheckoutPreview:
         """Price the cart without touching stock or creating anything."""
         if address_id is not None:
@@ -77,7 +89,9 @@ class CheckoutService:
         subtotal = self._subtotal(items)
 
         coupon, discount = await self._resolve_coupon(coupon_code, subtotal, for_update=False)
-        return await self._summary(items, subtotal, coupon, discount)
+        summary = await self._summary(items, subtotal, coupon, discount)
+        summary.payment_method = payment_method
+        return summary
 
     async def place_order(
         self,
@@ -85,12 +99,18 @@ class CheckoutService:
         coupon_code: str | None = None,
         *,
         idempotency_key: str | None = None,
+        payment_method: PaymentMethod = PaymentMethod.CASH_ON_DELIVERY,
+        currency: str = DEFAULT_CURRENCY,
     ) -> Order:
         """Create the order, its payment and its stock reservations in one transaction."""
         if idempotency_key:
             replayed = await self._replayed_order(idempotency_key)
             if replayed is not None:
                 return replayed
+
+        online = payment_method in ONLINE_PAYMENT_METHODS
+        if online and not razorpay.is_configured():
+            raise ServiceUnavailableError(razorpay.UNAVAILABLE)
 
         cart = await self._require_active_cart()
         address = await self._require_address(address_id)
@@ -100,16 +120,10 @@ class CheckoutService:
         try:
             order_number = await self._next_order_number()
 
-            for item in items:
+            for item in sorted(items, key=lambda line: str(line.variant_id)):
                 await self.inventory.reserve(
                     item.variant_id, item.quantity, reference=order_number, commit=False
                 )
-
-            # Re-validated here, under lock, against the server-computed
-            # subtotal -- never the subtotal/discount an earlier preview
-            # call may have shown the customer. This is also the only place
-            # a coupon actually gets spent (times_used incremented,
-            # CouponUsage recorded); a plain preview never reaches this.
             coupon, discount = await self._resolve_coupon(coupon_code, subtotal, for_update=True)
             summary = await self._summary(items, subtotal, coupon, discount)
 
@@ -135,6 +149,7 @@ class CheckoutService:
                 delivery_postal_code=address.postal_code,
                 delivery_country=address.country,
                 idempotency_key=idempotency_key,
+                payment_method=payment_method.value,
             )
             self.session.add(order)
             await self.session.flush()
@@ -156,22 +171,32 @@ class CheckoutService:
                 )
 
             if coupon is not None:
-                # No commit of its own -- shares this transaction, so a
-                # failure anywhere below (or above) rolls the redemption
-                # back along with the order itself.
                 await self.coupons.record_redemption(
                     coupon, self.customer_id, order.id, discount
                 )
 
-            self.session.add(
-                Payment(
-                    tenant_id=self.tenant_id,
-                    order_id=order.id,
-                    amount=summary.total_amount,
-                    status=CashStatus.PENDING.value,
-                    provider=PaymentProvider.COD.value,
-                )
+            payment = Payment(
+                tenant_id=self.tenant_id,
+                order_id=order.id,
+                amount=summary.total_amount,
+                status=CashStatus.PENDING.value,
+                provider=(
+                    PaymentProvider.RAZORPAY.value if online else PaymentProvider.COD.value
+                ),
             )
+            self.session.add(payment)
+
+            if online:
+                if summary.total_amount < MIN_ONLINE_PAYMENT_AMOUNT:
+                    raise ValidationError(
+                        f"Online payment needs a total of at least {MIN_ONLINE_PAYMENT_AMOUNT}"
+                    )
+                payment.razorpay_order_id = await razorpay.create_order(
+                    amount=summary.total_amount,
+                    currency=currency,
+                    receipt=order_number,
+                    notes={"order_id": str(order.id), "tenant_id": str(self.tenant_id)},
+                )
 
             cart.status = CartStatus.CONVERTED.value
 
@@ -359,7 +384,89 @@ class OrderService:
 
     async def update_status(self, order_id: UUID, new_status: OrderStatus) -> Order:
         """Move an order to its next status, adjusting stock and payment to match."""
-        order = await self.get(order_id)
+        order = await self.orders.get_for_update(order_id)
+        if order is None:
+            raise NotFoundError(ORDER_NOT_FOUND)
+        return await self._transition(order, new_status)
+
+    async def cancel_for_customer(self, customer_id: UUID, order_id: UUID) -> Order:
+        """Cancel the customer's own order, allowed only before PROCESSING and payment."""
+        order = await self.orders.get_for_update(order_id, customer_id=customer_id)
+        if order is None:
+            raise NotFoundError(ORDER_NOT_FOUND)
+
+        if order.status == OrderStatus.CANCELLED.value:
+            return order
+
+        if order.payment_status == PaymentStatus.PAID.value:
+            raise ConflictError(
+                "This order has been paid online. Please contact the store to cancel "
+                "it and arrange a refund.",
+                error_code="REFUND_REQUIRED",
+            )
+
+        if not order.customer_can_cancel:
+            raise ConflictError(
+                f"An order that is {order.status} can no longer be cancelled online. "
+                "Please contact the store."
+            )
+
+        return await self._transition(order, OrderStatus.CANCELLED)
+
+    async def expire_unpaid_online(self) -> int:
+        """Cancel online orders left unpaid past the expiry window; returns how many."""
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            minutes=get_settings().online_payment_expiry_minutes
+        )
+        unpaid = (
+            Order.status == OrderStatus.PENDING.value,
+            Order.payment_status == PaymentStatus.PENDING.value,
+            Order.payment_method != PaymentMethod.CASH_ON_DELIVERY.value,
+            Order.created_at < cutoff,
+        )
+        candidate_ids = (
+            await self.session.scalars(
+                select(Order.id).where(Order.tenant_id == self.tenant_id, *unpaid)
+            )
+        ).all()
+
+        expired = 0
+        for order_id in candidate_ids:
+            order = await self.session.scalar(
+                self.orders.base_select()
+                .where(Order.id == order_id, *unpaid)
+                .with_for_update(skip_locked=True)
+                .execution_options(populate_existing=True)
+            )
+            if order is None:
+                await self.session.rollback()
+                continue
+
+            gateway_order_id = order.payment.razorpay_order_id if order.payment else None
+            if gateway_order_id is not None:
+                try:
+                    statuses = await razorpay.fetch_order_payment_statuses(gateway_order_id)
+                except ServiceUnavailableError:
+                    await self.session.rollback()
+                    continue
+                if any(status != "failed" for status in statuses):
+                    logger.warning(
+                        "orders.expiry_skipped_payment_in_flight order_number=%s "
+                        "tenant_id=%s statuses=%s",
+                        order.order_number,
+                        self.tenant_id,
+                        statuses,
+                    )
+                    await self.session.rollback()
+                    continue
+
+            await self._transition(order, OrderStatus.CANCELLED)
+            expired += 1
+
+        return expired
+
+    async def _transition(self, order: Order, new_status: OrderStatus) -> Order:
+        """Apply one status change to an order whose row this transaction has locked."""
         current = OrderStatus(order.status)
 
         if new_status == current:
@@ -368,6 +475,16 @@ class OrderService:
         if new_status not in ALLOWED_TRANSITIONS[current]:
             raise ConflictError(
                 f"An order that is {current.value} cannot become {new_status.value}"
+            )
+
+        if (
+            new_status is not OrderStatus.CANCELLED
+            and order.payment_method != PaymentMethod.CASH_ON_DELIVERY.value
+            and order.payment_status != PaymentStatus.PAID.value
+        ):
+            raise ConflictError(
+                "This order is paid online and has not been paid yet",
+                error_code="PAYMENT_PENDING",
             )
 
         try:
@@ -394,30 +511,14 @@ class OrderService:
         )
         return await self.get(order.id)
 
-    async def cancel_for_customer(self, customer_id: UUID, order_id: UUID) -> Order:
-        """Cancel the customer's own order, allowed only before PROCESSING."""
-        order = await self.get_for_customer(customer_id, order_id)
-        current = OrderStatus(order.status)
-
-        if current is OrderStatus.CANCELLED:
-            return order
-
-        if current not in CUSTOMER_CANCELLABLE_STATUSES:
-            raise ConflictError(
-                f"An order that is {current.value} can no longer be cancelled online. "
-                "Please contact the store."
-            )
-
-        return await self.update_status(order_id, OrderStatus.CANCELLED)
-
     async def _release_stock(self, order: Order) -> None:
-        for item in order.items:
+        for item in sorted(order.items, key=lambda line: str(line.variant_id)):
             await self.inventory.release(
                 item.variant_id, item.quantity, reference=order.order_number, commit=False
             )
 
     async def _fulfil_stock(self, order: Order) -> None:
-        for item in order.items:
+        for item in sorted(order.items, key=lambda line: str(line.variant_id)):
             await self.inventory.fulfil(
                 item.variant_id, item.quantity, reference=order.order_number, commit=False
             )
@@ -425,7 +526,7 @@ class OrderService:
     async def _collect_cash(self, order: Order) -> None:
         """Mark the COD payment PAID; `update_status` owns the transaction."""
         payment = await self.payments.get_by_status(order.id, CashStatus.PENDING)
-        if payment is None:
+        if payment is None or payment.provider != PaymentProvider.COD.value:
             return
 
         payment.status = CashStatus.PAID.value

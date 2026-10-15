@@ -369,9 +369,7 @@ class DashboardService:
         }
 
         today_paid_amount = (
-            await self.session.scalar(
-                select(
-                    func.coalesce(
+            await self.session.scalar(select(func.coalesce(
                         func.sum(Payment.amount),
                         Decimal("0.00"),
                     )

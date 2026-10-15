@@ -42,10 +42,9 @@ class LocalStorage:
             shutil.rmtree(self.root)
 
 
-def build_key(tenant_id: uuid.UUID, filename: str) -> str:
-    """Tenant-partitioned so one storefront's files never sit among another's."""
-    suffix = Path(filename).suffix.lower() or ".bin"
-    return f"{tenant_id}/{uuid.uuid4().hex}{suffix}"
+def build_key(tenant_id: uuid.UUID, extension: str) -> str:
+    """A server-chosen name, tenant-partitioned; nothing in it comes from the client."""
+    return f"{tenant_id}/{uuid.uuid4().hex}{extension}"
 
 
 def get_storage() -> Storage:

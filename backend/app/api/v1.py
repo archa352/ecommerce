@@ -21,7 +21,6 @@ from app.pricing.router import shipping_router, tax_router
 from app.ratings.router import admin_router as ratings_admin_router
 from app.ratings.router import router as ratings_router
 from app.search_filter.router import router as search_filter_router
-from app.users.router import router as users_router
 from app.wishlist.router import router as wishlist_router
 
 api_router = APIRouter()
@@ -29,7 +28,6 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(auth_admin_router)
 api_router.include_router(auth_staff_router)
-api_router.include_router(users_router)
 
 api_router.include_router(catalogue_router)
 api_router.include_router(storefront_router)

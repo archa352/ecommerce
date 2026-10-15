@@ -21,6 +21,27 @@ class PaymentStatus(str, Enum):
     REFUNDED = "REFUNDED"
 
 
+class PaymentMethod(str, Enum):
+    """What the shopper chose at checkout; everything but cash is paid through Razorpay."""
+
+    UPI = "UPI"
+    CREDIT_CARD = "CREDIT_CARD"
+    DEBIT_CARD = "DEBIT_CARD"
+    NET_BANKING = "NET_BANKING"
+    CASH_ON_DELIVERY = "CASH_ON_DELIVERY"
+
+
+ONLINE_PAYMENT_METHODS = frozenset(
+    {
+        PaymentMethod.UPI,
+        PaymentMethod.CREDIT_CARD,
+        PaymentMethod.DEBIT_CARD,
+        PaymentMethod.NET_BANKING,
+    }
+)
+
+PAYMENT_METHOD_LENGTH = 20
+
 ALLOWED_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.PENDING: frozenset(
         {OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED}
@@ -31,6 +52,8 @@ ALLOWED_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.DELIVERED: frozenset(),
     OrderStatus.CANCELLED: frozenset(),
 }
+
+CUSTOMER_CANCELLABLE_STATUSES = frozenset({OrderStatus.PENDING, OrderStatus.CONFIRMED})
 
 MAX_ORDER_NUMBER_LENGTH = 32
 MAX_IDEMPOTENCY_KEY_LENGTH = 80

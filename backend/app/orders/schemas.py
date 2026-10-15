@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.pagination import PageParams
 from app.core.schemas import StrictModel
-from app.orders.constants import OrderStatus, PaymentStatus
+from app.orders.constants import OrderStatus, PaymentMethod, PaymentStatus
 from app.payments.schemas import PaymentRead
 
 
@@ -33,6 +33,7 @@ class CheckoutPreview(BaseModel):
     shipping_amount: Decimal
     tax_amount: Decimal
     total_amount: Decimal
+    payment_method: PaymentMethod | None = None
 
 
 class CheckoutCreate(StrictModel):
@@ -43,12 +44,14 @@ class CheckoutCreate(StrictModel):
 
     address_id: UUID
     coupon_code: str | None = Field(default=None, min_length=1, max_length=50)
+    payment_method: PaymentMethod = PaymentMethod.CASH_ON_DELIVERY
 
 
 class CheckoutPreviewCreate(StrictModel):
     """An optional address to price the cart against, validated when it is sent."""
 
     address_id: UUID | None = None
+    payment_method: PaymentMethod | None = None
 
 
 class DeliveryAddressRead(BaseModel):
@@ -88,6 +91,8 @@ class OrderRead(BaseModel):
     tax_amount: Decimal
     total_amount: Decimal
     currency: str
+    payment_method: PaymentMethod
+    can_cancel: bool
     payment: PaymentRead | None
     delivery_address: DeliveryAddressRead
     created_at: datetime

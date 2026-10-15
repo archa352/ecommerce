@@ -40,6 +40,8 @@ def order_read(order: Order, currency: str) -> OrderRead:
         tax_amount=order.tax_amount,
         total_amount=order.total_amount,
         currency=currency,
+        payment_method=order.payment_method,
+        can_cancel=order.customer_can_cancel,
         payment=payment_read(order.payment, currency) if order.payment else None,
         delivery_address=delivery_address(order),
         created_at=order.created_at,

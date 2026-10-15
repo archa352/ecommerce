@@ -32,16 +32,20 @@ from app.catalogue.constants import (
 )
 from app.models.base import Base, TimestampMixin
 from app.orders.constants import (
+    CUSTOMER_CANCELLABLE_STATUSES,
     MAX_IDEMPOTENCY_KEY_LENGTH,
     MAX_ORDER_NUMBER_LENGTH,
     ORDER_NUMBER_START,
+    PAYMENT_METHOD_LENGTH,
     OrderStatus,
+    PaymentMethod,
     PaymentStatus,
 )
 from app.payments.models import Payment
 
 _ORDER_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in OrderStatus)
 _PAYMENT_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
+_PAYMENT_METHOD_VALUES = ", ".join(f"'{method.value}'" for method in PaymentMethod)
 
 ORDER_NUMBER_SEQUENCE = Sequence(
     "order_number_seq", start=ORDER_NUMBER_START, metadata=Base.metadata
@@ -73,6 +77,9 @@ class Order(Base, TimestampMixin):
         CheckConstraint(f"status IN ({_ORDER_STATUS_VALUES})", name="status_valid"),
         CheckConstraint(
             f"payment_status IN ({_PAYMENT_STATUS_VALUES})", name="payment_status_valid"
+        ),
+        CheckConstraint(
+            f"payment_method IN ({_PAYMENT_METHOD_VALUES})", name="payment_method_valid"
         ),
         CheckConstraint("subtotal >= 0", name="subtotal_not_negative"),
         CheckConstraint("shipping_amount >= 0", name="shipping_not_negative"),
@@ -116,6 +123,13 @@ class Order(Base, TimestampMixin):
 
     payment_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=PaymentStatus.PENDING.value
+    )
+
+    payment_method: Mapped[str] = mapped_column(
+        String(PAYMENT_METHOD_LENGTH),
+        nullable=False,
+        default=PaymentMethod.CASH_ON_DELIVERY.value,
+        server_default=PaymentMethod.CASH_ON_DELIVERY.value,
     )
 
     subtotal: Mapped[Decimal] = mapped_column(
@@ -199,6 +213,14 @@ class Order(Base, TimestampMixin):
         lazy="selectin",
         viewonly=True,
     )
+
+    @property
+    def customer_can_cancel(self) -> bool:
+        """Whether the customer may cancel online: before PROCESSING and not yet paid."""
+        return (
+            OrderStatus(self.status) in CUSTOMER_CANCELLABLE_STATUSES
+            and self.payment_status != PaymentStatus.PAID.value
+        )
 
 
 class OrderItem(Base, TimestampMixin):

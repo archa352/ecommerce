@@ -22,6 +22,10 @@ DEV_PLACEHOLDER_SECRETS = frozenset(
     }
 )
 
+KNOWN_ENVIRONMENTS = frozenset(
+    {"development", "test", "testing", "staging", "production", "prod"}
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -52,6 +56,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 14
+    refresh_reuse_grace_seconds: int = 30
 
     phone_default_country_code: str = "91"
     phone_national_number_length: int = 10
@@ -105,6 +110,8 @@ class Settings(BaseSettings):
     razorpay_api_url: str = "https://api.razorpay.com/v1"
     razorpay_timeout_seconds: float = 10.0
 
+    online_payment_expiry_minutes: int = 30
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value: object) -> object:
@@ -131,6 +138,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_production_safety(self) -> Settings:
+        if self.environment.lower() not in KNOWN_ENVIRONMENTS:
+            raise ValueError(
+                f"Unknown ENVIRONMENT {self.environment!r}; expected one of "
+                + ", ".join(sorted(KNOWN_ENVIRONMENTS))
+            )
         if self.is_production:
             placeholders = [
                 name

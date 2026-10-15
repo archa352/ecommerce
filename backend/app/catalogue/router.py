@@ -46,6 +46,7 @@ from app.catalogue.service import (
     VariantService,
 )
 from app.catalogue.uploads import store_image
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
@@ -435,9 +436,8 @@ async def upload_product_image(
 ) -> ApiResponse[ProductImageRead]:
     url = await store_image(
         user.tenant_id,
-        file.filename or "",
         file.content_type or "",
-        await file.read(),
+        await file.read(get_settings().max_upload_bytes + 1),
     )
 
     image = await ProductImageService(session, user.tenant_id).add_uploaded(

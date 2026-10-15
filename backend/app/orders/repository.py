@@ -47,6 +47,17 @@ class OrderRepository(TenantScopedRepository[Order]):
 
         return stmt.order_by(Order.created_at.desc())
 
+    async def get_for_update(
+        self, order_id: UUID, customer_id: UUID | None = None
+    ) -> Order | None:
+        """Lock the order row; every change to an order or its payment takes this lock first."""
+        stmt = self.base_select().where(Order.id == order_id)
+        if customer_id is not None:
+            stmt = stmt.where(Order.customer_id == customer_id)
+        return await self.session.scalar(
+            stmt.with_for_update().execution_options(populate_existing=True)
+        )
+
     async def get_for_customer(self, customer_id: UUID, order_id: UUID) -> Order | None:
         """Fetch an order scoped to the customer as well as the tenant."""
         return await self.find_one(

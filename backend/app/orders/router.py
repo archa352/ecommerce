@@ -24,6 +24,7 @@ from app.orders.schemas import (
 )
 from app.orders.serializers import order_read, order_summary_read
 from app.orders.service import CheckoutService, OrderService
+from app.payments.service import PaymentService
 from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 
@@ -56,6 +57,7 @@ async def preview_checkout(
     ).preview(
         address_id=data.address_id if data else None,
         coupon_code=coupon_code,
+        payment_method=data.payment_method if data else None,
     )
     return ok(preview, message="Checkout preview")
 
@@ -88,7 +90,11 @@ async def place_order(
     )
 
     order = await CheckoutService(session, user.tenant_id, user.id).place_order(
-        data.address_id, data.coupon_code, idempotency_key=idempotency_key
+        data.address_id,
+        data.coupon_code,
+        idempotency_key=idempotency_key,
+        payment_method=data.payment_method,
+        currency=tenant.currency,
     )
     return ok(order_read(order, tenant.currency), message="Order placed")
 
@@ -205,3 +211,18 @@ async def update_order_status(
         order_id, data.status
     )
     return ok(order_read(order, tenant.currency), message="Order status updated")
+
+
+@admin_router.post(
+    "/{order_id}/refund",
+    response_model=ApiResponse[OrderRead],
+    summary="Refund a cancelled order's online payment in full",
+)
+async def refund_order(
+    order_id: UUID,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> ApiResponse[OrderRead]:
+    order = await PaymentService(session, user.tenant_id).refund(order_id)
+    return ok(order_read(order, tenant.currency), message="Refund requested")

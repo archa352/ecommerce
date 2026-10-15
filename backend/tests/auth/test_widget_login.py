@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import select, update
 
 from app.auth.constants import UserRole, UserStatus
+from app.auth.models import RefreshToken
+from app.auth.security import hash_refresh_token
 from app.users.models import User
 from tests.conftest import widget_login
 
@@ -127,7 +131,7 @@ async def test_signing_out_revokes_the_session_and_signing_in_again_works(
     assert again.status_code == 200
 
 
-async def test_the_existing_refresh_rotation_still_holds(client, tenant, msg91):
+async def test_the_existing_refresh_rotation_still_holds(client, session, tenant, msg91):
     tokens = (await widget_login(client, msg91.token_for(NEW_PHONE))).json()["data"]
 
     rotated = await client.post(
@@ -137,8 +141,18 @@ async def test_the_existing_refresh_rotation_still_holds(client, tenant, msg91):
     fresh = rotated.json()["data"]
     assert fresh["refresh_token"] != tokens["refresh_token"]
 
-    # Reuse of the spent token revokes every session, as before.
+    await session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.token_hash == hash_refresh_token(tokens["refresh_token"]))
+        .values(replaced_at=datetime.now(timezone.utc) - timedelta(hours=1))
+    )
+    await session.commit()
+
     replayed = await client.post(
         "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert replayed.status_code == 401
+    after_replay = await client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": fresh["refresh_token"]}
+    )
+    assert after_replay.status_code == 401
