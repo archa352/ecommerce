@@ -1,0 +1,173 @@
+.page {
+  background: #faf8f5;
+  min-height: 60vh;
+  padding: 56px 20px 64px;
+}
+
+.container {
+  max-width: 620px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.checkIcon {
+  width: 64px;
+  height: 64px;
+  color: #5c8a6c;
+  margin-bottom: 20px;
+}
+
+.heading {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 14px;
+  line-height: 1.25;
+}
+
+.thanks {
+  font-size: 18px;
+  color: #3a3632;
+  margin: 0 0 12px;
+}
+
+.subtext {
+  font-size: 14.5px;
+  color: #8a8580;
+  line-height: 1.6;
+  margin: 0 0 32px;
+}
+
+.infoCard {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e7e2da;
+  border-radius: 14px;
+  background: #fff;
+  margin-bottom: 32px;
+  text-align: left;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e7e2da;
+}
+
+.infoItem:last-child {
+  border-bottom: none;
+}
+
+.infoLabel {
+  font-size: 13px;
+  color: #8a8580;
+}
+
+.infoValue {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+  margin: 0 auto 28px;
+}
+
+.primaryBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 999px;
+  padding: 16px 24px;
+  font-size: 15.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.primaryBtn:hover {
+  color: #fff;
+  opacity: 0.9;
+}
+
+.secondaryBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8d3ca;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 999px;
+  padding: 16px 24px;
+  font-size: 15.5px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.secondaryBtn:hover {
+  background: #f6f3ec;
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9a958f;
+}
+
+.captionRule {
+  width: 32px;
+  height: 1px;
+  background: #d8d3ca;
+}
+
+@media (min-width: 640px) {
+  .infoCard {
+    flex-direction: row;
+  }
+
+  .infoItem {
+    flex: 1;
+    border-bottom: none;
+    border-right: 1px solid #e7e2da;
+    text-align: center;
+    align-items: center;
+  }
+
+  .infoItem:last-child {
+    border-right: none;
+  }
+
+}
+
+@media (min-width: 992px) {
+  .page {
+    padding: 80px 20px 96px;
+  }
+
+  .heading {
+    font-size: 36px;
+  }
+
+  .thanks {
+    font-size: 19px;
+  }
+
+  .subtext {
+    font-size: 15px;
+  }
+}

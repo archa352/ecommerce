@@ -1,0 +1,211 @@
+/*
+ * Wishlist page -- extends the same Zeen design system as the Product
+ * Listing page. Reuses Home.module.css and Product Listing styles where
+ * possible; only wishlist-specific layout and actions are defined here.
+ */
+
+ .listingSection {
+  padding: 40px 0 88px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 12px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+/*
+ * Compact square wishlist media.
+ * Overrides the taller product-listing media ratio for Wishlist only.
+ */
+.card .media {
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+}
+
+.cardBody {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding-top: 14px;
+}
+
+.variant {
+  font-size: 12px;
+  color: var(--muted, #8b857e);
+  margin: 0 0 6px;
+}
+
+.rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
+  margin: 6px 0 0;
+}
+
+.rating svg {
+  color: #c9a24b;
+  fill: #c9a24b;
+}
+
+.ratingCount {
+  font-weight: 400;
+  color: var(--muted, #8b857e);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: var(--ink, #1a1714);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #e7e2db);
+  background: #fff;
+  color: var(--ink, #1a1714);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.secondaryBtn:hover:not(:disabled) {
+  border-color: var(--ink, #1a1714);
+}
+
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.addToBagBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 46px;
+  margin-top: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ink, #1a1714);
+  background: #fff;
+  color: var(--ink, #1a1714);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.addToBagBtn:hover:not(:disabled) {
+  background: var(--ink, #1a1714);
+  color: #fff;
+}
+
+.addToBagBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 100px 20px;
+  color: var(--muted, #8b857e);
+}
+
+.emptyState p {
+  font-size: 15px;
+  margin: 0 0 24px;
+}
+
+/* Tablet / iPad */
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 18px;
+  }
+}
+
+/* Desktop */
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px 20px;
+  }
+}
+
+/* Large desktop */
+@media (min-width: 1440px) {
+  .grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Mobile */
+@media (max-width: 639.98px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 14px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .secondaryBtn {
+    width: 100%;
+  }
+
+  .listingSection {
+    padding-bottom: 96px;
+  }
+}

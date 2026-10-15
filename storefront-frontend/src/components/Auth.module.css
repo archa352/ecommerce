@@ -1,0 +1,381 @@
+/*
+ * Shared shell for the two customer auth screens.
+ *
+ * Deliberately mirrors the luxe home page's system -- same palette, same
+ * DM Sans, same pill button and 24px radii -- so signing in does not look
+ * like a different site. Scoped as a module because the Bootstrap theme the
+ * rest of the storefront still uses owns very generic global class names
+ * (.page, .card, .title, .input) that the old markup was colliding with.
+ */
+
+.page {
+  --ink: #1a1714;
+  --ink-soft: #55504b;
+  --muted: #8b857e;
+  --rust: #a9714a;
+  --line: #e7e2db;
+  --card: #f4f1ec;
+  --danger: #b3261e;
+
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  background: #fff;
+  color: var(--ink);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page * {
+  box-sizing: border-box;
+}
+
+.card {
+  flex: 1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  background: #fff;
+}
+
+/* ---------------------------------- Image panel ---------------------------------- */
+
+.imagePanel {
+  position: relative;
+  background: var(--card);
+  overflow: hidden;
+}
+.imagePanel img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+}
+.imageCaption {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  right: 28px;
+  color: #fff;
+  text-shadow: 0 1px 12px rgb(0 0 0 / 35%);
+}
+.imageCaptionEyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+.imageCaptionText {
+  font-size: 19px;
+  line-height: 1.35;
+  margin: 0;
+  max-width: 300px;
+}
+
+/* ---------------------------------- Form panel ---------------------------------- */
+
+.formPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 48px;
+  /* A short viewport must scroll the form rather than clip it. */
+  overflow-y: auto;
+}
+.formInner {
+  width: 100%;
+  max-width: 380px;
+  padding: 24px 0;
+}
+
+/* The country code is fixed, so it reads as part of the field rather than
+   something to be typed. */
+.phoneField {
+  position: relative;
+}
+.phonePrefix {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+.phoneField .phoneInput {
+  padding-left: 56px;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.linkButton:hover {
+  color: var(--rust);
+}
+
+.subtitle code {
+  font-size: 13px;
+  background: var(--card);
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.brand {
+  display: inline-block;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  text-decoration: none;
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rust);
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 32px;
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+}
+
+.subtitle {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 32px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+
+.input {
+  width: 100%;
+  height: 52px;
+  padding: 0 18px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.input::placeholder {
+  color: var(--muted);
+}
+.input:focus {
+  border-color: var(--ink);
+}
+.inputError {
+  border-color: var(--danger);
+}
+
+.error {
+  font-size: 13px;
+  color: var(--danger);
+  margin: 8px 0 0;
+}
+
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 52px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: inherit;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.submit:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 24px 0 0;
+}
+
+.hint a,
+.link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hint a:hover,
+.link:hover {
+  color: var(--rust);
+}
+
+/* ---------------------------------- OTP ---------------------------------- */
+
+.otpRow {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+}
+
+.otpInput {
+  width: 100%;
+  height: 56px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.otpInput:focus {
+  border-color: var(--ink);
+}
+.otpInputError {
+  border-color: var(--danger);
+}
+
+.resend {
+  margin-top: 22px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.resendCount {
+  color: var(--ink);
+  font-weight: 600;
+}
+.resendButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.resendButton:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* ---------------------------------- Responsive ---------------------------------- */
+
+@media (max-width: 1024px) {
+  .card {
+    grid-template-columns: 1fr;
+  }
+  /* Becomes a banner above the form: enough of the brand to set the tone,
+     without pushing the field below the fold. */
+  .imagePanel {
+    height: 34vh;
+    min-height: 200px;
+    max-height: 300px;
+  }
+  .imagePanel img {
+    object-position: center 22%;
+  }
+  .imageCaption {
+    left: 24px;
+    right: 24px;
+    bottom: 20px;
+  }
+  .imageCaptionText {
+    font-size: 17px;
+  }
+  .formPanel {
+    padding: 40px 28px;
+    align-items: flex-start;
+  }
+  .formInner {
+    max-width: 440px;
+  }
+  .brand {
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-width: 560px) {
+  .imagePanel {
+    height: 26vh;
+    min-height: 160px;
+  }
+  .formPanel {
+    padding: 32px 20px;
+  }
+  .title {
+    font-size: 26px;
+  }
+  .subtitle {
+    margin-bottom: 26px;
+  }
+  .otpRow {
+    gap: 8px;
+  }
+  .otpInput {
+    height: 52px;
+    font-size: 18px;
+  }
+}
+
+/* Landscape phones have no height to spare for a banner. */
+@media (max-height: 520px) and (max-width: 1024px) {
+  .imagePanel {
+    display: none;
+  }
+  .formPanel {
+    padding: 28px 20px;
+  }
+}

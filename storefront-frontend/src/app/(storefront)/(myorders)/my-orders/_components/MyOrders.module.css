@@ -1,0 +1,166 @@
+/*
+ * My Orders -- extends the same Zeen design system as the Product Listing
+ * and Wishlist pages (banner/crumb, container, filter pills, card media all
+ * reused from Home.module.css / Listing.module.css). Only order-card layout
+ * and status-dot colours are defined here.
+ */
+
+.ordersList {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.orderCard {
+  display: flex;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--line, #e7e2db);
+  border-radius: var(--radius-md, 16px);
+  background: #fff;
+}
+
+.thumb {
+  width: 96px;
+  height: 96px;
+  flex: none;
+}
+
+.orderBody {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.orderTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.orderNumber {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
+}
+
+.orderMeta {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted, #8b857e);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--card, #f4f1ec);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-soft, #55504b);
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dotAmber { background: #c9852b; }
+.dotBlue { background: #3f6ea8; }
+.dotGreen { background: #4f765d; }
+.dotRed { background: #b42318; }
+
+.orderBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.orderAmount {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink, #1a1714);
+}
+
+.viewButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: 1px solid var(--line, #e7e2db);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink, #1a1714);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.2s ease;
+}
+
+.viewButton:hover {
+  border-color: var(--ink, #1a1714);
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 90px 20px;
+  text-align: center;
+  color: var(--muted, #8b857e);
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--card, #f4f1ec);
+  color: var(--muted, #8b857e);
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 15px;
+}
+
+@media (max-width: 639.98px) {
+  .orderCard {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .thumb {
+    width: 72px;
+    height: 72px;
+  }
+
+  .orderBottom {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .viewButton {
+    justify-content: center;
+  }
+}

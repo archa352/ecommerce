@@ -298,11 +298,6 @@ class PaymentService:
         """Record that Razorpay has returned the money."""
         payment.status = PaymentStatus.REFUNDED.value
         order.payment_status = OrderPaymentStatus.REFUNDED.value
-        logger.info(
-            "payments.refunded order_number=%s tenant_id=%s",
-            order.order_number,
-            self.tenant_id,
-        )
 
 
 def _entity(event: Any, kind: str) -> dict[str, Any]:

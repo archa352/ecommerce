@@ -1,0 +1,1373 @@
+/*
+ * "Zeen" women's ethnic and casual wear home page.
+ * Scoped as a CSS module so none of this leaks into the Bootstrap-based
+ * theme the rest of the storefront still uses.
+ */
+
+.page {
+  --ink: #1a1714;
+  --ink-soft: #55504b;
+  --muted: #8b857e;
+  --rust: #a9714a;
+  --line: #e7e2db;
+  --card: #f4f1ec;
+  --card-deep: #efe9e1;
+  --cream: #fbfaf8;
+  --terracotta: #8f5a3c;
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+  --maxw: 1320px;
+
+  background: #fff;
+  color: var(--ink);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+  /* Plain <img> tags below have no intrinsic size until they load; without
+     this, Chrome's scroll anchoring "corrects" the scroll position as each
+     one resolves and the page lands mid-scroll on first paint. */
+  overflow-anchor: none;
+}
+
+.page * {
+  box-sizing: border-box;
+}
+
+.container {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 40px;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rust);
+  margin: 0 0 14px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
+.h2 {
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--ink);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 15px 8px 15px 26px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  white-space: nowrap;
+}
+.pill:hover { opacity: 0.85; }
+
+.pillIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  flex: none;
+}
+
+.pillOutline {
+  composes: pill;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.pillOutline .pillIcon {
+  background: var(--ink);
+  color: #fff;
+}
+
+.btnCircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  flex: none;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.btnCircle:hover:not(:disabled) {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.btnCircle:disabled {
+  background: #f1f1f2;
+  border-color: transparent;
+  color: var(--muted);
+  cursor: default;
+}
+.btnCircleDark {
+  composes: btnCircle;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+/* ---------------------------------- Header ---------------------------------- */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.headerInner {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nav a {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav a:hover { color: var(--rust); }
+
+.logo {
+  justify-self: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+}
+.headerIconBtn {
+  color: var(--ink);
+  display: inline-flex;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+/* The wishlist and the cart, as a matched pair of round icon buttons. */
+.headerRoundBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  text-decoration: none;
+}
+.headerRoundBtn:hover { border-color: var(--ink); color: var(--rust); }
+
+.headerBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--rust);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Same pill as the cart, so the two sit as a pair rather than as an
+   afterthought next to it. */
+.authPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.authPill:hover { border-color: var(--ink); }
+
+/* Signed in, the control is a filled pill with the shopper's initial, so it
+   never reads as the outlined login pill it replaces. */
+.accountMenu {
+  position: relative;
+}
+.profilePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: var(--ink);
+  padding: 5px 14px 5px 5px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.profilePill:hover { background: var(--terracotta); border-color: var(--terracotta); }
+
+.profileInitial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--rust);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.profileChevron { transition: transform 0.2s ease; }
+.profilePill[aria-expanded='true'] .profileChevron { transform: rotate(180deg); }
+
+.profileDropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(26, 23, 20, 0.14);
+}
+.profileHead {
+  padding: 6px 12px 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.profileHeadName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.profileHeadContact {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.profileItem {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink-soft);
+  text-decoration: none;
+  cursor: pointer;
+}
+.profileItem:hover { background: var(--card); color: var(--ink); }
+.profileItem:disabled { opacity: 0.6; cursor: default; }
+.profileSignOut {
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  padding-top: 12px;
+  color: var(--rust);
+  font-weight: 600;
+}
+
+.menuBtn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.mobileNav {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 20px;
+  border-top: 1px solid var(--line);
+}
+.mobileNav a {
+  padding: 12px 4px;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+/* ---------------------------------- Hero ---------------------------------- */
+
+.hero {
+  position: relative;
+  padding-top: 56px;
+  overflow: hidden;
+  background-image: url('/home/hero-model.png');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: cover;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    #fff 0%,
+    rgba(255, 255, 255, 0.94) 26%,
+    rgba(255, 255, 255, 0.6) 42%,
+    rgba(255, 255, 255, 0) 58%
+  );
+  pointer-events: none;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 22%;
+  background: linear-gradient(rgba(255, 255, 255, 0), #fff 92%);
+  pointer-events: none;
+}
+
+.heroWatermark {
+  position: absolute;
+  top: 6%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: clamp(64px, 13vw, 190px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  opacity: 0.3;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+
+.heroGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(300px, 470px) 1fr;
+  align-items: center;
+  gap: 24px;
+  min-height: 780px;
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 2;
+  padding-bottom: 40px;
+}
+
+.heroTitle {
+  font-size: clamp(32px, 3.4vw, 47px);
+  line-height: 1.08;
+  max-width: 400px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0 0 18px;
+}
+
+.heroDesc {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 380px;
+  margin: 0 0 40px;
+}
+
+.heroSide {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  margin-top: 44px;
+}
+.heroThumbRow {
+  display: flex;
+  gap: 14px;
+}
+.heroThumb {
+  width: 88px;
+  height: 88px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.75);
+  overflow: hidden;
+  border: none;
+  cursor: pointer;
+  padding: 10px;
+}
+.heroThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.heroThumb.active {
+  background: var(--card-deep);
+}
+.heroCounter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin-top: 0;
+}
+.heroCounter .btnCircle {
+  width: 38px;
+  height: 38px;
+}
+
+/* ---------------------------------- Signature pieces ---------------------------------- */
+
+.filterRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.filterPill {
+  border-radius: 999px;
+  padding: 11px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filterPill.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.productGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.productCard {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.productMedia {
+  position: relative;
+  aspect-ratio: 1 / 1.08;
+  border-radius: var(--radius-md);
+  background: var(--card);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.productMedia img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  transition: transform 0.5s ease;
+}
+.productCard:hover .productMedia img {
+  transform: scale(1.05);
+}
+.productMediaEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  font-size: 13px;
+}
+.productName {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+.productPrice {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* ---------------------------------- Category strip ---------------------------------- */
+
+.catStrip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 22px;
+}
+.catCard {
+  text-decoration: none;
+  color: var(--ink);
+  text-align: center;
+  display: block;
+}
+.catImage {
+  border-radius: var(--radius-md);
+  background: var(--card);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Matches the product cards. `contain` with a multiply blend suits cut-out
+   packshots; against photography it letterboxes and muddies the tint. */
+.catImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.catLabel {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ---------------------------------- Spotlight ---------------------------------- */
+
+.spotlightHead {
+  margin-bottom: 44px;
+}
+.spotlightRule {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 28px 0 0;
+}
+
+.spotlightGrid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.75fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.spotlightModel {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card);
+  aspect-ratio: 3 / 4;
+}
+.spotlightModel img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+
+.spotlightDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.spotlightDetail {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card);
+  aspect-ratio: 1 / 1;
+}
+.spotlightDetail img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+
+.spotlightInfo {
+  padding-top: 4px;
+}
+.spotlightCategory {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+.spotlightTitle {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.25;
+  margin: 0 0 16px;
+  max-width: 320px;
+}
+.spotlightPrice {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 32px;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-color: var(--line);
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.optionLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sizeGuide {
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sizeRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 26px;
+}
+.sizeBtn {
+  min-width: 64px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sizeBtn.active {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.colorRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+.colorSwatch {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  background: var(--card);
+}
+.colorSwatch img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.colorSwatch.active { border-color: var(--ink); }
+
+.buyRow {
+  display: flex;
+  gap: 12px;
+}
+.qtyStepper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: none;
+}
+.qtyStepper button {
+  width: 40px;
+  height: 48px;
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.qtyStepper span {
+  min-width: 24px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+.addToCartBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+}
+.buyItNowBtn {
+  margin-top: 12px;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+/* ---------------------------------- Category price grid ---------------------------------- */
+
+.introCard {
+  border-radius: var(--radius-lg);
+  background: var(--cream);
+  border: 1px solid var(--line);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+}
+.introTitle {
+  font-size: 26px;
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+.introText {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 26px;
+}
+
+.priceCardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.priceCard {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.priceMedia {
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.priceMedia img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+.priceName { font-weight: 500; color: var(--ink); }
+.priceValue { font-weight: 600; color: var(--ink); white-space: nowrap; }
+
+/* ---------------------------------- Testimonials ---------------------------------- */
+
+/* The heading, the strapline row and the quote card all sit in the left
+   column so the photograph can run the full height of the section beside
+   them. */
+.testiLeft {
+  display: flex;
+  flex-direction: column;
+}
+.testiHeading {
+  /* Holds the reference's two-line break: "What Our" / "Customers Say". */
+  max-width: 340px;
+}
+.testiTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: auto 0 24px;
+  padding-top: 40px;
+}
+.testiSub {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 220px;
+}
+.testiSub span {
+  font-size: 14px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.testiRule {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+  min-width: 40px;
+}
+.testiArrows {
+  display: flex;
+  gap: 10px;
+}
+.testiArrows .btnCircle {
+  width: 36px;
+  height: 36px;
+  background: #f1f1f2;
+  border-color: transparent;
+  color: var(--muted);
+}
+.testiArrows .btnCircle:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.testiArrows .btnCircleDark {
+  width: 36px;
+  height: 36px;
+}
+
+.testiGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: stretch;
+}
+
+.testiCard {
+  position: relative;
+  background: var(--terracotta);
+  border-radius: 26px;
+  /* Right padding clears the inset portrait. */
+  padding: 30px 214px 30px 30px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 250px;
+}
+.testiThumb {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  bottom: 22px;
+  width: 164px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.testiThumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.stars {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 20px;
+  color: #fff;
+}
+.testiQuote {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.45;
+  margin: 0 0 22px;
+  max-width: 352px;
+}
+.testiName {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.testiHero {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card);
+  /* Fixes the row height. Left to the photograph's own proportions the
+     column ran ~100px taller than the reference, which opened an
+     unreasonable gap under the heading. */
+  aspect-ratio: 20 / 21;
+}
+.testiHero img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+.testiBadge {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(20, 18, 16, 0.72);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+}
+.testiBadgeNum {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.testiBadgeText {
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+/* ---------------------------------- Commitment ---------------------------------- */
+
+.commitment {
+  background: var(--cream);
+}
+.commitmentHead {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 52px;
+}
+.commitmentHead .eyebrow { display: block; }
+.commitmentHead .h2 { }
+
+.commitGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-bottom: 48px;
+}
+.commitItem {
+  text-align: center;
+}
+.commitIcon {
+  width: 76px;
+  height: 76px;
+  border-radius: 999px;
+  background: #ece2d6;
+  color: var(--terracotta);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+.commitTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.commitText {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 260px;
+  margin: 0 auto;
+}
+
+.commitStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+/* Was 4:3. A landscape box fed portrait fashion shots crops straight through
+   the model's head no matter where it is anchored. */
+.commitStripImg {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  background: var(--card);
+}
+.commitStripImg img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+
+/* ---------------------------------- CTA + Footer ---------------------------------- */
+
+.ctaWrap {
+  text-align: center;
+  padding: 64px 0 0;
+}
+
+.footer {
+  background: #fff;
+  padding-top: 72px;
+  /* The Bootstrap theme styles the bare `footer` element for its own dark
+     footer, including a cream `color`. Anything here that does not set a
+     colour of its own would inherit that and vanish against the white. */
+  color: var(--ink);
+}
+/* Column starts are what the eye reads, so the brand keeps the left 55% and
+   the three link columns split the rest evenly. */
+.footerTop {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 3.6fr 1fr 1fr 1.05fr;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+.footerBrand {
+  font-family: 'Anton', 'DM Sans', sans-serif;
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+  margin: 0 0 20px;
+}
+.footerTagline {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 350px;
+  margin: 0 0 26px;
+}
+.footerSocials {
+  display: flex;
+  gap: 26px;
+}
+.footerSocials a {
+  display: inline-flex;
+  color: var(--ink);
+}
+.footerSocials a:hover { color: var(--rust); }
+.footerColTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 20px;
+}
+.footerCol ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.footerCol a {
+  font-size: 15px;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.footerCol a:hover { color: var(--ink); }
+
+/* Full-bleed, and pulled up far enough that the socials sit over its top
+   edge -- the white gradient below is what makes that overlap read as the
+   photo rising out of the page rather than as a seam. */
+.footerImage {
+  position: relative;
+  /* Own stacking context, so the gradient below stays behind .footerTop
+     instead of tying with it on z-index and winning on document order. */
+  z-index: 0;
+  margin-top: -44px;
+  aspect-ratio: 2.62;
+  overflow: hidden;
+}
+.footerImage img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.footerImage::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 42%;
+  background: linear-gradient(#fff 12%, rgba(255, 255, 255, 0));
+  z-index: 1;
+}
+.footerWatermark {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  transform: translate(-50%, -50%);
+  /* Sized past the viewport on purpose: the outer A's are meant to run off
+     both edges. */
+  font-size: 30vw;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.36);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------------------------------- Section spacing ---------------------------------- */
+
+.section { padding: 88px 0; }
+.sectionTight { padding: 64px 0 0; }
+
+/* ---------------------------------- Scroll animation ---------------------------------- */
+
+/*
+ * Reveals are opt-in per element with `data-reveal`, and are driven two ways.
+ *
+ * Where the browser has scroll-driven animations they run entirely in CSS --
+ * no JS, nothing to hydrate, and no chance of content being stranded
+ * invisible if a script fails. Everywhere else HomeClient sets
+ * `data-js-reveal` on the root and falls back to an IntersectionObserver.
+ * The hidden state is deliberately gated behind that attribute so a page
+ * with no JS at all still paints in full.
+ *
+ * Both paths sit inside a reduced-motion guard.
+ */
+
+@keyframes revealRise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes revealScale {
+  from {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .page [data-reveal] {
+      animation-name: revealRise;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: view();
+      animation-range: entry 8% cover 24%;
+    }
+    .page [data-reveal='scale'] {
+      animation-name: revealScale;
+    }
+  }
+
+  /* Fallback path. Only ever applies once the script has confirmed the
+     browser cannot do the above. */
+  .page[data-js-reveal] [data-reveal] {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms),
+      transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms);
+  }
+  .page[data-js-reveal] [data-reveal='scale'] {
+    transform: scale(1.05);
+  }
+  .page[data-js-reveal] [data-reveal][data-revealed] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Continuous, scroll-linked motion. Progressive enhancement only -- there is
+   no JS fallback, because a browser without scroll timelines simply gets the
+   static composition, which is the design either way. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: scroll()) {
+    .heroWatermark {
+      animation-name: watermarkDrift;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: scroll(root block);
+      animation-range: 0 80vh;
+    }
+    .headerInner {
+      animation-name: headerCondense;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: scroll(root block);
+      animation-range: 0 140px;
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    .footerWatermark {
+      animation-name: watermarkLift;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: view();
+      animation-range: entry 0% cover 85%;
+    }
+    .spotlightModel img {
+      animation-name: mediaPan;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: view();
+      animation-range: entry 0% cover 100%;
+    }
+  }
+}
+
+@keyframes watermarkDrift {
+  to {
+    transform: translate3d(-4%, -22%, 0);
+  }
+}
+
+@keyframes watermarkLift {
+  from {
+    transform: translate(-50%, -35%) scale(1.06);
+  }
+  to {
+    transform: translate(-50%, -62%) scale(1);
+  }
+}
+
+@keyframes headerCondense {
+  to {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* A slow drift across the frame as the section passes, so the largest image
+   on the page is not completely inert. */
+@keyframes mediaPan {
+  from {
+    transform: scale(1.08) translateY(-1.2%);
+  }
+  to {
+    transform: scale(1.08) translateY(1.2%);
+  }
+}
+
+/* ---------------------------------- Responsive ---------------------------------- */
+
+@media (max-width: 1080px) {
+  .heroGrid { grid-template-columns: 1fr; min-height: auto; }
+  .heroSide { flex-direction: row; align-items: center; padding: 0; margin-top: 32px; }
+  .heroThumb { width: 76px; height: 76px; }
+  .heroCounter { margin: 0; }
+  .productGrid { grid-template-columns: repeat(2, 1fr); }
+  .catStrip { grid-template-columns: repeat(3, 1fr); row-gap: 32px; }
+  .spotlightGrid { grid-template-columns: 1fr 1fr; }
+  .spotlightInfo { grid-column: 1 / -1; }
+  .priceCardGrid { grid-template-columns: repeat(2, 1fr); }
+  .introCard { grid-column: 1 / -1; }
+  .testiGrid { grid-template-columns: 1fr; gap: 28px; }
+  .testiHeading { max-width: none; }
+  .testiTop { margin-top: 32px; padding-top: 0; }
+  .testiHero { min-height: 420px; }
+  .commitGrid, .commitStrip { grid-template-columns: repeat(3, 1fr); }
+  .footerTop { grid-template-columns: 1fr 1fr; gap: 40px 24px; }
+  .footerImage { margin-top: -36px; aspect-ratio: 2.1; }
+}
+
+@media (max-width: 720px) {
+  .container { padding: 0 20px; }
+  .nav, .headerRight .authPill span { display: none; }
+  .headerRight .profileLabel { display: none; }
+  .profilePill { padding: 5px 8px 5px 5px; }
+  .menuBtn { display: inline-flex; }
+  .mobileNav.open { display: flex; }
+  .headerInner { grid-template-columns: auto 1fr auto; }
+  .logo { justify-self: start; }
+  .hero { padding-top: 24px; }
+  .heroTitle { font-size: 34px; max-width: none; }
+  .heroDesc { margin-bottom: 28px; }
+  .heroSide { margin-top: 24px; flex-wrap: wrap; gap: 14px; }
+  .heroThumb { width: 68px; height: 68px; }
+  .heroWatermark { font-size: 17vw; }
+  .productGrid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .catStrip { grid-template-columns: repeat(2, 1fr); }
+  .spotlightGrid { grid-template-columns: 1fr; }
+  .spotlightDetails { flex-direction: row; }
+  .testiCard { padding: 26px; min-height: 0; }
+  .testiThumb { position: static; width: 100%; height: 200px; margin-bottom: 20px; }
+  .testiQuote { font-size: 18px; max-width: none; }
+  .priceCardGrid { grid-template-columns: 1fr; }
+  .commitGrid { grid-template-columns: 1fr; gap: 40px; }
+  .commitStrip { grid-template-columns: 1fr; }
+  .footerTop { grid-template-columns: 1fr; gap: 36px; }
+  .footerBrand { font-size: 36px; }
+  /* Too little height left at this width for the overlap to read as
+     anything but a collision. */
+  .footerImage { margin-top: 0; aspect-ratio: 1.5; }
+  .footerImage::before { height: 22%; }
+  .footerWatermark { font-size: 34vw; }
+  .section { padding: 56px 0; }
+  .sectionHead { flex-direction: column; align-items: flex-start; }
+}
