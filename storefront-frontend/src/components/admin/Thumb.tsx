@@ -2,17 +2,6 @@ import { Icon } from '@iconify/react';
 
 import { mediaUrl } from '@/lib/media';
 
-/**
- * A product thumbnail, or an obviously-empty slot when there is none.
- *
- * The empty state is drawn as a dashed outline rather than a filled square:
- * a solid block reads as a tile that failed to load, especially in the dark
- * theme where the neutral fill is a near-opaque slate.
- *
- * Catalogue images are remote and unoptimised on purpose -- seed and
- * uploaded URLs point at hosts next.config does not allow through
- * next/image.
- */
 export default function Thumb({
   url,
   alt,

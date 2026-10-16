@@ -19,7 +19,6 @@ export default function HeadSearchBar(){
     const [history, setHistory] = useState<string[]>([]);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    /* The signed-in shopper's recent searches -- empty, and quietly so, for a guest. */
     useEffect(() => {
         getSearchHistory().then(setHistory).catch(() => setHistory([]));
     }, []);

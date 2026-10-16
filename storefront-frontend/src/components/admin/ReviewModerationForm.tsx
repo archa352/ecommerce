@@ -5,7 +5,6 @@ import { useActionState } from 'react';
 import { moderateReview } from '@/lib/admin/actions';
 import { initialCheckoutState } from '@/lib/orders/state';
 
-/** Approving publishes the review on the storefront; hiding takes it down. */
 export default function ReviewModerationForm({
   reviewId,
   isApproved,

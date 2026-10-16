@@ -14,14 +14,6 @@ import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { ProductAdmin, VariantAdmin } from '@/types/catalogue-admin';
 
-/**
- * Everything the API can do to one variant, next to the variant itself.
- *
- * Stock has two verbs on purpose: "set" writes an absolute count (a
- * stocktake), "adjust" writes a signed delta (a delivery, breakage). The
- * backend records either as a movement, so which one was used stays visible
- * in the history.
- */
 function VariantRow({ variant, product }: { variant: VariantAdmin; product: ProductAdmin }) {
   const inventory = variant.inventory;
   const ids = { variant_id: variant.id, product_id: product.id };

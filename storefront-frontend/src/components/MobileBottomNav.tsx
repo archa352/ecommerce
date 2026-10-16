@@ -53,13 +53,6 @@ const NAV_ITEMS = [
   { href: '/my-account', label: 'Account', Icon: UserIcon },
 ] as const;
 
-/**
- * Mobile-only bottom tab bar.
- *
- * Zeen's storefront has no bottom nav elsewhere yet -- this is scoped to the
- * cart page for now rather than added to the shared layout, so it does not
- * change how any other page renders.
- */
 export default function MobileBottomNav() {
   const pathname = usePathname();
   const { wishlist } = useWishlist();

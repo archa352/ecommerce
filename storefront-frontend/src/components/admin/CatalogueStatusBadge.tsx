@@ -6,7 +6,6 @@ const TONES: Record<string, string> = {
   ARCHIVED: 'bg-neutral-200 text-neutral-600',
 };
 
-/** ARCHIVED is the backend's soft delete, so it reads as muted, not alarming. */
 export default function CatalogueStatusBadge({ status }: { status: CatalogueStatus }) {
   return (
     <span

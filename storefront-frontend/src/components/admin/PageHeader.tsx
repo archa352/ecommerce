@@ -1,6 +1,5 @@
 import Link from 'next/link';
 
-/** Title row shared by every admin page, with an optional trail back up. */
 export default function PageHeader({
   title,
   subtitle,

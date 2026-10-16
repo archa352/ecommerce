@@ -5,17 +5,6 @@ import { useActionState, useState } from 'react';
 import { initialCheckoutState } from '@/lib/orders/state';
 import type { CheckoutState } from '@/lib/orders/state';
 
-/**
- * A destructive action behind an inline confirmation.
- *
- * The first click only arms the button; the second submits. That is
- * deliberately not `window.confirm` -- a dialog the browser can suppress is
- * a poor guard for something irreversible, and this stays visible in the
- * page where the row it belongs to is.
- *
- * `fields` carries whatever the action needs to identify the row, so one
- * component serves archiving a product, a variant, a category or a coupon.
- */
 export default function DangerAction({
   action,
   fields,

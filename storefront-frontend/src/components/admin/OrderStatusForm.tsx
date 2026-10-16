@@ -7,13 +7,6 @@ import { initialCheckoutState } from '@/lib/orders/state';
 import { ALLOWED_TRANSITIONS } from '@/types/orders';
 import type { OrderStatus } from '@/types/orders';
 
-/**
- * Move an order to its next state.
- *
- * Only the transitions the backend allows from the current status are
- * offered -- it validates them again and rejects anything else, so this
- * mirrors that table rather than inventing its own rules.
- */
 export default function OrderStatusForm({
   orderId,
   status,

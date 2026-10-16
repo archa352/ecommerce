@@ -3,17 +3,14 @@
 import React, { useState, useEffect } from "react";
 
 const ThemeToggleButton = () => {
-  // 1. State for the current theme, initialized to null before hydration
   const [theme, setTheme] = useState(null);
 
-  // 2. Function to update the theme on the HTML element
   const updateThemeOnHtmlEl = (theme) => {
     if (typeof window !== "undefined") {
       document.documentElement.setAttribute("data-theme", theme);
     }
   };
 
-  // 3. Load theme from localStorage after the component mounts
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedTheme = localStorage.getItem("theme") || "light";
@@ -22,7 +19,6 @@ const ThemeToggleButton = () => {
     }
   }, []);
 
-  // 4. Toggle theme when button is clicked
   const handleThemeToggle = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
@@ -33,7 +29,6 @@ const ThemeToggleButton = () => {
     }
   };
 
-  // 5. Render only after theme state is initialized
   if (!theme) return null;
 
   return (

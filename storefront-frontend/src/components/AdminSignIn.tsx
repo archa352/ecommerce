@@ -7,13 +7,6 @@ import { useActionState } from 'react';
 import { passwordLogin } from '@/lib/auth/actions';
 import { initialAuthState } from '@/lib/auth/form-state';
 
-/**
- * Sign in an admin or staff member.
- *
- * Unlike shoppers, staff authenticate with a password against
- * /admin/auth/login. The action puts the returned pair in the same httpOnly
- * cookies the storefront uses, so one session covers both.
- */
 export default function AdminSignIn() {
   const [state, formAction, pending] = useActionState(passwordLogin, initialAuthState);
 

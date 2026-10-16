@@ -1,12 +1,3 @@
-/*
- * Shared shell for the two customer auth screens.
- *
- * Deliberately mirrors the luxe home page's system -- same palette, same
- * DM Sans, same pill button and 24px radii -- so signing in does not look
- * like a different site. Scoped as a module because the Bootstrap theme the
- * rest of the storefront still uses owns very generic global class names
- * (.page, .card, .title, .input) that the old markup was colliding with.
- */
 
 .page {
   --ink: #1a1714;

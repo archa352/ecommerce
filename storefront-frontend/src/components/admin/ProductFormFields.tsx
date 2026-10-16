@@ -3,13 +3,6 @@ import type { CategoryAdmin, ProductAdmin } from '@/types/catalogue-admin';
 
 const GENDERS = ['MEN', 'WOMEN', 'UNISEX'];
 
-/**
- * The product body, shared by the create and edit forms.
- *
- * Create posts an `active` checkbox (a new product is a draft unless the
- * box is ticked) while edit exposes the full status including ARCHIVED,
- * which is the one state a form should not be able to set by accident.
- */
 export default function ProductFormFields({
   categories,
   product,

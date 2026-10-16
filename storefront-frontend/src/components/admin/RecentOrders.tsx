@@ -3,7 +3,6 @@ import type { RecentOrderSummary } from '@/types/admin';
 
 import { OrderStatusBadge, PaymentStatusBadge } from './StatusBadge';
 
-/** Each order carries its own currency, so nothing here assumes the tenant's. */
 export default function RecentOrders({ orders }: { orders: RecentOrderSummary[] }) {
   return (
     <div className="col-12">

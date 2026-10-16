@@ -10,14 +10,6 @@ import {
 } from '@/lib/admin/actions';
 import type { ProductAdmin } from '@/types/catalogue-admin';
 
-/**
- * Product photography: upload a file, or point at one already hosted.
- *
- * Uploads go through the API, which writes them into the container's
- * uploads volume and hands back a /media URL -- so they survive a rebuild.
- * The backend refuses to delete a product's last image, and that refusal is
- * shown on the button that tried.
- */
 export default function ImagePanel({ product }: { product: ProductAdmin }) {
   const images = [...product.images].sort((a, b) => a.sort_order - b.sort_order);
 

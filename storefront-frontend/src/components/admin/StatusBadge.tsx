@@ -1,10 +1,5 @@
 import type { OrderStatus, PaymentStatus } from '@/types/orders';
 
-/**
- * `RecentOrderSummary.order_status` is typed against the storefront's own
- * union, but the dashboard renders whatever the backend sends -- a status
- * added server-side should show up as itself rather than crash the table.
- */
 const ORDER_TONES: Record<string, string> = {
   PENDING: 'bg-warning-focus text-warning-main',
   CONFIRMED: 'bg-info-focus text-info-main',

@@ -16,11 +16,6 @@ function Feedback({ status, message }: { status: string; message: string | null 
   );
 }
 
-/**
- * The delivery charge, and the basket value that waives it.
- *
- * Both fields go up together because the endpoint replaces the whole row.
- */
 export function ShippingForm({ settings }: { settings: ShippingSettings }) {
   const [state, formAction, pending] = useActionState(updateShippingSettings, initialCheckoutState);
 

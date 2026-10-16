@@ -3,13 +3,6 @@ import { Icon } from '@iconify/react';
 import { formatMoney } from '@/lib/format';
 import type { DashboardOverview } from '@/types/admin';
 
-/**
- * Change against the previous comparable period.
- *
- * The backend sends null when that period had nothing to compare against,
- * which is not the same as no change -- a store's first day would otherwise
- * read as flat rather than as new.
- */
 function Delta({ pct, label }: { pct: number | null; label: string }) {
   if (pct === null) {
     return <span className="text-xs fw-medium text-neutral-500">No {label} to compare</span>;

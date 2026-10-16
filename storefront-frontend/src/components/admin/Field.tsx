@@ -20,7 +20,6 @@ export default function Field({
   required?: boolean;
   inputMode?: 'text' | 'decimal' | 'numeric';
   className?: string;
-  /** For rows that repeat the same field, where a visible label is noise. */
   hideLabel?: boolean;
 }) {
   return (

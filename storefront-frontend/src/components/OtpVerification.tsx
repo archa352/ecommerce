@@ -10,14 +10,7 @@ import { initialAuthState } from '@/lib/auth/form-state';
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
-/**
- * Verify the code and start a session.
- *
- * Verification posts to a server action rather than fetching from here: the
- * token pair it returns has to land in httpOnly cookies, which only the
- * server can write. On success the action redirects, so there is no
- * "verified" state to render.
- */
+
 export default function OtpVerification() {
   const router = useRouter();
   const searchParams = useSearchParams();

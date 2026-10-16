@@ -1,7 +1,6 @@
 import { formatMoney } from '@/lib/format';
 import type { TopSellingProductItem } from '@/types/admin';
 
-/** Ranked by units sold over the same window as the trend chart. */
 export default function TopProducts({
   products,
   currency,

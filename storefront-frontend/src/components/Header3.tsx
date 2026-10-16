@@ -23,9 +23,7 @@ interface reduType{
     basketShoppingCard: boolean;
     home: boolean;
     openMenu: number | null,
-    // type : string;        
-    // index : number;
-    
+
 }
 
 type Action =
@@ -42,10 +40,6 @@ type Action =
     | { type: 'home' }
     | { type: 'toggleMenu'; index: number };
 
-// interface stateType {
-//     home: boolean;
-//     openMenu: number | null; 
-// }
 
 const initialState = {
     headerFix: false,

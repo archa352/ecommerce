@@ -6,7 +6,7 @@ const MobileMenuToggle = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   const toggleSidebar = () => {
-    setSidebarOpen(!isSidebarOpen); // Toggle sidebar open state
+    setSidebarOpen(!isSidebarOpen);
   };
 
   return (
@@ -20,11 +20,11 @@ const MobileMenuToggle = () => {
       </button>
 
       <div className={`sidebar ${isSidebarOpen ? "sidebar-open" : ""}`}>
-        {/* Sidebar content */}
+        
       </div>
 
       <div className={isSidebarOpen ? "overlay-active" : ""}>
-        {/* Your overlay content */}
+       
       </div>
     </>
   );

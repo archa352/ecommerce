@@ -12,12 +12,6 @@ const STAGES: { key: keyof OrderStatusSummary; label: string; tone: string; icon
   { key: 'returned', label: 'Returned', tone: 'bg-neutral-400', icon: 'solar:rewind-back-bold' },
 ];
 
-/**
- * Where every order currently sits.
- *
- * The bar is each stage's share of all orders, so a queue building up in one
- * stage is visible without reading the numbers.
- */
 export default function OrderPipeline({ orders }: { orders: OrderStatusSummary }) {
   const total = orders.total || 1;
 

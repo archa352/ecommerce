@@ -217,10 +217,7 @@ class CartService:
         return await self._render(cart)
 
     async def merge_guest_cart(self, guest_token: str) -> CartRead:
-        """Fold a guest cart into the signed-in customer's cart after login.
-
-        Quantities add up, capped at what is in stock; lines that are no
-        longer sellable are dropped. The guest cart is closed afterwards.
+        """Merge the contents of a guest cart into the signed-in customer's cart.
         """
         if self.customer_id is None:
             raise ConflictError("Only a signed-in customer can merge a cart")

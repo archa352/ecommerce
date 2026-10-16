@@ -9,12 +9,6 @@ import SignOutButton from '@/components/SignOutButton';
 import ThemeToggleButton from '@/helper/ThemeToggleButton';
 import type { UserProfile } from '@/types/auth';
 
-/**
- * One entry per thing the backend can actually do.
- *
- * Anything without an endpoint behind it is deliberately absent: a nav that
- * promises a page the API cannot fill is worse than a short nav.
- */
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: 'solar:home-smile-angle-outline', exact: true },
   { href: '/admin/orders', label: 'Orders', icon: 'solar:cart-5-outline' },

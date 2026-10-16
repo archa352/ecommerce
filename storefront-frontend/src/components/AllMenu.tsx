@@ -272,21 +272,4 @@ export const AllMenu = [
       },
     ],
   }
-  // {
-  //   menu: "Shop",
-  //   className: "sub-menu-down",
-  //   ulClassName: "sub-menu",
-   
-  //   submenu: [
-  //     { child: "Shop Style 1", to: "/shop-style-1" },
-  //     { child: "Shop Style 2", to: "/shop-style-2" },
-  //     { child: "Shop Cart", to: "/shop-cart" },
-  //     { child: "Shop Wishlist", to: "/shop-wishlist" },
-  //     { child: "Shop Checkout", to: "/shop-checkout" },
-  //     { child: "Product Detail", to: "/product-detail" },
-  //   ],
-  // },
-  // {
-  
-  // { menu: "Contact Us", to: "/contact-us" },
 ];

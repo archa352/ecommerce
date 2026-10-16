@@ -16,12 +16,6 @@ function VariantRow({ variant, tone }: { variant: InventoryVariantItem; tone: st
   );
 }
 
-/**
- * What needs restocking, with the counts first.
- *
- * The overview carries a sample of variants rather than the full list, so
- * the counts are authoritative and the rows underneath are examples.
- */
 export default function InventoryAlerts({ inventory }: { inventory: InventoryOverview }) {
   const clear = inventory.out_of_stock_count === 0 && inventory.low_stock_count === 0;
 

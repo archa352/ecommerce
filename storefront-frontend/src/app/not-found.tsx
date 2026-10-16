@@ -12,16 +12,6 @@ export const metadata = {
 
 const EMPTY_CART: Cart = { id: 'guest', items: [], subtotal: '0.00', item_count: 0 };
 
-/**
- * The app has no single root layout -- `(storefront)` and `(admin)` each
- * define their own `<html>`/`<body>` ("multiple root layouts", per
- * Next.js's app router). A URL that matches neither group's routes at all
- * (a typo, a dead link) can't be routed into either group's tree, so Next
- * falls back to its own generic 404 unless a root `not-found.tsx` exists.
- * This is that file: it renders the same ZEEN 404 as
- * `(storefront)/not-found.tsx`, with its own minimal shell (no layout wraps
- * it) so the header's cart/wishlist badges still work.
- */
 export default async function RootNotFound() {
   const [user, cart, wishlist] = await Promise.all([
     getCurrentUser().catch(() => null),

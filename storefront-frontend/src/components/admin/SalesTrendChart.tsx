@@ -8,13 +8,6 @@ import type { SalesTrendItem } from '@/types/admin';
 
 const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
-/**
- * Daily revenue for the trailing window.
- *
- * The endpoint only returns days that actually had sales, so the series is
- * plotted against its own dates rather than a padded calendar -- a gap in
- * the axis is a day with no fulfilled orders, not missing data.
- */
 export default function SalesTrendChart({
   data,
   currency,

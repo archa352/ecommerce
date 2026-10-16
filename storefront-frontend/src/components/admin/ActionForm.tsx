@@ -5,14 +5,6 @@ import { useActionState, useRef } from 'react';
 import { initialCheckoutState } from '@/lib/orders/state';
 import type { CheckoutState } from '@/lib/orders/state';
 
-/**
- * One form shell for every admin write.
- *
- * The action reports through the same CheckoutState the rest of the app
- * uses, so a backend refusal ("an option name may only appear once per
- * variant", "Category still has active products") is shown verbatim rather
- * than replaced by a guess at what went wrong.
- */
 export default function ActionForm({
   action,
   submitLabel,
@@ -27,18 +19,15 @@ export default function ActionForm({
   submitLabel: string;
   pendingLabel?: string;
   children: React.ReactNode;
-  /** Identifiers the action needs, e.g. the product this row belongs to. */
+  
   hidden?: Record<string, string>;
   resetOnSuccess?: boolean;
   inline?: boolean;
-  /** Lets a form in a tight spot (an image card) use a smaller button. */
   submitClassName?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialCheckoutState);
   const formRef = useRef<HTMLFormElement>(null);
 
-  /* A form that adds a row (an image, a variant) should come back empty so
-     the next one can be typed straight in; an edit form keeps what it has. */
   if (resetOnSuccess && state.status === 'success') formRef.current?.reset();
 
   return (

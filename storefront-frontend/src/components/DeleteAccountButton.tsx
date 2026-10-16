@@ -4,11 +4,7 @@ import { useTransition } from 'react';
 
 import { deleteAccount } from '@/lib/auth/actions';
 
-/**
- * Erase the account. Past orders survive, stripped of the person.
- *
- * This cannot be undone, so it asks once before doing anything irreversible.
- */
+
 export default function DeleteAccountButton() {
   const [pending, startTransition] = useTransition();
 

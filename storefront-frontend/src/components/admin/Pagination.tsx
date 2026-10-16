@@ -1,6 +1,5 @@
 import Link from 'next/link';
 
-/** Page numbers around the current one, e.g. 1 … 4 5 [6] 7 8 … 12. */
 function window(current: number, total: number): (number | 'gap')[] {
   const pages = new Set([1, total, current, current - 1, current + 1]);
   const sorted = [...pages].filter(page => page >= 1 && page <= total).sort((a, b) => a - b);
