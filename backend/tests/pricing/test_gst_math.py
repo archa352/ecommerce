@@ -85,6 +85,39 @@ def test_intra_state_halves_add_back_up_exactly():
     assert result.igst == D("0.00")
 
 
+def test_tax_inclusive_price_extracts_tax_without_increasing_the_gross_total():
+    line = TaxableLine("inclusive", D("118.00"), D("18.00"), "1234", True)
+    result = compute_tax(
+        [line], discount=D("0.00"), charges=D("0.00"), default_rate=D("0.00"),
+        active=True, gst_type=GstType.INTRA_STATE,
+    )
+
+    assert result.lines["inclusive"].taxable == D("100.00")
+    assert result.lines["inclusive"].tax == D("18.00")
+    assert result.included_tax == D("18.00")
+    assert result.tax_amount - result.included_tax == D("0.00")
+    assert result.cgst + result.sgst == result.tax_amount
+
+
+def test_tax_inclusive_discount_and_mixed_rates_use_each_products_rate():
+    result = compute_tax(
+        [
+            TaxableLine("five", D("105.00"), D("5.00"), "1111", True),
+            TaxableLine("twelve", D("112.00"), D("12.00"), "2222", True),
+        ],
+        discount=D("21.70"), charges=D("0.00"), default_rate=D("0.00"),
+        active=True, gst_type=GstType.INTER_STATE,
+    )
+
+    assert result.lines["five"].discount == D("10.50")
+    assert result.lines["twelve"].discount == D("11.20")
+    assert result.lines["five"].taxable == D("90.00")
+    assert result.lines["twelve"].taxable == D("90.00")
+    assert result.lines["five"].tax == D("4.50")
+    assert result.lines["twelve"].tax == D("10.80")
+    assert result.igst == D("15.30")
+
+
 def test_inactive_tax_charges_nothing():
     result = compute_tax(
         _lines(("500.00", "12.00")),

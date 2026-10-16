@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,13 @@ from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from app.cod.schemas import CodAvailability
 from app.cod.service import CodService
-from app.core.error_codes import CartErrorCode, InventoryErrorCode, OrderErrorCode, UserErrorCode
+from app.core.error_codes import (
+    CartErrorCode,
+    InventoryErrorCode,
+    OrderErrorCode,
+    TaxErrorCode,
+    UserErrorCode,
+)
 from app.core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -64,6 +70,7 @@ from app.pricing.gst import (
     state_code_for,
     supply_type,
 )
+from app.pricing.models import GstSettings, TaxRateConfiguration, TaxSettings
 from app.pricing.service import (
     DeliveryQuote,
     DeliveryService,
@@ -167,6 +174,7 @@ class Quote:
     cod: CodAvailability | None
     seller_gstin: str | None
     place_of_supply: str | None
+    gst_settings: GstSettings | None
 
 
 class CheckoutService:
@@ -404,12 +412,22 @@ class CheckoutService:
                 shipping_amount=summary.shipping_amount,
                 cod_fee=summary.cod_fee,
                 tax_amount=summary.tax_amount,
+                tax_included_amount=quote.tax.included_tax,
                 cgst_amount=quote.tax.cgst,
                 sgst_amount=quote.tax.sgst,
                 igst_amount=quote.tax.igst,
                 gst_type=quote.tax.gst_type.value if quote.tax.gst_type else None,
                 place_of_supply=quote.place_of_supply,
                 seller_gstin=quote.seller_gstin,
+                seller_legal_name=quote.gst_settings.legal_name if quote.gst_settings else None,
+                seller_address=quote.gst_settings.address if quote.gst_settings else None,
+                seller_state=quote.gst_settings.state if quote.gst_settings else None,
+                seller_state_code=quote.gst_settings.state_code if quote.gst_settings else None,
+                invoice_prefix=quote.gst_settings.invoice_prefix if quote.gst_settings else None,
+                shipping_sac_code=quote.gst_settings.shipping_sac_code if quote.gst_settings else None,
+                charges_gst_rate=quote.tax.charges_rate,
+                prices_include_gst=bool(quote.gst_settings and quote.gst_settings.prices_include_gst),
+                gst_registration_status=quote.gst_settings.registration_status if quote.gst_settings else None,
                 total_amount=summary.total_amount,
                 advance_amount=summary.advance_amount,
                 delivery_name=destination.full_name,
@@ -442,6 +460,7 @@ class CheckoutService:
                         quantity=item.quantity,
                         subtotal=item.subtotal,
                         hsn_code=item.hsn_code,
+                        tax_configuration_id=item.tax_configuration_id,
                         gst_rate=item.gst_rate,
                         discount_amount=item.discount_amount,
                         taxable_amount=item.taxable_amount,
@@ -566,29 +585,111 @@ class CheckoutService:
         shipping_discount = min(coupon.shipping_discount, shipping) if coupon else ZERO
         shipping_charged = shipping - shipping_discount
 
-        tax_settings = await self.tax.get_settings()
-        tax_active = bool(tax_settings and tax_settings.is_active)
+        gst_settings = (
+            await self.session.scalar(
+                select(GstSettings).where(GstSettings.tenant_id == self.tenant_id).with_for_update()
+            )
+            if for_update
+            else await self.gst.get_settings()
+        )
+        if gst_settings is None or gst_settings.configuration_status != "ACTIVE":
+            raise ConflictError(
+                "Tax & GST settings are incomplete or awaiting CA confirmation. Complete and activate them before checkout.",
+                error_code=TaxErrorCode.CONFIGURATION_INCOMPLETE,
+            )
+        tax_settings = (
+            await self.session.scalar(
+                select(TaxSettings).where(TaxSettings.tenant_id == self.tenant_id).with_for_update()
+            )
+            if for_update
+            else await self.tax.get_settings()
+        )
         default_rate = tax_settings.tax_percentage if tax_settings else ZERO
-        gst_settings = await self.gst.get_settings()
-        seller_state = gst_settings.state_code if gst_settings else None
+        seller_state = gst_settings.state_code
+        if destination is not None:
+            if destination.country.strip().lower() not in INDIA:
+                raise ConflictError(
+                    "International GST treatment is not configured. Confirm export rules with the CA before accepting this destination.",
+                    error_code=TaxErrorCode.CONFIGURATION_INCOMPLETE,
+                )
+            if state_code_for(destination.state) is None:
+                raise ConflictError(
+                    "A valid Indian state is required to classify GST for this delivery address.",
+                    error_code=TaxErrorCode.CONFIGURATION_INCOMPLETE,
+                )
         gst_type = supply_type(seller_state, destination.state if destination else None)
+
+        today = datetime.now(timezone.utc).date()
+        product_ids = [line.item.product_id for line in lines]
+        category_ids = [line.category_id for line in lines]
+        target_filters = []
+        if product_ids:
+            target_filters.append(TaxRateConfiguration.product_id.in_(product_ids))
+        if category_ids:
+            target_filters.append(TaxRateConfiguration.category_id.in_(category_ids))
+        mappings = (
+            await self.session.scalars(
+                select(TaxRateConfiguration)
+                .where(
+                    TaxRateConfiguration.tenant_id == self.tenant_id,
+                    TaxRateConfiguration.status == "ACTIVE",
+                    TaxRateConfiguration.ca_confirmed.is_(True),
+                    TaxRateConfiguration.effective_from <= today,
+                    or_(*target_filters),
+                )
+                .order_by(TaxRateConfiguration.effective_from.desc(), TaxRateConfiguration.created_at.desc())
+            )
+        ).all()
+        product_rates: dict[UUID, TaxRateConfiguration] = {}
+        category_rates: dict[UUID, TaxRateConfiguration] = {}
+        for mapping in mappings:
+            target = product_rates if mapping.product_id else category_rates
+            key = mapping.product_id or mapping.category_id
+            if key is not None:
+                target.setdefault(key, mapping)
+
+        for line in lines:
+            mapping = product_rates.get(line.item.product_id) or category_rates.get(line.category_id)
+            if mapping is None:
+                raise ConflictError(
+                    f"No active, CA-confirmed HSN and GST rate is configured for {line.item.product_name}.",
+                    error_code=TaxErrorCode.RATE_NOT_FOUND,
+                )
+            line.item.hsn_code = mapping.hsn_code
+            line.item.gst_rate = mapping.gst_rate
+            line.item.tax_configuration_id = mapping.id
+
         taxable_lines = [
             TaxableLine(
                 key=line.item.variant_id,
                 amount=line.item.subtotal,
-                rate=line.item.gst_rate if line.item.gst_rate is not None else default_rate,
+                rate=line.item.gst_rate,
                 hsn_code=line.item.hsn_code,
+                prices_include_tax=gst_settings.prices_include_gst,
             )
             for line in lines
         ]
 
+        def require_charge_tax(charges: Decimal) -> None:
+            if charges > ZERO and (
+                tax_settings is None
+                or not tax_settings.is_active
+                or not tax_settings.confirmed_by_ca
+                or not gst_settings.shipping_sac_code
+            ):
+                raise ConflictError(
+                    "Shipping/COD tax is not confirmed. Configure its approved rate and SAC code before checkout.",
+                    error_code=TaxErrorCode.CONFIGURATION_INCOMPLETE,
+                )
+
         def tax_for(charges: Decimal) -> TaxResult:
+            require_charge_tax(charges)
             return compute_tax(
                 taxable_lines,
                 discount=discount,
                 charges=charges,
                 default_rate=default_rate,
-                active=tax_active,
+                active=True,
                 gst_type=gst_type,
             )
 
@@ -596,7 +697,7 @@ class CheckoutService:
         cod_fee = ZERO
         if payment_method is PaymentMethod.CASH_ON_DELIVERY:
             before_fee = tax_for(shipping_charged)
-            order_value = subtotal - discount + shipping_charged + before_fee.tax_amount
+            order_value = subtotal - discount + shipping_charged + before_fee.tax_amount - before_fee.included_tax
             cod = await self.cod.availability(
                 order_value,
                 phones=phones,
@@ -606,7 +707,7 @@ class CheckoutService:
                 cod_fee = cod.fee
 
         tax = tax_for(shipping_charged + cod_fee)
-        total = subtotal - discount + shipping_charged + cod_fee + tax.tax_amount
+        total = subtotal - discount + shipping_charged + cod_fee + tax.tax_amount - tax.included_tax
         advance = min(cod.advance_amount, total) if cod and cod.available else ZERO
 
         items = []
@@ -615,7 +716,7 @@ class CheckoutService:
             items.append(
                 line.item.model_copy(
                     update={
-                        "gst_rate": share.rate if tax_active else line.item.gst_rate,
+                        "gst_rate": share.rate,
                         "discount_amount": share.discount,
                         "taxable_amount": share.taxable,
                         "tax_amount": share.tax,
@@ -671,6 +772,7 @@ class CheckoutService:
             cod=cod,
             seller_gstin=gst_settings.gstin if gst_settings else None,
             place_of_supply=place,
+            gst_settings=gst_settings,
         )
 
     async def _resolve_coupon(

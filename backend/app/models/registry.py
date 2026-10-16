@@ -30,7 +30,7 @@ from app.customers.models import CustomerNote
 from app.models.base import Base
 from app.orders.models import Order, OrderItem, OrderTrackingEvent
 from app.payments.models import Payment
-from app.pricing.models import GstSettings, PincodeRule, ShippingSettings, TaxSettings
+from app.pricing.models import GstSettings, PincodeRule, ShippingSettings, TaxRateConfiguration, TaxSettings
 from app.ratings.models import Review, ReviewImage, ReviewRequest
 from app.returns.models import ReturnReason
 from app.search_filter.models import SearchHistory
@@ -84,6 +84,7 @@ __all__ = [
     "SearchHistory",
     "ShippingSettings",
     "TaxSettings",
+    "TaxRateConfiguration",
     "Tenant",
     "TenantDomain",
     "User",

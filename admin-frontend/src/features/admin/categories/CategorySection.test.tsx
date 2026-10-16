@@ -93,7 +93,7 @@ describe("Categories page", () => {
     await userEvent.clear(name);
     await userEvent.type(name, "Kurtas");
     expect(name).not.toHaveAttribute("aria-invalid");
-    expect(within(dialog).getByRole("textbox", { name: "HSN code" })).not.toHaveAttribute("aria-required");
+    expect(within(dialog).getByRole("textbox", { name: "Legacy HSN code" })).not.toHaveAttribute("aria-required");
     await userEvent.click(within(dialog).getByRole("button", { name: "Create category" }));
     await waitFor(() => expect(calls.some((call) => call.init.method === "POST")).toBe(true));
     const posted = calls.find((call) => call.init.method === "POST");

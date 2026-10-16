@@ -114,6 +114,14 @@ class CouponErrorCode(ErrorCode):
     NOT_APPLICABLE = "COUPON_NOT_APPLICABLE"
 
 
+class TaxErrorCode(ErrorCode):
+    CONFIGURATION_INCOMPLETE = "TAX_CONFIGURATION_INCOMPLETE"
+    RATE_UNCONFIRMED = "TAX_RATE_UNCONFIRMED"
+    RATE_NOT_FOUND = "TAX_RATE_NOT_FOUND"
+    RATE_CONFLICT = "TAX_RATE_CONFLICT"
+    CONFIRMATION_REQUIRED = "TAX_CONFIRMATION_REQUIRED"
+
+
 class ContentErrorCode(ErrorCode):
     MEDIA_IN_USE = "MEDIA_IN_USE"
     IMAGE_REQUIRED = "IMAGE_REQUIRED"
@@ -130,5 +138,6 @@ ERROR_CODE_DOMAINS: tuple[type[ErrorCode], ...] = (
     OrderErrorCode,
     PaymentErrorCode,
     CouponErrorCode,
+    TaxErrorCode,
     ContentErrorCode,
 )

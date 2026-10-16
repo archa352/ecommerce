@@ -283,8 +283,8 @@ function ProductForm({
       <div className="panel">
         <h3>Tax &amp; SEO</h3>
         <div className="form-grid">
-          <Field label="HSN code" error={fieldErrors.hsn} hint="Blank = category default"><input {...t("hsn_code")} /></Field>
-          <Field label="GST rate (%)" error={fieldErrors.gst} hint="Blank = category default" guidance="Override this only when the product has a different GST rate."><input type="number" min="0" max="100" step="0.01" {...t("gst_rate")} /></Field>
+          <Field label="Legacy HSN code" error={fieldErrors.hsn} hint="Checkout uses confirmed mappings in Tax & GST Settings."><input {...t("hsn_code")} /></Field>
+          <Field label="Legacy GST rate (%)" error={fieldErrors.gst} hint="Checkout uses confirmed mappings in Tax & GST Settings." guidance="Set active tax mappings in Tax & GST Settings."><input type="number" min="0" max="100" step="0.01" {...t("gst_rate")} /></Field>
           <Field label="SEO title"><input {...t("seo_title")} /></Field>
           <Field label="SEO description" wide><textarea {...t("seo_description")} /></Field>
         </div>

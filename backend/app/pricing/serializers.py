@@ -34,7 +34,8 @@ def tax_read(settings: TaxSettings | None) -> TaxSettingsRead:
         return TaxSettingsRead(tax_percentage=ZERO, is_active=False)
 
     return TaxSettingsRead(
-        tax_percentage=settings.tax_percentage, is_active=settings.is_active
+        tax_percentage=settings.tax_percentage, is_active=settings.is_active,
+        confirmed_by_ca=settings.confirmed_by_ca,
     )
 
 
@@ -62,4 +63,12 @@ def gst_read(settings: GstSettings | None) -> GstSettingsRead:
         state_code=settings.state_code,
         invoice_prefix=settings.invoice_prefix,
         shipping_sac_code=settings.shipping_sac_code,
+        registration_status=settings.registration_status,
+        accounting_software=settings.accounting_software,
+        configuration_status=settings.configuration_status,
+        prices_include_gst=settings.prices_include_gst,
+        updated_at=settings.updated_at,
+        updated_by_id=settings.updated_by_id,
+        confirmed_at=settings.confirmed_at,
+        confirmed_by_id=settings.confirmed_by_id,
     )

@@ -115,8 +115,8 @@ function CategorySection() {
             { key: "name", header: "Category name", render: (category) => <span className="category-name" style={{ paddingLeft: Math.min(category.depth, 4) * 14 }}>{category.depth > 0 && "↳ "}{canManage ? <button type="button" className="link" onClick={(event) => { event.stopPropagation(); setEditing(category); }}>{category.name}</button> : category.name}</span> },
             { key: "parent", header: "Parent category", render: parentName },
             { key: "status", header: "Status", render: (category) => <Badge value={category.status} /> },
-            { key: "hsn_code", header: "HSN", render: (category) => category.hsn_code ?? "-" },
-            { key: "gst_rate", header: "GST %", render: (category) => category.gst_rate ?? "-" },
+            { key: "hsn_code", header: "Legacy HSN", render: (category) => category.hsn_code ?? "-" },
+            { key: "gst_rate", header: "Legacy GST %", render: (category) => category.gst_rate ?? "-" },
             { key: "actions", header: "Actions", render: (category) => canManage && (category.status === "ARCHIVED"
               ? <button type="button" disabled={action.busy || !canRestore(category)} title={!canRestore(category) ? "Restore the parent category first" : undefined} onClick={(event) => { event.stopPropagation(); action.run(async () => { await updateCategory(category.id, { status: "DRAFT" }); reload(); }, "Category restored to draft", "Could not restore category"); }}>Restore to draft</button>
               : <ConfirmButton message={`Archive ${category.name}? It will be hidden from the store. Categories containing products or subcategories cannot be archived.`} disabled={action.busy} onConfirm={() => action.run(async () => { await archiveCategory(category.id); reload(); }, "Category archived", "Could not archive")}>Archive</ConfirmButton>) },

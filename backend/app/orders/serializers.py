@@ -161,11 +161,11 @@ def invoice_read(order: Order, seller: GstSettings | None, currency: str) -> Inv
     charges_tax = order.tax_amount - goods_tax if tax_split_known else ZERO
     if charges > ZERO or charges_tax > ZERO:
         cgst, sgst, igst = split_tax(charges_tax, order.gst_type)
-        rate = money(charges_tax * 100 / charges) if charges > ZERO else ZERO
+        rate = (order.charges_gst_rate if order.charges_gst_rate is not None else money(charges_tax * 100 / charges)) if charges > ZERO else ZERO
         lines.append(
             InvoiceLine(
                 description="Shipping and handling" if order.cod_fee else "Shipping charges",
-                hsn_code=seller.shipping_sac_code if seller else None,
+                hsn_code=order.shipping_sac_code or (seller.shipping_sac_code if seller else None),
                 quantity=1,
                 unit_price=charges,
                 discount=ZERO,
@@ -186,8 +186,8 @@ def invoice_read(order: Order, seller: GstSettings | None, currency: str) -> Inv
         f"{order.delivery_state} {order.delivery_postal_code}",
         order.delivery_country,
     ]
-    prefix = seller.invoice_prefix if seller else "INV-"
-    taxable_value = order.subtotal - order.discount_amount + charges
+    prefix = order.invoice_prefix or (seller.invoice_prefix if seller else "INV-")
+    taxable_value = order.subtotal - order.discount_amount + charges - order.tax_included_amount
 
     return InvoiceRead(
         invoice_number=f"{prefix}{order.order_number}",
@@ -198,15 +198,15 @@ def invoice_read(order: Order, seller: GstSettings | None, currency: str) -> Inv
         tax_split_known=tax_split_known,
         place_of_supply=order.place_of_supply,
         seller=InvoiceParty(
-            name=seller.legal_name if seller else None,
+            name=order.seller_legal_name or (seller.legal_name if seller else None),
             gstin=(
                 order.seller_gstin
-                if not tax_split_known
+                if order.gst_registration_status is not None or not tax_split_known
                 else order.seller_gstin or (seller.gstin if seller else None)
             ),
-            address=seller.address if seller else None,
-            state=seller.state if seller and tax_split_known else None,
-            state_code=seller.state_code if seller and tax_split_known else None,
+            address=order.seller_address or (seller.address if seller else None),
+            state=(order.seller_state or (seller.state if seller else None)) if tax_split_known else None,
+            state_code=(order.seller_state_code or (seller.state_code if seller else None)) if tax_split_known else None,
         ),
         buyer=InvoiceParty(
             name=order.delivery_name,
