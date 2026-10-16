@@ -11,15 +11,12 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.error_codes import CommonErrorCode, TenantErrorCode
 from app.core.exceptions import NotFoundError, PermissionDeniedError
-from app.core.logging import get_logger
 from app.core.responses import ApiResponse, ok
 from app.tenants.models import Tenant
 from app.tenants.repository import TenantRepository
 from app.tenants.resolver import CurrentTenantOptional
 from app.users.schemas import UserCreate, UserRead
 from app.users.service import UserService
-
-logger = get_logger("users")
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -89,14 +86,6 @@ async def _provision(
     response.status_code = (
         status.HTTP_201_CREATED if created else status.HTTP_200_OK
     )
-
-    if created:
-        logger.info(
-            "users.provisioned role=%s user_id=%s tenant_id=%s",
-            role.value,
-            user.id,
-            target.id,
-        )
 
     return ok(
         UserRead.model_validate(user),

@@ -8,14 +8,13 @@ from app.auth.phone import normalize_phone
 from app.core.config import get_settings
 from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError, ServiceUnavailableError
-from app.core.logging import get_logger
-
-logger = get_logger("auth.widget")
 
 UNVERIFIED = "Could not verify that number"
 UNAVAILABLE = "Unable to verify your number right now"
 _IDENTIFIER_KEYS = ("message", "mobile", "identifier", "phone", "number")
 _MAX_SEARCH_DEPTH = 3
+# MSG91 answers these when the fault is ours, not the user's: 201 = auth key
+# rejected, 418 = this server's IP is not whitelisted against the auth key.
 _OUR_FAULT_CODES = frozenset({"201", "418"})
 
 
@@ -26,7 +25,6 @@ async def verify_access_token(access_token: str) -> str:
     settings = get_settings()
 
     if not settings.msg91_auth_key:
-        logger.error("widget.verification_not_configured")
         raise ServiceUnavailableError(
             UNAVAILABLE,
             error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
@@ -43,7 +41,6 @@ async def verify_access_token(access_token: str) -> str:
                 headers={"Content-Type": "application/json"},
             )
     except httpx.HTTPError as exc:
-        logger.error("widget.verify_transport_error error=%s", type(exc).__name__)
         raise ServiceUnavailableError(
             UNAVAILABLE,
             error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
@@ -65,7 +62,6 @@ def _identity_from(response: httpx.Response) -> str:
     if response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR or (
         response.status_code == httpx.codes.TOO_MANY_REQUESTS
     ):
-        logger.error("widget.provider_error status=%s", response.status_code)
         raise ServiceUnavailableError(
             UNAVAILABLE,
             error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
@@ -73,30 +69,17 @@ def _identity_from(response: httpx.Response) -> str:
 
     code = str(payload.get("code", "")) if isinstance(payload, dict) else ""
     if code in _OUR_FAULT_CODES:
-        logger.error(
-            "widget.provider_misconfigured code=%s detail=%s "
-            "(201=auth key rejected, 418=this server's IP is not whitelisted "
-            "against the auth key in MSG91)",
-            code,
-            payload.get("message") if isinstance(payload, dict) else "-",
-        )
         raise ServiceUnavailableError(
             UNAVAILABLE,
             error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
         )
 
     if response.status_code != httpx.codes.OK or outcome != "success":
-        logger.info(
-            "widget.token_rejected status=%s type=%s",
-            response.status_code,
-            outcome or "-",
-        )
         raise AuthenticationError(UNVERIFIED, error_code=AuthErrorCode.INVALID_OTP)
 
     phone = _phone_from(payload)
 
     if phone is None:
-        logger.error("widget.identifier_missing keys=%s", sorted(payload))
         raise AuthenticationError(UNVERIFIED, error_code=AuthErrorCode.INVALID_OTP)
 
     return phone

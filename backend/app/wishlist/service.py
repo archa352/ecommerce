@@ -7,7 +7,6 @@ from app.catalogue.constants import CatalogueStatus
 from app.catalogue.repository import ProductRepository, VariantRepository
 from app.core.error_codes import InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
-from app.core.logging import get_logger
 from app.wishlist.models import Wishlist
 from app.wishlist.repository import WishlistItemRepository, WishlistRepository
 from app.wishlist.schemas import (
@@ -16,8 +15,6 @@ from app.wishlist.schemas import (
     WishListItemRead,
     WishListRead,
 )
-
-logger = get_logger("wishlist")
 
 VARIANT_NOT_FOUND = "Product variant not found"
 VARIANT_UNAVAILABLE = "Product variant is not available"
@@ -88,12 +85,6 @@ class WishListService:
         except IntegrityError as exc:
             await self.session.rollback()
             raise ConflictError(WISHLIST_ITEM_EXISTS) from exc
-        logger.info(
-            "wishlist.item_added wishlist_id=%s tenant_id=%s variant_id=%s",
-            wishlist.id,
-            self.tenant_id,
-            data.variant_id,
-        )
         return await self.render(wishlist)
 
     async def remove_item(self, item_id: UUID) -> WishListRead:
@@ -103,24 +94,12 @@ class WishListService:
             raise NotFoundError(ITEM_NOT_FOUND)
         await self.items.delete(item)
         await self.session.commit()
-        logger.info(
-            "wishlist.item_removed wishlist_id=%s tenant_id=%s item_id=%s",
-            wishlist.id,
-            self.tenant_id,
-            item_id,
-        )
         return await self.render(wishlist)
 
     async def clear(self) -> WishListRead:
         wishlist = await self.get_or_create_wishlist()
-        removed = await self.items.clear(wishlist.id)
+        await self.items.clear(wishlist.id)
         await self.session.commit()
-        logger.info(
-            "wishlist.cleared wishlist_id=%s tenant_id=%s items=%s",
-            wishlist.id,
-            self.tenant_id,
-            removed,
-        )
         return await self.render(wishlist)
 
     async def check_available(self, variant_id: UUID) -> None:

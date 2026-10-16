@@ -33,12 +33,9 @@ from app.auth.widget import verify_access_token
 from app.core.config import get_settings
 from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError
-from app.core.logging import get_logger
 from app.tenants.models import Tenant
 from app.users.models import User
 from app.users.repository import UserRepository
-
-logger = get_logger("auth")
 
 INVALID_CREDENTIALS = "Invalid credentials"
 INVALID_OTP = "Invalid or expired OTP"
@@ -72,11 +69,9 @@ class AuthService:
 
         if user is None:
             user = await self._create_customer(phone)
-            logger.info("auth.customer_created user_id=%s tenant_id=%s", user.id, self.tenant.id)
         elif not user.is_active or user.role != UserRole.CUSTOMER.value:
             # Staff and admins hold passwords and sign in through their own
             # routes; letting them in here would sidestep that.
-            logger.info("auth.login_rejected user_id=%s tenant_id=%s", user.id, self.tenant.id)
             raise AuthenticationError(
                 INVALID_CREDENTIALS,
                 error_code=AuthErrorCode.INVALID_CREDENTIALS,
@@ -88,9 +83,6 @@ class AuthService:
         tokens = await self._issue_tokens(user)
         await self.session.commit()
 
-        logger.info(
-            "auth.login user_id=%s tenant_id=%s role=%s", user.id, self.tenant.id, user.role
-        )
         return tokens
 
     async def admin_login(
@@ -105,12 +97,6 @@ class AuthService:
         tokens = await self._issue_tokens(user)
         await self.session.commit()
 
-        logger.info(
-            "auth.login user_id=%s tenant_id=%s role=%s",
-            user.id,
-            self.tenant.id,
-            user.role,
-        )
         return tokens
 
     async def staff_login(
@@ -125,12 +111,6 @@ class AuthService:
         tokens = await self._issue_tokens(user)
         await self.session.commit()
 
-        logger.info(
-            "auth.login user_id=%s tenant_id=%s role=%s",
-            user.id,
-            self.tenant.id,
-            user.role,
-        )
         return tokens
 
     async def verify_staff_otp(self, verification_id: UUID, otp: str) -> TokenPair:
@@ -163,9 +143,6 @@ class AuthService:
         tokens = await self._issue_tokens(user)
         await self.session.commit()
 
-        logger.info(
-            "auth.login user_id=%s tenant_id=%s role=%s", user.id, self.tenant.id, user.role
-        )
         return tokens
 
     async def refresh_tokens(self, refresh_token: str) -> TokenPair:
@@ -181,14 +158,8 @@ class AuthService:
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         if stored.revoked_at is not None:
-            revoked = await self.tokens.revoke_all_for_user(stored.user_id)
+            await self.tokens.revoke_all_for_user(stored.user_id)
             await self.session.commit()
-            logger.warning(
-                "auth.refresh_reuse_detected user_id=%s tenant_id=%s sessions_revoked=%s",
-                stored.user_id,
-                self.tenant.id,
-                revoked,
-            )
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         if stored.expires_at <= datetime.now(timezone.utc):
@@ -196,18 +167,12 @@ class AuthService:
 
         user = await self.users.get_by_id(tenant_id=self.tenant.id, user_id=stored.user_id)
         if user is None or not user.is_active:
-            logger.info(
-                "auth.refresh_rejected user_id=%s tenant_id=%s",
-                stored.user_id,
-                self.tenant.id,
-            )
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         await self.tokens.revoke(stored)
         tokens = await self._issue_tokens(user)
         await self.session.commit()
 
-        logger.info("auth.refreshed user_id=%s tenant_id=%s", user.id, self.tenant.id)
         return tokens
 
     async def logout(self, refresh_token: str) -> None:
@@ -217,7 +182,6 @@ class AuthService:
         )
         if stored is not None and stored.revoked_at is None:
             await self.tokens.revoke(stored)
-            logger.info("auth.logout user_id=%s tenant_id=%s", stored.user_id, self.tenant.id)
 
         await self.session.commit()
 
@@ -266,7 +230,6 @@ class AuthService:
             )
 
         if not await verify_password(password, user.password_hash):
-            logger.info("auth.login_failed user_id=%s tenant_id=%s", user.id, self.tenant.id)
             raise AuthenticationError(
                 INVALID_CREDENTIALS,
                 error_code=AuthErrorCode.INVALID_CREDENTIALS,
@@ -318,12 +281,6 @@ class AuthService:
 
         if not await verify_otp(otp, record.otp_hash):
             await self.session.commit()
-            logger.info(
-                "auth.otp_failed tenant_id=%s otp_request_id=%s attempts=%s",
-                self.tenant.id,
-                record.id,
-                record.attempts,
-            )
             raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
 
         record.verified_at = now

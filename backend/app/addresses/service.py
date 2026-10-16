@@ -9,9 +9,6 @@ from app.addresses.models import Address
 from app.addresses.repository import AddressRepository
 from app.addresses.schemas import AddressCreate, AddressUpdate
 from app.core.exceptions import ConflictError, NotFoundError
-from app.core.logging import get_logger
-
-logger = get_logger("addresses")
 
 ADDRESS_NOT_FOUND = "Address not found"
 
@@ -60,9 +57,6 @@ class AddressService:
             await self.session.rollback()
             raise ConflictError("Unable to save the address") from exc
 
-        logger.info(
-            "addresses.created id=%s tenant_id=%s", address.id, self.tenant_id
-        )
         return address
 
     async def update(self, address_id: UUID, data: AddressUpdate) -> Address:
@@ -88,9 +82,6 @@ class AddressService:
             await self.session.rollback()
             raise ConflictError("Unable to save the address") from exc
 
-        logger.info(
-            "addresses.updated id=%s tenant_id=%s", address.id, self.tenant_id
-        )
         return address
 
     async def delete(self, address_id: UUID) -> None:
@@ -100,6 +91,3 @@ class AddressService:
         await self.addresses.delete(address)
         await self.session.commit()
 
-        logger.info(
-            "addresses.deleted id=%s tenant_id=%s", address_id, self.tenant_id
-        )

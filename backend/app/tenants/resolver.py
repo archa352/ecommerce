@@ -9,11 +9,8 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.error_codes import TenantErrorCode
 from app.core.exceptions import NotFoundError
-from app.core.logging import get_logger
 from app.tenants.models import Tenant
 from app.tenants.repository import TenantRepository
-
-logger = get_logger("tenants")
 
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]", "0.0.0.0"})
 
@@ -50,10 +47,6 @@ async def resolve_tenant(
     settings = get_settings()
     if tenant is None and not settings.is_production and hostname in LOOPBACK_HOSTS:
         tenant = await repository.get_active_by_slug(settings.seed_tenant_slug)
-        if tenant is not None:
-            logger.debug(
-                "tenants.dev_fallback host=%s tenant_id=%s", hostname, tenant.id
-            )
 
     if tenant is None:
         raise NotFoundError(

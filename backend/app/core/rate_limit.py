@@ -4,9 +4,6 @@ import hashlib
 
 from app.core.cache import get_redis
 from app.core.exceptions import RateLimitedError
-from app.core.logging import get_logger
-
-logger = get_logger("rate_limit")
 
 KEY_PREFIX = "ratelimit"
 
@@ -30,10 +27,8 @@ async def hit(key: str, *, limit: int, window_seconds: int) -> None:
         if ttl < 0:
             await client.expire(key, window_seconds)
             ttl = window_seconds
-    except RateLimitedError:
-        raise
-    except Exception as exc:
-        logger.warning("rate_limit.unavailable key=%s error=%s", key, type(exc).__name__)
+    except Exception:
+        # Redis is down: fail open rather than refuse every request.
         return
 
     if count > limit:
@@ -48,5 +43,6 @@ async def enforce(scope: str, *parts: str, limit: int, window_seconds: int) -> N
 async def reset(key: str) -> None:
     try:
         await get_redis().delete(key)
-    except Exception as exc:
-        logger.warning("rate_limit.reset_failed key=%s error=%s", key, type(exc).__name__)
+    except Exception:
+        # Best effort: an unreset counter only expires at the end of its window.
+        return

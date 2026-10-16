@@ -33,7 +33,6 @@ class Settings(BaseSettings):
 
     app_name: str = "TWS E-Commerce API"
     environment: str = "development"
-    log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
 
     database_url: str

@@ -10,10 +10,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.error_codes import AuthErrorCode, CommonErrorCode, ErrorCode
 from app.core.exceptions import AppError, RateLimitedError
-from app.core.logging import get_logger, get_request_id
+from app.core.request_context import get_request_id
 from app.core.responses import ErrorPayload, ErrorResponse
-
-logger = get_logger("errors")
 
 _STATUS_ERROR_CODES: dict[int, ErrorCode] = {
     status.HTTP_401_UNAUTHORIZED: AuthErrorCode.AUTHENTICATION_FAILED,
@@ -52,16 +50,6 @@ def _json(
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    log = logger.error if exc.status_code >= 500 else logger.warning
-    log(
-        "app.error error_code=%s status_code=%s message=%s path=%s method=%s",
-        exc.error_code,
-        exc.status_code,
-        exc.message,
-        request.url.path,
-        request.method,
-    )
-
     headers = None
     if isinstance(exc, RateLimitedError) and exc.retry_after_seconds:
         headers = {"Retry-After": str(exc.retry_after_seconds)}
@@ -85,13 +73,6 @@ async def validation_error_handler(
         }
         for error in exc.errors()
     ]
-
-    logger.info(
-        "app.validation_error path=%s method=%s fields=%s",
-        request.url.path,
-        request.method,
-        [detail["field"] for detail in details],
-    )
 
     return _json(
         status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -118,13 +99,6 @@ async def http_exception_handler(
 
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
     """A constraint the service did not anticipate, usually two requests racing."""
-    logger.warning(
-        "app.integrity_error path=%s method=%s constraint=%s",
-        request.url.path,
-        request.method,
-        getattr(getattr(exc.orig, "__cause__", None), "constraint_name", None),
-    )
-
     return _json(
         status.HTTP_409_CONFLICT,
         _envelope(
@@ -136,13 +110,6 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 
 async def database_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
     """Lost or refused database connections. Never echoes the driver's message."""
-    logger.error(
-        "app.database_unavailable path=%s method=%s error=%s",
-        request.url.path,
-        request.method,
-        type(exc).__name__,
-    )
-
     return _json(
         status.HTTP_503_SERVICE_UNAVAILABLE,
         _envelope(
@@ -153,14 +120,7 @@ async def database_unavailable_handler(request: Request, exc: Exception) -> JSON
 
 
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Last resort. Logs the traceback, returns nothing internal to the caller."""
-    logger.exception(
-        "app.unhandled_error path=%s method=%s error=%s",
-        request.url.path,
-        request.method,
-        type(exc).__name__,
-    )
-
+    """Last resort: a generic 500 that reveals nothing internal to the caller."""
     return _json(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         _envelope(
