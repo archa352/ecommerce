@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -14,8 +14,10 @@ from app.coupons.repository import CouponRepository, CouponUsageRepository
 from app.coupons.service import CouponService
 from app.orders.constants import OrderStatus
 from app.orders.models import Order
+from app.orders.service import CheckoutService
 from app.payments.constants import PaymentStatus
 from tests.conftest import headers_for
+from tests.helpers import run_concurrently, succeeded
 
 
 async def _make_coupon(session: AsyncSession, tenant, **overrides) -> Coupon:
@@ -117,15 +119,15 @@ async def test_admin_list_coupons(client: AsyncClient, staff_headers: dict, sess
 
 
 @pytest.mark.asyncio
-async def test_customer_apply_coupon_success(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_customer_apply_coupon_success(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     await _make_coupon(
         session, tenant, code="PROMO10", min_order_amount=Decimal("200.00")
     )
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "promo10"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 200
@@ -135,36 +137,36 @@ async def test_customer_apply_coupon_success(client: AsyncClient, customer_heade
 
 
 @pytest.mark.asyncio
-async def test_customer_apply_coupon_min_order_fail(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_customer_apply_coupon_min_order_fail(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     await _make_coupon(
         session, tenant, code="MINORDER", min_order_amount=Decimal("500.00")
     )
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "MINORDER"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_customer_apply_expired_coupon(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_customer_apply_expired_coupon(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     past_time = datetime.now(timezone.utc) - timedelta(days=2)
     await _make_coupon(session, tenant, code="EXPIRED", expires_at=past_time)
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "EXPIRED"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_percentage_coupon_without_cap(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_percentage_coupon_without_cap(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     await _make_coupon(
         session,
         tenant,
@@ -173,10 +175,10 @@ async def test_percentage_coupon_without_cap(client: AsyncClient, customer_heade
         discount_value=Decimal("10.00"),
     )
 
+    await cart_worth(customer_headers, "200.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "TENPCT"},
-        params={"subtotal": "200.00"},
         headers=customer_headers,
     )
     assert response.status_code == 200
@@ -184,7 +186,7 @@ async def test_percentage_coupon_without_cap(client: AsyncClient, customer_heade
 
 
 @pytest.mark.asyncio
-async def test_percentage_coupon_with_max_cap(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_percentage_coupon_with_max_cap(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     await _make_coupon(
         session,
         tenant,
@@ -195,10 +197,10 @@ async def test_percentage_coupon_with_max_cap(client: AsyncClient, customer_head
     )
 
     # Subtotal 300 -> 50% is 150, but cap is 75
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "BIGSALE"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 200
@@ -322,38 +324,38 @@ async def test_admin_create_coupon_negative_limits_rejected(client: AsyncClient,
 
 
 @pytest.mark.asyncio
-async def test_apply_coupon_not_found(client: AsyncClient, customer_headers: dict):
+async def test_apply_coupon_not_found(cart_worth, client: AsyncClient, customer_headers: dict):
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "DOESNOTEXIST"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_apply_inactive_coupon_rejected(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_apply_inactive_coupon_rejected(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     await _make_coupon(session, tenant, code="INACTIVE1", is_active=False)
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "INACTIVE1"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_apply_not_yet_started_coupon_rejected(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_apply_not_yet_started_coupon_rejected(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     future_time = datetime.now(timezone.utc) + timedelta(days=2)
     await _make_coupon(session, tenant, code="NOTSTARTED", starts_at=future_time)
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "NOTSTARTED"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 400
@@ -361,14 +363,14 @@ async def test_apply_not_yet_started_coupon_rejected(client: AsyncClient, custom
 
 @pytest.mark.asyncio
 async def test_apply_coupon_global_usage_limit_reached(
-    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
 ):
     await _make_coupon(session, tenant, code="MAXEDOUT", usage_limit=1, times_used=1)
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "MAXEDOUT"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 400
@@ -376,7 +378,7 @@ async def test_apply_coupon_global_usage_limit_reached(
 
 @pytest.mark.asyncio
 async def test_apply_coupon_per_customer_usage_limit_reached(
-    client: AsyncClient, session: AsyncSession, tenant, make_user
+    cart_worth, client: AsyncClient, session: AsyncSession, tenant, make_user
 ):
     customer = await make_user(tenant=tenant, phone="+919000222001")
     other_order = await _make_order(session, tenant, customer)
@@ -395,24 +397,24 @@ async def test_apply_coupon_per_customer_usage_limit_reached(
     )
     await session.commit()
 
+    await cart_worth(headers_for(customer), "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "ONEPERPERSON"},
-        params={"subtotal": "300.00"},
         headers=headers_for(customer),
     )
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_apply_coupon_case_insensitive_code(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
+async def test_apply_coupon_case_insensitive_code(cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
     await _make_coupon(session, tenant, code="MIXEDCASE")
 
+    await cart_worth(customer_headers, "300.00")
     for code in ("mixedcase", "MixedCase", "MIXEDCASE"):
         response = await client.post(
             "/api/v1/coupons/apply",
             json={"code": code},
-            params={"subtotal": "300.00"},
             headers=customer_headers,
         )
         assert response.status_code == 200, response.text
@@ -420,28 +422,47 @@ async def test_apply_coupon_case_insensitive_code(client: AsyncClient, customer_
 
 
 @pytest.mark.asyncio
-async def test_apply_coupon_negative_subtotal_rejected(client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant):
-    await _make_coupon(session, tenant, code="NEGSUB")
+async def test_apply_coupon_ignores_a_client_supplied_subtotal(
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+):
+    await _make_coupon(
+        session, tenant, code="NEGSUB", discount_type="PERCENTAGE", discount_value=Decimal("10.00")
+    )
+    await cart_worth(customer_headers, "300.00")
+
+    for forged in ("-1.00", "999999.00"):
+        response = await client.post(
+            "/api/v1/coupons/apply",
+            json={"code": "NEGSUB"},
+            params={"subtotal": forged},
+            headers=customer_headers,
+        )
+        assert response.status_code == 200, response.text
+        assert Decimal(response.json()["data"]["discount_amount"]) == Decimal("30.00")
+
+
+@pytest.mark.asyncio
+async def test_apply_coupon_needs_a_cart(
+    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+):
+    await _make_coupon(session, tenant, code="NOCART")
 
     response = await client.post(
-        "/api/v1/coupons/apply",
-        json={"code": "NEGSUB"},
-        params={"subtotal": "-1.00"},
-        headers=customer_headers,
+        "/api/v1/coupons/apply", json={"code": "NOCART"}, headers=customer_headers
     )
-    assert response.status_code == 422
+    assert response.status_code == 409
 
 
 @pytest.mark.asyncio
 async def test_apply_coupon_discount_does_not_exceed_subtotal(
-    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
 ):
     await _make_coupon(session, tenant, code="OVERCAP", discount_value=Decimal("500.00"))
 
+    await cart_worth(customer_headers, "50.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "OVERCAP"},
-        params={"subtotal": "50.00"},
         headers=customer_headers,
     )
     assert response.status_code == 200
@@ -450,15 +471,15 @@ async def test_apply_coupon_discount_does_not_exceed_subtotal(
 
 @pytest.mark.asyncio
 async def test_apply_coupon_tenant_isolation(
-    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant, other_tenant
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant, other_tenant
 ):
     """A coupon created for one tenant must be invisible to another."""
     await _make_coupon(session, other_tenant, code="OTHERTENANT")
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "OTHERTENANT"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 404
@@ -509,17 +530,17 @@ async def test_deleted_coupon_remains_in_database(
 
 @pytest.mark.asyncio
 async def test_deactivated_coupon_is_not_applicable(
-    client: AsyncClient, admin_headers: dict, customer_headers: dict, session: AsyncSession, tenant
+    cart_worth, client: AsyncClient, admin_headers: dict, customer_headers: dict, session: AsyncSession, tenant
 ):
     coupon = await _make_coupon(session, tenant, code="NOWDEAD")
 
     delete_response = await client.delete(f"/api/v1/admin/coupons/{coupon.id}", headers=admin_headers)
     assert delete_response.status_code == 200
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "NOWDEAD"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 404
@@ -549,14 +570,14 @@ async def test_coupon_usage_history_survives_coupon_deactivation(
 
 @pytest.mark.asyncio
 async def test_apply_coupon_does_not_increment_times_used(
-    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
 ):
     coupon = await _make_coupon(session, tenant, code="NOCONSUME")
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "NOCONSUME"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 200
@@ -567,14 +588,14 @@ async def test_apply_coupon_does_not_increment_times_used(
 
 @pytest.mark.asyncio
 async def test_apply_coupon_does_not_create_coupon_usage(
-    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
 ):
     coupon = await _make_coupon(session, tenant, code="NOUSAGEROW")
 
+    await cart_worth(customer_headers, "300.00")
     response = await client.post(
         "/api/v1/coupons/apply",
         json={"code": "NOUSAGEROW"},
-        params={"subtotal": "300.00"},
         headers=customer_headers,
     )
     assert response.status_code == 200
@@ -587,15 +608,15 @@ async def test_apply_coupon_does_not_create_coupon_usage(
 
 @pytest.mark.asyncio
 async def test_apply_coupon_repeatedly_does_not_consume_usage_limit(
-    client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
 ):
     coupon = await _make_coupon(session, tenant, code="REUSABLE", usage_limit=1)
 
+    await cart_worth(customer_headers, "300.00")
     for _ in range(5):
         response = await client.post(
             "/api/v1/coupons/apply",
             json={"code": "REUSABLE"},
-            params={"subtotal": "300.00"},
             headers=customer_headers,
         )
         assert response.status_code == 200, response.text
@@ -628,3 +649,67 @@ async def test_record_usage_increments_times_used_and_creates_coupon_usage(
 
     row = await session.scalar(select(CouponUsage).where(CouponUsage.id == usage.id))
     assert row is not None
+
+
+ADDRESS = {
+    "full_name": "Coupon Racer",
+    "phone": "+919876500009",
+    "address_line_1": "9 Race Street",
+    "city": "Kochi",
+    "state": "Kerala",
+    "postal_code": "682001",
+    "country": "India",
+}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_checkouts_cannot_exceed_the_usage_limit(
+    cart_worth, client: AsyncClient, engine, session: AsyncSession, tenant, make_user
+):
+    coupon = await _make_coupon(session, tenant, code="ONLYONCE", usage_limit=1)
+    shoppers = []
+    for phone in ("+919000333001", "+919000333002"):
+        customer = await make_user(tenant=tenant, phone=phone)
+        headers = headers_for(customer)
+        await cart_worth(headers, "300.00")
+        saved = await client.post("/api/v1/addresses", json=ADDRESS, headers=headers)
+        assert saved.status_code == 201, saved.text
+        shoppers.append((customer, saved.json()["data"]["id"]))
+
+    async def place(db, index):
+        customer, address_id = shoppers[index]
+        return await CheckoutService(db, tenant.id, customer.id).place_order(
+            UUID(address_id), "ONLYONCE"
+        )
+
+    results = await run_concurrently(engine, 2, place)
+
+    assert len(succeeded(results)) == 1, results
+    await session.refresh(coupon)
+    assert coupon.times_used == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_and_preview_agree(
+    cart_worth, client: AsyncClient, customer_headers: dict, session: AsyncSession, tenant
+):
+    await _make_coupon(
+        session,
+        tenant,
+        code="SAMEANSWER",
+        discount_type="PERCENTAGE",
+        discount_value=Decimal("15.00"),
+        max_discount_amount=Decimal("40.00"),
+    )
+    await cart_worth(customer_headers, "199.99")
+
+    applied = await client.post(
+        "/api/v1/coupons/apply", json={"code": "SAMEANSWER"}, headers=customer_headers
+    )
+    previewed = await client.post(
+        "/api/v1/checkout/preview", params={"coupon_code": "SAMEANSWER"}, headers=customer_headers
+    )
+
+    assert applied.status_code == 200, applied.text
+    assert previewed.status_code == 200, previewed.text
+    assert applied.json()["data"]["discount_amount"] == previewed.json()["data"]["discount_amount"]

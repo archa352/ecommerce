@@ -162,7 +162,7 @@ class ReviewService:
                 f"A review can have at most {MAX_IMAGES_PER_REVIEW} photos"
             )
 
-        url = await store_image(self.tenant_id, filename, content_type, data)
+        url = await store_image(self.tenant_id, content_type, data)
         review.images.append(
             ReviewImage(tenant_id=self.tenant_id, image_url=url, alt_text=alt_text)
         )

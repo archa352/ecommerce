@@ -80,3 +80,4 @@ class Payment(IdMixin, TenantMixin, TimestampMixin, Base):
     razorpay_order_creation_started: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    razorpay_refund_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)

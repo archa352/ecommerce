@@ -6,16 +6,14 @@ import { requireStaff } from '@/lib/auth/require-staff';
 const FALLBACK_STORE_NAME = 'Store';
 
 /**
- * Resolve which store this staff member administers.
+ * The name of the store this staff member administers.
  *
- * No endpoint returns the caller's own tenant, so the name is looked up in
- * the list of active tenants by the id on their profile. It is cosmetic --
- * every query is already scoped by the backend from the token -- so a
- * failure here costs the name in the sidebar, not the page.
+ * Cosmetic -- every query is already scoped by the backend from the token --
+ * so a failure here costs the name in the sidebar, not the page.
  */
 async function storeNameFor(tenantId: string): Promise<string> {
-  const tenants = await authApi.listTenants().catch(() => []);
-  return tenants.find(tenant => tenant.id === tenantId)?.name ?? FALLBACK_STORE_NAME;
+  const tenant = await authApi.currentTenant().catch(() => null);
+  return tenant?.id === tenantId ? tenant.name : FALLBACK_STORE_NAME;
 }
 
 /**

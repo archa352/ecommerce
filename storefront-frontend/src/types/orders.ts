@@ -37,9 +37,6 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = 
   CANCELLED: [],
 };
 
-/** The statuses a customer may cancel from. */
-export const CANCELLABLE_STATUSES: readonly OrderStatus[] = ['PENDING', 'CONFIRMED', 'PROCESSING'];
-
 export interface Payment {
   id: string;
   order_id: string;
@@ -109,6 +106,8 @@ export interface Order {
   total_amount: string;
   currency: string;
   payment_method?: PaymentMethod;
+  /** Whether the shopper may cancel it now. The backend decides; it also enforces it. */
+  can_cancel: boolean;
   payment: Payment | null;
   /** Every payment on the order, e.g. a COD advance alongside the balance. */
   payments?: Payment[];

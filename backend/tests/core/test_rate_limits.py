@@ -31,14 +31,12 @@ async def test_coupon_apply_is_throttled(client, customer_headers, tenant):
         await client.post(
             COUPON_APPLY,
             json={"code": "GUESS"},
-            params={"subtotal": "100.00"},
             headers=customer_headers,
         )
 
     blocked = await client.post(
         COUPON_APPLY,
         json={"code": "GUESS"},
-        params={"subtotal": "100.00"},
         headers=customer_headers,
     )
     assert blocked.status_code == 429
@@ -66,7 +64,6 @@ async def test_the_limit_is_per_shopper_not_global(
         await client.post(
             COUPON_APPLY,
             json={"code": "GUESS"},
-            params={"subtotal": "100.00"},
             headers=customer_headers,
         )
 
@@ -75,8 +72,8 @@ async def test_the_limit_is_per_shopper_not_global(
     response = await client.post(
         COUPON_APPLY,
         json={"code": "GUESS"},
-        params={"subtotal": "100.00"},
         headers=headers_for(other),
     )
     assert response.status_code != 429
-    assert response.status_code == 404, response.text
+    assert response.status_code == 409, response.text
+    assert response.json()["message"] == "Your cart is empty"

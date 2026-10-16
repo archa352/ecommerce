@@ -12,7 +12,7 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { cancelOrder } from '@/lib/orders/actions';
 import { initialCheckoutState } from '@/lib/orders/state';
 import { paymentMethodLabel } from '@/lib/payments/online';
-import { CANCELLABLE_STATUSES, type Order, type OrderStatus, type PaymentStatus } from '@/types/orders';
+import type { Order, OrderStatus, PaymentStatus } from '@/types/orders';
 
 import styles from './OrderDetails.module.css';
 
@@ -111,7 +111,7 @@ export default function OrderDetails({ order, images }: { order: Order; images: 
   const address = order.delivery_address;
   const paymentMethod = paymentMethodLabel(order);
   const currentStepIndex = TRACK_STEPS.findIndex(step => step.status === order.status);
-  const canCancel = CANCELLABLE_STATUSES.includes(order.status);
+  const canCancel = order.can_cancel;
 
   function confirmCancel() {
     startCancel(async () => {

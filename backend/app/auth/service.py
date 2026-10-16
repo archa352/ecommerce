@@ -1,25 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.service import record_login
-from app.auth.constants import (
-    OTP_MAX_ATTEMPTS,
-    OtpPurpose,
-    UserRole,
-)
-from app.auth.models import OtpRequest
+from app.auth.constants import UserRole
 from app.auth.phone import normalize_phone
-from app.auth.repository import (
-    AdminChallengeRepository,
-    OtpRepository,
-    RefreshTokenRepository,
-)
+from app.auth.repository import RefreshTokenRepository
 from app.auth.schemas import TokenPair
 from app.auth.security import (
     create_access_token,
@@ -27,7 +17,6 @@ from app.auth.security import (
     decode_token,
     hash_refresh_token,
     spend_dummy_verification,
-    verify_otp,
     verify_password,
 )
 from app.auth.widget import verify_access_token
@@ -39,7 +28,6 @@ from app.users.models import User
 from app.users.repository import UserRepository
 
 INVALID_CREDENTIALS = "Invalid credentials"
-INVALID_OTP = "Invalid or expired OTP"
 INVALID_TOKEN = "Invalid authentication token"
 
 
@@ -48,8 +36,6 @@ class AuthService:
         self.session = session
         self.tenant = tenant
         self.users = UserRepository(session)
-        self.otps = OtpRepository(session)
-        self.challenges = AdminChallengeRepository(session)
         self.tokens = RefreshTokenRepository(session)
 
     async def login_with_widget(self, access_token: str) -> TokenPair:
@@ -90,9 +76,6 @@ class AuthService:
         self, identifier: str, password: str, *, request: Request | None = None
     ) -> TokenPair:
         user = await self._audited_login(identifier, password, UserRole.ADMIN, request)
-        await self.challenges.expire_pending_for_user(
-            tenant_id=self.tenant.id, user_id=user.id
-        )
 
         user.is_verified = True
         tokens = await self._issue_tokens(user)
@@ -104,42 +87,7 @@ class AuthService:
         self, identifier: str, password: str, *, request: Request | None = None
     ) -> TokenPair:
         user = await self._audited_login(identifier, password, UserRole.STAFF, request)
-        await self.challenges.expire_pending_for_user(
-            tenant_id=self.tenant.id, user_id=user.id
-        )
 
-        user.is_verified = True
-        tokens = await self._issue_tokens(user)
-        await self.session.commit()
-
-        return tokens
-
-    async def verify_staff_otp(self, verification_id: UUID, otp: str) -> TokenPair:
-        challenge = await self.challenges.get_pending(
-            tenant_id=self.tenant.id, challenge_id=verification_id
-        )
-        if challenge is None:
-            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
-
-        record = await self.otps.get_by_id(
-            tenant_id=self.tenant.id, otp_id=challenge.otp_request_id
-        )
-        if record is None or record.purpose != OtpPurpose.ADMIN_LOGIN.value:
-            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
-
-        await self._consume_otp(record, otp)
-
-        user = await self.users.get_by_id(
-            tenant_id=self.tenant.id, user_id=challenge.user_id
-        )
-        if user is None or not user.is_active or user.role != UserRole.STAFF.value:
-            await self.session.commit()
-            raise AuthenticationError(
-                INVALID_CREDENTIALS,
-                error_code=AuthErrorCode.INVALID_CREDENTIALS,
-            )
-
-        await self.challenges.consume(challenge)
         user.is_verified = True
         tokens = await self._issue_tokens(user)
         await self.session.commit()
@@ -158,19 +106,28 @@ class AuthService:
         if stored is None or str(stored.user_id) != payload.user_id:
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
-        if stored.revoked_at is not None:
+        now = datetime.now(timezone.utc)
+        grace = timedelta(seconds=get_settings().refresh_reuse_grace_seconds)
+        rotated_moments_ago = (
+            stored.replaced_at is not None and now - stored.replaced_at <= grace
+        )
+
+        if stored.revoked_at is not None and not rotated_moments_ago:
             await self.tokens.revoke_all_for_user(stored.user_id)
             await self.session.commit()
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
-        if stored.expires_at <= datetime.now(timezone.utc):
+        if stored.expires_at <= now:
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         user = await self.users.get_by_id(tenant_id=self.tenant.id, user_id=stored.user_id)
         if user is None or not user.is_active:
             raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
-        await self.tokens.revoke(stored)
+        # A token reused inside the grace window was already rotated; issue a new pair.
+        if stored.revoked_at is None:
+            stored.replaced_at = now
+            await self.tokens.revoke(stored)
         tokens = await self._issue_tokens(user)
         await self.session.commit()
 
@@ -264,26 +221,6 @@ class AuthService:
                 INVALID_CREDENTIALS,
                 error_code=AuthErrorCode.INVALID_CREDENTIALS,
             ) from exc
-
-    async def _consume_otp(self, record: OtpRequest | None, otp: str) -> None:
-        now = datetime.now(timezone.utc)
-
-        if (
-            record is None
-            or record.verified_at is not None
-            or record.expires_at <= now
-            or record.attempts >= OTP_MAX_ATTEMPTS
-        ):
-            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
-
-        record.attempts += 1
-
-        if not await verify_otp(otp, record.otp_hash):
-            await self.session.commit()
-            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
-
-        record.verified_at = now
-        await self.session.flush()
 
     async def _issue_tokens(self, user: User) -> TokenPair:
         settings = get_settings()

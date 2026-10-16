@@ -14,12 +14,13 @@ from app.catalogue.prices import effective_price
 from app.catalogue.repository import CategoryRepository, category_subtree
 from app.core.config import get_settings
 from app.core.database import conflict_on_integrity_error
-from app.core.error_codes import CouponErrorCode
+from app.core.error_codes import CartErrorCode, CouponErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.money import ZERO, money
 from app.core.pagination import PageParams
 from app.coupons.constants import PERCENT_TYPES, DiscountType
 from app.coupons.models import Coupon, CouponUsage
+from app.coupons.models import Coupon as CouponModel
 from app.coupons.repository import (
     CouponCategoryRepository,
     CouponRepository,
@@ -37,6 +38,7 @@ DATES_INVERTED = "Start date cannot be after expiration date."
 USAGE_LIMIT_REACHED = "This coupon has reached its usage limit"
 
 
+CART_EMPTY = "Your cart is empty"
 NEEDS_CART = "This offer depends on what is in your bag -- add items first"
 FIRST_ORDER_ONLY = "This coupon is only valid on your first order"
 
@@ -387,25 +389,13 @@ class CouponService:
         """Validate a coupon and calculate the discount (subtotal-only rules)."""
         return (await self.evaluate(coupon, subtotal, customer_id)).discount
 
-    async def apply_for_customer(
-        self, code: str, subtotal: Decimal, customer_id: UUID
-    ) -> CouponResult:
-        """The /coupons/apply check.
-
-        Simple coupons use the subtotal the client sent, as before. Coupons
-        that look at the basket (categories, quantities, BOGO) are checked
-        against the customer's live cart instead.
-        """
-        coupon = await self.coupons.get_by_code(code)
-        covered = await self._eligible_category_ids(coupon) if coupon else None
-        if coupon is None or not self._needs_lines(coupon, covered is not None):
-            return await self.evaluate(coupon, subtotal, customer_id)
-
-
+    async def apply_for_customer(self, code: str, customer_id: UUID) -> CouponResult:
+        """The /coupons/apply check, priced against the live cart, never a client subtotal."""
         cart = await CartService(self.session, self.tenant_id, customer_id).active_cart()
         lines = await cart_lines(self.session, self.tenant_id, cart.id) if cart else []
         if not lines:
-            raise ValidationError(NEEDS_CART, error_code=CouponErrorCode.NOT_APPLICABLE)
+            raise ConflictError(CART_EMPTY, error_code=CartErrorCode.CART_EMPTY)
+        coupon = await self.coupons.get_by_code(code)
         cart_subtotal = sum((line.unit_price * line.quantity for line in lines), ZERO)
         return await self.evaluate(coupon, cart_subtotal, customer_id, lines=lines)
 
@@ -464,8 +454,8 @@ class CouponService:
     async def lock(self, coupon_id: UUID) -> Coupon | None:
         """Re-read a coupon with a row lock before spending it."""
         return await self.session.scalar(
-            select(Coupon)
-            .where(Coupon.tenant_id == self.tenant_id, Coupon.id == coupon_id)
+            select(CouponModel)
+            .where(CouponModel.tenant_id == self.tenant_id, CouponModel.id == coupon_id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )

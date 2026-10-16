@@ -75,6 +75,7 @@ def order_read(order: Order, currency: str) -> OrderRead:
         advance_amount=order.advance_amount,
         currency=currency,
         payment_method=order.payment_method,
+        can_cancel=order.customer_can_cancel,
         payment=payment_read(order.payment, currency) if order.payment else None,
         payments=[payment_read(payment, currency) for payment in order.payments],
         gst=gst_breakdown(order),

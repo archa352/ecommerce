@@ -33,6 +33,8 @@ def _verification(order: dict, payment_id: str = "pay_verified_123") -> dict:
 
 
 async def _online_order(customer_auth, variant, make_order, monkeypatch):
+    monkeypatch.setattr(razorpay.get_settings(), "razorpay_key_id", "rzp_test_key")
+    monkeypatch.setattr(razorpay.get_settings(), "razorpay_key_secret", "test-key-secret")
     monkeypatch.setattr(razorpay, "create_order", _create_order)
     return await make_order(customer_auth, variant["id"], payment_method="UPI")
 

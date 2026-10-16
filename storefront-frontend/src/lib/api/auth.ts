@@ -64,7 +64,8 @@ export const authApi = {
     return apiRequest<null>('/auth/me', { method: 'DELETE', token, cache: 'no-store' });
   },
 
-  listTenants(): Promise<Tenant[]> {
-    return apiRequest<Tenant[]>('/auth/tenants', { cache: 'no-store' });
+  /** The storefront this API host serves. Other tenants are never listed. */
+  currentTenant(): Promise<Tenant> {
+    return apiRequest<Tenant>('/auth/tenant', { cache: 'no-store' });
   },
 };

@@ -29,7 +29,7 @@ class PaymentStatus(str, Enum):
 
 
 class PaymentMethod(str, Enum):
-    """How the shopper chose to pay."""
+    """What the shopper chose at checkout; everything but cash is paid through Razorpay."""
 
     UPI = "UPI"
     CREDIT_CARD = "CREDIT_CARD"
@@ -108,6 +108,8 @@ MAX_TRACKING_URL_LENGTH = 500
 MAX_TRACKING_DESCRIPTION_LENGTH = 255
 MAX_TRACKING_LOCATION_LENGTH = 150
 INVOICE_PREFIX_DEFAULT = "INV-"
+
+CUSTOMER_CANCELLABLE_STATUSES = frozenset({OrderStatus.PENDING, OrderStatus.CONFIRMED})
 
 MAX_ORDER_NUMBER_LENGTH = 32
 MAX_IDEMPOTENCY_KEY_LENGTH = 80

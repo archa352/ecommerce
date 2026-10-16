@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import CurrentUser
@@ -11,7 +10,6 @@ from app.auth.schemas import (
     PasswordLoginPayload,
     ProfileUpdate,
     RefreshPayload,
-    StaffOtpVerifyPayload,
     TenantResponse,
     TokenPair,
     UserProfile,
@@ -159,44 +157,6 @@ async def staff_login(
     return ok(tokens, message="Login successful")
 
 
-async def _verify_staff_otp(
-    request: Request,
-    data: StaffOtpVerifyPayload,
-    tenant: Tenant,
-    session: AsyncSession,
-) -> ApiResponse[TokenPair]:
-    settings = get_settings()
-    key = await _throttle(
-        request,
-        tenant,
-        "staff-otp-verify",
-        str(data.verification_id),
-        limit=settings.otp_verify_rate_limit_attempts,
-        window_seconds=settings.otp_rate_limit_window_seconds,
-    )
-
-    tokens = await AuthService(session, tenant).verify_staff_otp(
-        data.verification_id, data.otp
-    )
-
-    await rate_limit.reset(key)
-    return ok(tokens, message="Login successful")
-
-
-@admin_router.post(
-    "/verify-otp",
-    include_in_schema=False,
-    response_model=ApiResponse[TokenPair],
-)
-async def legacy_admin_verify_otp(
-    request: Request,
-    data: StaffOtpVerifyPayload,
-    tenant: CurrentTenant,
-    session: AsyncSession = Depends(get_db),
-) -> ApiResponse[TokenPair]:
-    return await _verify_staff_otp(request, data, tenant, session)
-
-
 @router.post(
     "/refresh",
     response_model=ApiResponse[TokenPair],
@@ -274,18 +234,9 @@ async def delete_me(
 
 
 @router.get(
-    "/tenants",
-    response_model=ApiResponse[list[TenantResponse]],
-    summary="List all active tenants",
+    "/tenant",
+    response_model=ApiResponse[TenantResponse],
+    summary="The storefront this request belongs to",
 )
-async def list_tenants(
-    session: AsyncSession = Depends(get_db),
-) -> ApiResponse[list[TenantResponse]]:
-    result = await session.execute(
-        select(Tenant).where(Tenant.is_active.is_(True)).order_by(Tenant.name)
-    )
-    tenants = result.scalars().all()
-    return ok(
-        [TenantResponse.model_validate(t) for t in tenants],
-        message="List of active tenants",
-    )
+async def get_tenant(tenant: CurrentTenant) -> ApiResponse[TenantResponse]:
+    return ok(TenantResponse.model_validate(tenant), message="Current tenant")

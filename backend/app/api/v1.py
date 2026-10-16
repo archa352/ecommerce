@@ -31,7 +31,6 @@ for router in (
     auth.router,
     auth.admin_router,
     auth.staff_router,
-    users.router,
     users.admin_router,
     audit.router,
     customers.router,

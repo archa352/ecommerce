@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -24,10 +24,12 @@ from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from app.cod.schemas import CodAvailability
 from app.cod.service import CodService
+from app.core.config import get_settings
 from app.core.error_codes import (
     CartErrorCode,
     InventoryErrorCode,
     OrderErrorCode,
+    PaymentErrorCode,
     TaxErrorCode,
     UserErrorCode,
 )
@@ -35,6 +37,7 @@ from app.core.exceptions import (
     ConflictError,
     NotFoundError,
     PermissionDeniedError,
+    ServiceUnavailableError,
     ValidationError,
 )
 from app.core.money import ZERO, money
@@ -42,6 +45,7 @@ from app.core.pagination import PageParams
 from app.coupons.service import CouponLine, CouponResult, CouponService
 from app.orders.constants import (
     ALLOWED_TRANSITIONS,
+    CUSTOMER_CANCELLABLE_STATUSES,
     NEEDS_ADVANCE_PAID,
     ORDER_NUMBER_PREFIX,
     OrderStatus,
@@ -58,6 +62,7 @@ from app.orders.schemas import (
     GstBreakdown,
     GuestContact,
 )
+from app.payments import razorpay
 from app.payments.constants import PaymentProvider, PaymentPurpose
 from app.payments.constants import PaymentStatus as CashStatus
 from app.payments.models import Payment
@@ -86,8 +91,6 @@ from app.users.repository import UserRepository
 ORDER_NOT_FOUND = "Order not found"
 ADDRESS_NOT_FOUND = "Address not found"
 CART_EMPTY = "Your cart is empty"
-
-CUSTOMER_CANCELLABLE_STATUSES = frozenset({OrderStatus.PENDING, OrderStatus.CONFIRMED})
 
 def _require_may_order(customer: User | None) -> None:
     """A customer the store has blocked cannot place new orders, as account or guest."""
@@ -243,6 +246,12 @@ class CheckoutService:
             replayed = await self._replayed_order(idempotency_key, payment_method)
             if replayed is not None:
                 return replayed
+
+        if payment_method is not PaymentMethod.CASH_ON_DELIVERY and not razorpay.is_configured():
+            raise ServiceUnavailableError(
+                razorpay.UNAVAILABLE,
+                error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE,
+            )
 
         cart = await self._require_cart(CartService(self.session, self.tenant_id, self.customer_id))
         destination = Destination.of(await self._require_address(address_id))
@@ -1010,6 +1019,7 @@ class OrderService:
         return_reason_id: UUID | None = None,
         return_note: str | None = None,
         customer_id: UUID | None = None,
+        unpaid_only: bool = False,
     ) -> Order:
         """Move an order to its next status, adjusting stock and payment to match."""
         # Locked: two status changes at once (a customer cancelling while the
@@ -1026,6 +1036,14 @@ class OrderService:
         # Match verification's lock order (order, then payment). Decisions use
         # the refreshed payment row, so verification and status changes serialize.
         razorpay_payment = await self.payments.get_razorpay_payment_for_update(order.id)
+        if unpaid_only and (
+            current is not OrderStatus.PENDING
+            or order.payment_status != PaymentStatus.PENDING.value
+            or razorpay_payment is None
+            or razorpay_payment.status != CashStatus.PENDING.value
+        ):
+            await self.session.rollback()
+            raise ConflictError("The order was paid or changed meanwhile")
 
         if (return_reason_id or return_note) and new_status is not OrderStatus.RETURNED:
             raise ValidationError(
@@ -1075,18 +1093,26 @@ class OrderService:
                 )
 
         if new_status is OrderStatus.CANCELLED:
-            if (
-                order.payment_status == PaymentStatus.PAID.value
-                or any(payment.status == CashStatus.PAID.value for payment in order.payments)
-            ):
+            if customer_id is not None and current not in CUSTOMER_CANCELLABLE_STATUSES:
                 raise ConflictError(
-                    "A paid order cannot be cancelled without a refund",
-                    error_code=OrderErrorCode.REFUND_REQUIRED,
+                    f"An order that is {current.value} can no longer be cancelled online. "
+                    "Please contact the store.",
+                    error_code=OrderErrorCode.INVALID_STATUS,
                 )
-            if order.payment_method != PaymentMethod.CASH_ON_DELIVERY.value:
+            is_online = order.payment_method != PaymentMethod.CASH_ON_DELIVERY.value
+            if customer_id is not None and is_online:
                 raise ConflictError(
                     "A Razorpay order cannot be cancelled automatically because its "
                     "gateway payment outcome cannot be confirmed. Please contact the store."
+                )
+            if any(
+                payment.status == CashStatus.PAID.value
+                and payment.provider != PaymentProvider.RAZORPAY.value
+                for payment in order.payments
+            ) or (customer_id is not None and order.payment_status == PaymentStatus.PAID.value):
+                raise ConflictError(
+                    "A paid order cannot be cancelled without a refund",
+                    error_code=OrderErrorCode.REFUND_REQUIRED,
                 )
 
         if new_status is OrderStatus.RETURNED and any(
@@ -1275,6 +1301,61 @@ class OrderService:
             order_id, OrderStatus.CANCELLED, source=TrackingSource.SYSTEM,
             note="Cancelled by the customer", customer_id=customer_id,
         )
+
+    async def expire_unpaid_online(self) -> int:
+        """Cancel online orders left unpaid past the expiry window; returns how many."""
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            minutes=get_settings().online_payment_expiry_minutes
+        )
+        candidate_ids = (
+            await self.session.scalars(
+                select(Order.id).where(
+                    Order.tenant_id == self.tenant_id,
+                    Order.status == OrderStatus.PENDING.value,
+                    Order.payment_status == PaymentStatus.PENDING.value,
+                    Order.payment_method != PaymentMethod.CASH_ON_DELIVERY.value,
+                    Order.created_at < cutoff,
+                )
+            )
+        ).all()
+
+        expired = 0
+        for order_id in candidate_ids:
+            if not await self._no_live_gateway_payment(order_id):
+                continue
+            try:
+                await self.update_status(
+                    order_id,
+                    OrderStatus.CANCELLED,
+                    source=TrackingSource.SYSTEM,
+                    note="Cancelled: online payment was not completed in time",
+                    unpaid_only=True,
+                )
+            except ConflictError:
+                await self.session.rollback()
+                continue
+            expired += 1
+        return expired
+
+    async def _no_live_gateway_payment(self, order_id: UUID) -> bool:
+        """Whether Razorpay confirms nothing was, or could still be, paid against the order."""
+        payment = await self.session.scalar(
+            select(Payment).where(
+                Payment.tenant_id == self.tenant_id,
+                Payment.order_id == order_id,
+                Payment.provider == PaymentProvider.RAZORPAY.value,
+            )
+        )
+        if payment is None or payment.status != CashStatus.PENDING.value:
+            return False
+        if payment.razorpay_order_id is None:
+            return not payment.razorpay_order_creation_started
+        try:
+            statuses = await razorpay.fetch_order_payment_statuses(payment.razorpay_order_id)
+        except ServiceUnavailableError:
+            return False
+        # Any payment not yet failed may still be captured, so the order is left alone.
+        return all(status == "failed" for status in statuses)
 
     async def _release_stock(self, order: Order) -> None:
         for item in order.items:

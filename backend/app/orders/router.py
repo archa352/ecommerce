@@ -608,3 +608,18 @@ async def shipping_label_pdf(
         render_shipping_label, order, store_name=tenant.name, seller=seller
     )
     return _pdf_response(content, f"label-{order.order_number}.pdf")
+
+
+@admin_router.post(
+    "/{order_id}/refund",
+    response_model=ApiResponse[OrderRead],
+    summary="Refund a cancelled order's online payment in full",
+)
+async def refund_order(
+    order_id: UUID,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.PAYMENTS_MANAGE)),
+) -> ApiResponse[OrderRead]:
+    order = await PaymentService(session, user.tenant_id).refund(order_id)
+    return ok(order_read(order, tenant.currency), message="Refund requested")

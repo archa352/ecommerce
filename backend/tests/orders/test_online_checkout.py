@@ -2,9 +2,18 @@
 
 from uuid import uuid4
 
+import pytest
+
+from app.core.config import get_settings
 from app.core.exceptions import ServiceUnavailableError
 from app.payments import razorpay
 from tests.orders.conftest import CHECKOUT, ORDERS
+
+
+@pytest.fixture(autouse=True)
+def razorpay_keys(monkeypatch):
+    monkeypatch.setattr(get_settings(), "razorpay_key_id", "rzp_test_key")
+    monkeypatch.setattr(get_settings(), "razorpay_key_secret", "test-key-secret")
 
 
 async def test_checkout_preview_accepts_online_payment_method(

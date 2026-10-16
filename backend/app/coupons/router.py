@@ -1,7 +1,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -133,12 +132,11 @@ async def delete_coupon(
 @router.post(
     "/apply",
     response_model=ApiResponse[CouponApplyResponse],
-    summary="Validate a coupon code and calculate discount",
+    summary="Validate a coupon code against your cart and calculate its discount",
 )
 async def apply_coupon(
     data: CouponApplyRequest,
     tenant: CurrentTenant,
-    subtotal: Decimal = Query(..., ge=0, description="Current cart subtotal"),
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[CouponApplyResponse]:
@@ -151,9 +149,7 @@ async def apply_coupon(
         window_seconds=settings.commerce_rate_limit_window_seconds,
     )
 
-    result = await CouponService(session, user.tenant_id).apply_for_customer(
-        data.code, subtotal, user.id
-    )
+    result = await CouponService(session, user.tenant_id).apply_for_customer(data.code, user.id)
 
     return ok(
         CouponApplyResponse(

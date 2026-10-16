@@ -149,7 +149,7 @@ class CmsService:
     ) -> CmsMedia:
         # Same validation and storage as product images: JPEG/PNG/WebP,
         # size-capped, very large images shrunk, files outside the database.
-        url = await store_image(self.tenant_id, filename, content_type, data)
+        url = await store_image(self.tenant_id, content_type, data)
         media = CmsMedia(
             tenant_id=self.tenant_id,
             url=url,

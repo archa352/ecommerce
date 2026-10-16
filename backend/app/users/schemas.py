@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.auth.permissions import ALL_PERMISSIONS
 from app.auth.schemas import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, NormalizedPhone
@@ -24,25 +24,6 @@ def _check_permissions(value: list[str] | None) -> list[str] | None:
         raise ValueError(f"unknown permissions: {', '.join(unknown)}")
     return sorted(set(value))
 
-
-class UserCreate(StrictModel):
-    email: EmailStr
-    phone: str = Field(min_length=6, max_length=32)
-    name: str | None = None
-    password: str = Password
-
-
-class UserRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    tenant_id: UUID
-    email: EmailStr | None
-    phone: str
-    name: str | None
-    role: str
-    status: str
-    is_verified: bool
 
 
 # Staff accounts: individual logins, roles and permissions (admin-only).

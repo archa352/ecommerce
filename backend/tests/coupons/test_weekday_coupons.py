@@ -69,12 +69,11 @@ async def test_weekdays_can_be_changed_and_cleared(client, admin_headers):
 
 
 async def _apply(client, headers, code):
-    return await client.post(
-        "/api/v1/coupons/apply", json={"code": code}, params={"subtotal": "300.00"}, headers=headers
-    )
+    return await client.post("/api/v1/coupons/apply", json={"code": code}, headers=headers)
 
 
-async def test_a_coupon_works_on_its_days(client, admin_headers, customer_headers):
+async def test_a_coupon_works_on_its_days(client, admin_headers, customer_headers, cart_worth):
+    await cart_worth(customer_headers, "300.00")
     await _coupon(client, admin_headers, "TODAYONLY", [_today_ist()])
 
     response = await _apply(client, customer_headers, "TODAYONLY")
@@ -82,7 +81,8 @@ async def test_a_coupon_works_on_its_days(client, admin_headers, customer_header
     assert response.status_code == 200, response.text
 
 
-async def test_a_coupon_is_refused_on_other_days(client, admin_headers, customer_headers):
+async def test_a_coupon_is_refused_on_other_days(client, admin_headers, customer_headers, cart_worth):
+    await cart_worth(customer_headers, "300.00")
     other_days = [d for d in range(7) if d != _today_ist()]
     await _coupon(client, admin_headers, "NOTTODAY", other_days)
 

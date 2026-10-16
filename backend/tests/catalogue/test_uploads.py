@@ -128,3 +128,119 @@ async def test_uploading_requires_an_admin(client, customer_headers, product):
     )
 
     assert response.status_code == 403
+
+
+def _jpeg() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (40, 40), (200, 10, 10)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+def _png_carrying(text: str) -> bytes:
+    """A valid PNG with `text` hidden in a metadata chunk, as polyglot attacks do."""
+    from PIL.PngImagePlugin import PngInfo
+
+    info = PngInfo()
+    info.add_text("Comment", text)
+    buffer = io.BytesIO()
+    Image.new("RGB", (40, 40)).save(buffer, format="PNG", pnginfo=info)
+    return buffer.getvalue()
+
+
+def _stored(url: str) -> Path:
+    return Path(get_settings().storage_local_path) / url.split("/media/")[-1]
+
+
+@pytest.mark.parametrize(
+    "filename", ["page.html", "../../../etc/passwd.png", "x.svg", "shell.php", "no-extension"]
+)
+async def test_the_stored_name_never_comes_from_the_client(
+    client, admin_headers, product, tenant, filename
+):
+    response = await client.post(
+        upload_url(product["id"]),
+        files={"file": (filename, _png(), "image/png")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 201, response.text
+    url = response.json()["data"]["url"]
+    name = url.split("/")[-1]
+    assert url == f"/media/{tenant.id}/{name}"
+    assert len(name) == len("0" * 32 + ".png") and name.endswith(".png")
+    assert _stored(url).resolve().is_relative_to(
+        Path(get_settings().storage_local_path).resolve()
+    )
+
+
+async def test_the_extension_follows_the_content_not_the_declared_type(
+    client, admin_headers, product
+):
+    response = await client.post(
+        upload_url(product["id"]),
+        files={"file": ("photo.png", _jpeg(), "image/png")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 201, response.text
+    url = response.json()["data"]["url"]
+    assert url.endswith(".jpg")
+    with Image.open(_stored(url)) as saved:
+        assert saved.format == "JPEG"
+
+
+async def test_hidden_payloads_do_not_survive_re_encoding(client, admin_headers, product):
+    response = await client.post(
+        upload_url(product["id"]),
+        files={"file": ("x.png", _png_carrying("<script>alert(1)</script>"), "image/png")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 201, response.text
+    assert b"<script>" not in _stored(response.json()["data"]["url"]).read_bytes()
+
+
+async def test_an_allowed_type_wrapping_another_format_is_refused(
+    client, admin_headers, product
+):
+    buffer = io.BytesIO()
+    Image.new("RGB", (40, 40)).save(buffer, format="GIF")
+
+    response = await client.post(
+        upload_url(product["id"]),
+        files={"file": ("anim.png", buffer.getvalue(), "image/png")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400, response.text
+
+
+async def test_an_image_with_too_many_pixels_is_refused_before_decoding(
+    client, admin_headers, product, monkeypatch
+):
+    monkeypatch.setattr("app.catalogue.uploads.MAX_SOURCE_PIXELS", 100)
+
+    response = await client.post(
+        upload_url(product["id"]),
+        files={"file": ("big.png", _png(40, 40), "image/png")},
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 400, response.text
+    assert "pixels" in response.json()["message"]
+
+
+async def test_served_media_cannot_be_sniffed_or_run(client, admin_headers, product):
+    uploaded = await client.post(
+        upload_url(product["id"]),
+        files={"file": ("shoe.png", _png(), "image/png")},
+        headers=admin_headers,
+    )
+    url = uploaded.json()["data"]["url"]
+
+    response = await client.get(url)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "sandbox" in response.headers["content-security-policy"]

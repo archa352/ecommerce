@@ -3,12 +3,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.api.v1 import api_router
-from app.core.cache import close_redis
+from app.core.cache import close_redis, redis_healthy
 from app.core.config import get_settings
-from app.core.database import dispose_engine
+from app.core.database import dispose_engine, engine
 from app.core.error_handlers import register_exception_handlers
 from app.core.request_context import sanitize_request_id, set_request_id
 
@@ -50,6 +52,9 @@ def create_app() -> FastAPI:
 
         response = await call_next(request)
         response.headers["X-Request-Id"] = request_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if request.url.path.startswith(settings.storage_public_base_url):
+            response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
         return response
 
     # Local storage keeps files on disk, so the app serves them itself. An
@@ -61,6 +66,32 @@ def create_app() -> FastAPI:
         StaticFiles(directory=uploads),
         name="media",
     )
+
+    @app.get("/health", include_in_schema=False)
+    async def health() -> dict[str, str]:
+        """Liveness: the process is up and serving."""
+        return {"status": "ok"}
+
+    @app.get("/health/ready", include_in_schema=False)
+    async def ready() -> JSONResponse:
+        """Readiness: the database and Redis both answer."""
+        try:
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+            database = True
+        except Exception:
+            database = False
+        cache = await redis_healthy()
+
+        healthy = database and cache
+        return JSONResponse(
+            status_code=200 if healthy else 503,
+            content={
+                "status": "ok" if healthy else "unavailable",
+                "database": "ok" if database else "unavailable",
+                "redis": "ok" if cache else "unavailable",
+            },
+        )
 
     register_exception_handlers(app)
 
