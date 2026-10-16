@@ -36,6 +36,7 @@ from app.catalogue.constants import (
 )
 from app.models.base import Base, TimestampMixin
 from app.orders.constants import (
+    CUSTOMER_CANCELLABLE_STATUSES,
     MAX_COURIER_NAME_LENGTH,
     MAX_IDEMPOTENCY_KEY_LENGTH,
     MAX_ORDER_NUMBER_LENGTH,
@@ -319,6 +320,16 @@ class Order(Base, TimestampMixin):
         lazy="selectin",
         viewonly=True,
     )
+
+    @property
+    def customer_can_cancel(self) -> bool:
+        """Whether the customer may cancel online: an unpaid cash order before PROCESSING."""
+        return (
+            OrderStatus(self.status) in CUSTOMER_CANCELLABLE_STATUSES
+            and self.payment_method == PaymentMethod.CASH_ON_DELIVERY.value
+            and self.payment_status != PaymentStatus.PAID.value
+            and not any(payment.status == PaymentStatus.PAID.value for payment in self.payments)
+        )
 
 
 class OrderItem(Base, TimestampMixin):

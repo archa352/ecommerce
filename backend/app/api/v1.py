@@ -37,7 +37,6 @@ from app.ratings.router import router as ratings_router
 from app.reports.router import router as reports_router
 from app.returns.router import router as return_reasons_router
 from app.search_filter.router import router as search_filter_router
-from app.users.router import router as users_router
 from app.users.staff import router as staff_router
 from app.wishlist.router import router as wishlist_router
 
@@ -46,7 +45,6 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(auth_admin_router)
 api_router.include_router(auth_staff_router)
-api_router.include_router(users_router)
 api_router.include_router(staff_router)
 api_router.include_router(audit_router)
 api_router.include_router(customers_router)

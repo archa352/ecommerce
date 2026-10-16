@@ -13,8 +13,16 @@ backend/.venv/bin/pip install -r backend/requirements-dev.txt
 make dev
 ```
 
-API docs: <http://localhost:58000/docs>. To create the Zeen tenant and its admin
-user, run the seed once:
+API docs: <http://localhost:58000/docs>. To create the Zeen tenant, its domain
+and its admin user, run the bootstrap once. It is safe in production and adds
+no demo data; there the admin password must be at least 12 characters:
+
+```bash
+docker compose exec api python -m app.commands.bootstrap
+```
+
+In development, the seed runs the same bootstrap and then adds a demo
+catalogue and demo users. It refuses to run in production:
 
 ```bash
 docker compose exec api python -m app.commands.seed

@@ -192,6 +192,7 @@ class OrderRead(BaseModel):
     advance_amount: Decimal = Decimal("0.00")
     currency: str
     payment_method: PaymentMethod = PaymentMethod.CASH_ON_DELIVERY
+    can_cancel: bool
     payment: PaymentRead | None
     payments: list[PaymentRead] = []
     gst: GstBreakdown | None = None

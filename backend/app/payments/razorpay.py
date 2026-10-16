@@ -1,4 +1,4 @@
-"""Small server-side adapter for Razorpay order and payment APIs."""
+"""Server-side adapter for Razorpay order, payment and refund APIs."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import hashlib
 import hmac
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
 import httpx
 
@@ -21,6 +22,12 @@ class Credentials:
     key_secret: str
     api_url: str
     timeout_seconds: float
+
+
+def is_configured() -> bool:
+    """Whether both halves of the API key are set."""
+    settings = get_settings()
+    return bool(settings.razorpay_key_id and settings.razorpay_key_secret)
 
 
 def credentials() -> Credentials:
@@ -72,23 +79,10 @@ async def create_order(amount: Decimal, currency: str, receipt: str) -> str:
     return order_id
 
 
-async def fetch_payment(payment_id: str) -> dict:
-    creds = credentials()
+async def fetch_payment(payment_id: str) -> dict[str, Any]:
     if not payment_id.startswith("pay_"):
         raise ServiceUnavailableError(UNAVAILABLE)
-    try:
-        async with httpx.AsyncClient(timeout=creds.timeout_seconds) as client:
-            response = await client.get(
-                f"{creds.api_url}/payments/{payment_id}",
-                auth=(creds.key_id, creds.key_secret),
-            )
-            payload = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        raise ServiceUnavailableError(UNAVAILABLE) from exc
-
-    if response.status_code != httpx.codes.OK or not isinstance(payload, dict):
-        raise ServiceUnavailableError(UNAVAILABLE)
-    return payload
+    return await _get(f"/payments/{payment_id}")
 
 
 def signature_is_valid(order_id: str, payment_id: str, signature: str) -> bool:
@@ -99,3 +93,66 @@ def signature_is_valid(order_id: str, payment_id: str, signature: str) -> bool:
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def webhook_signature_valid(raw_body: bytes, signature: str) -> bool:
+    """Check X-Razorpay-Signature: HMAC-SHA256 of the raw body with the webhook secret."""
+    secret = get_settings().razorpay_webhook_secret
+    if not secret:
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+async def _get(path: str) -> dict[str, Any]:
+    creds = credentials()
+    try:
+        async with httpx.AsyncClient(timeout=creds.timeout_seconds) as client:
+            response = await client.get(
+                f"{creds.api_url}{path}", auth=(creds.key_id, creds.key_secret)
+            )
+            payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ServiceUnavailableError(UNAVAILABLE) from exc
+
+    if response.status_code != httpx.codes.OK or not isinstance(payload, dict):
+        raise ServiceUnavailableError(UNAVAILABLE)
+    return payload
+
+
+async def fetch_order_payment_statuses(order_id: str) -> list[str]:
+    """The status of every payment attempted against a Razorpay order."""
+    if not order_id.startswith("order_"):
+        raise ServiceUnavailableError(UNAVAILABLE)
+    items = (await _get(f"/orders/{order_id}/payments")).get("items")
+    if not isinstance(items, list):
+        raise ServiceUnavailableError(UNAVAILABLE)
+    return [str(item.get("status", "")) for item in items if isinstance(item, dict)]
+
+
+async def create_refund(*, payment_id: str, amount: Decimal, receipt: str) -> tuple[str, str]:
+    """Ask Razorpay to refund a captured payment in full; returns the refund id and status."""
+    creds = credentials()
+    if not payment_id.startswith("pay_"):
+        raise ServiceUnavailableError(UNAVAILABLE)
+    expected_amount = to_subunits(amount)
+    try:
+        async with httpx.AsyncClient(timeout=creds.timeout_seconds) as client:
+            response = await client.post(
+                f"{creds.api_url}/payments/{payment_id}/refund",
+                auth=(creds.key_id, creds.key_secret),
+                json={"amount": expected_amount, "receipt": receipt[:40]},
+            )
+            payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ServiceUnavailableError(UNAVAILABLE) from exc
+
+    refund_id = payload.get("id") if isinstance(payload, dict) else None
+    if (
+        response.status_code != httpx.codes.OK
+        or not isinstance(refund_id, str)
+        or not refund_id.startswith("rfnd_")
+        or payload.get("amount") != expected_amount
+    ):
+        raise ServiceUnavailableError(UNAVAILABLE)
+    return refund_id, str(payload.get("status", ""))

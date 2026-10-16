@@ -265,21 +265,24 @@ async def test_apply_checks_basket_rules_against_the_cart(
 ):
     await _coupon(client, admin_headers, code="BUY3", discount_type="PERCENTAGE",
                   discount_value="10", min_quantity=3)
-    empty = await client.post(APPLY, json={"code": "BUY3"}, params={"subtotal": "5000"},
-                              headers=customer_auth)
-    await add_to_cart(customer_auth, variant["id"], 3)
-    full = await client.post(APPLY, json={"code": "BUY3"}, params={"subtotal": "1"},
-                             headers=customer_auth)
+    empty = await client.post(APPLY, json={"code": "BUY3"}, headers=customer_auth)
+    await add_to_cart(customer_auth, variant["id"], 1)
+    short = await client.post(APPLY, json={"code": "BUY3"}, headers=customer_auth)
+    await add_to_cart(customer_auth, variant["id"], 2)
+    full = await client.post(APPLY, json={"code": "BUY3"}, headers=customer_auth)
 
-    assert empty.status_code == 400
+    assert empty.status_code == 409
+    assert short.status_code == 400
     assert Decimal(full.json()["data"]["discount_amount"]) == Decimal("299.70")
 
 
-async def test_apply_reports_free_shipping(client, admin_headers, customer_auth):
+async def test_apply_reports_free_shipping(
+    client, admin_headers, customer_auth, variant, add_to_cart
+):
     await _coupon(client, admin_headers, code="SHIPIT", discount_type="FREE_SHIPPING")
+    await add_to_cart(customer_auth, variant["id"], 1)
 
-    response = await client.post(APPLY, json={"code": "SHIPIT"}, params={"subtotal": "500"},
-                                 headers=customer_auth)
+    response = await client.post(APPLY, json={"code": "SHIPIT"}, headers=customer_auth)
 
     assert response.json()["data"]["free_shipping"] is True
 

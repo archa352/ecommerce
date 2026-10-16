@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_customer, require_permission
@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.responses import ApiResponse, ok, paginated
 from app.payments.schemas import PaymentQuery, PaymentRead, RazorpayVerification
 from app.payments.serializers import payment_read
-from app.payments.service import PaymentService
+from app.payments.service import PaymentService, handle_razorpay_webhook
 from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 
@@ -50,6 +50,20 @@ async def verify_razorpay_payment(
         currency=tenant.currency,
     )
     return ok(payment_read(payment, tenant.currency), message="Payment verified")
+
+
+@router.post(
+    "/razorpay/webhook",
+    response_model=ApiResponse[dict[str, str]],
+    summary="Receive a signed Razorpay account webhook, for any tenant",
+)
+async def razorpay_webhook(
+    request: Request,
+    signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[dict[str, str]]:
+    result = await handle_razorpay_webhook(session, await request.body(), signature)
+    return ok({"result": result}, message="Webhook received")
 
 
 @router.get(

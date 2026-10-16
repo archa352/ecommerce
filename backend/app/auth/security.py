@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -13,7 +12,6 @@ import jwt
 from pwdlib import PasswordHash
 from pwdlib.exceptions import PwdlibError
 
-from app.auth.constants import OTP_LENGTH
 from app.core.config import get_settings
 from app.core.exceptions import AuthenticationError
 
@@ -56,18 +54,6 @@ async def spend_dummy_verification() -> None:
     if _DUMMY_HASH is None:
         _DUMMY_HASH = await hash_password(uuid.uuid4().hex)
     await verify_password("not-the-password", _DUMMY_HASH)
-
-
-def generate_otp() -> str:
-    return f"{secrets.randbelow(10**OTP_LENGTH):0{OTP_LENGTH}d}"
-
-
-async def hash_otp(otp: str) -> str:
-    return await hash_password(otp)
-
-
-async def verify_otp(otp: str, otp_hash: str) -> bool:
-    return await verify_password(otp, otp_hash)
 
 
 def _create(

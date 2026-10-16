@@ -1,0 +1,73 @@
+.header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  background: #faf8f5;
+  border-bottom: 1px solid #e7e2da;
+  padding: 18px 20px;
+}
+
+.menuBtn {
+  display: inline-flex;
+  color: #1a1a1a;
+  justify-self: start;
+}
+
+.logo {
+  justify-self: center;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: #1a1a1a;
+  text-decoration: none;
+  /* Nudge the tracked-out wordmark's optical center under the letter-spacing's
+     trailing gap, so it lines up with the true midpoint between the icon
+     groups on either side. */
+  padding-left: 0.35em;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+}
+
+.iconBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: #1a1a1a;
+}
+
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+@media (min-width: 992px) {
+  .header {
+    padding: 26px 60px;
+  }
+
+  .logo {
+    font-size: 24px;
+  }
+
+  .actions {
+    gap: 20px;
+  }
+}
