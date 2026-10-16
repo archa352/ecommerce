@@ -42,7 +42,6 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_recycle_seconds: int = 1800
-    db_echo: bool = False
     db_pool_timeout_seconds: int = 10
     db_statement_timeout_seconds: int = 15
 

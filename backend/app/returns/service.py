@@ -3,9 +3,9 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import conflict_on_integrity_error
 from app.core.exceptions import ConflictError, NotFoundError
 from app.returns.models import ReturnReason
 
@@ -65,8 +65,5 @@ class ReturnReasonService:
         return reason
 
     async def _commit(self) -> None:
-        try:
+        async with conflict_on_integrity_error(self.session, DUPLICATE):
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(DUPLICATE) from exc

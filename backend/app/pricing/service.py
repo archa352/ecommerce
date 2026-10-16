@@ -6,10 +6,10 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import and_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.database import conflict_on_integrity_error
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.money import ZERO, money
 from app.pricing.constants import (
     DEFAULT_MAX_DELIVERY_DAYS,
@@ -49,7 +49,7 @@ class ShippingService:
         """Write the tenant's one row, creating it the first time."""
         settings = await self.get_settings()
 
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             if settings is None:
                 settings = ShippingSettings(
                     shipping_amount=data.shipping_amount,
@@ -69,9 +69,6 @@ class ShippingService:
                 settings.restrict_to_listed_pincodes = data.restrict_to_listed_pincodes
 
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
 
         return settings
 
@@ -106,7 +103,7 @@ class TaxService:
         """Write the tenant's one row, creating it the first time."""
         settings = await self.get_settings()
 
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             if settings is None:
                 settings = TaxSettings(
                     tax_percentage=data.tax_percentage, is_active=data.is_active
@@ -117,9 +114,6 @@ class TaxService:
                 settings.is_active = data.is_active
 
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
 
         return settings
 
@@ -232,23 +226,17 @@ class PincodeService:
         return rule
 
     async def upsert(self, pincode: str, data: PincodeRuleWrite) -> PincodeRule:
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             rule = await self._write(pincode, data)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
         return rule
 
     async def bulk_upsert(self, items) -> int:
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             for item in items:
                 rule = PincodeRuleWrite(**item.model_dump(exclude={"pincode"}))
                 await self._write(item.pincode, rule)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
         return len(items)
 
     async def delete(self, pincode: str) -> None:
@@ -293,16 +281,13 @@ class GstService:
             "invoice_prefix": data.invoice_prefix,
             "shipping_sac_code": data.shipping_sac_code,
         }
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             if settings is None:
                 settings = await self.settings.add(GstSettings(**values))
             else:
                 for field, value in values.items():
                     setattr(settings, field, value)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
 
         return settings
 

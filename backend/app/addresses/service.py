@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.addresses.models import Address
 from app.addresses.repository import AddressRepository
 from app.addresses.schemas import AddressCreate, AddressUpdate
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.database import conflict_on_integrity_error
+from app.core.exceptions import NotFoundError
 
 ADDRESS_NOT_FOUND = "Address not found"
 
@@ -35,7 +35,7 @@ class AddressService:
     async def create(self, data: AddressCreate) -> Address:
         is_default = data.is_default or not await self.addresses.has_any(self.customer_id)
 
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to save the address"):
             if is_default:
                 await self.addresses.clear_default(self.customer_id)
 
@@ -53,9 +53,6 @@ class AddressService:
             )
             await self.addresses.add(address)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to save the address") from exc
 
         return address
 
@@ -68,7 +65,7 @@ class AddressService:
         for field, value in changes.items():
             setattr(address, field, value)
 
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to save the address"):
             if make_default is True:
                 await self.addresses.clear_default(
                     self.customer_id, exclude_id=address.id
@@ -78,9 +75,6 @@ class AddressService:
                 address.is_default = False
 
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to save the address") from exc
 
         return address
 

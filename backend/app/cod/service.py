@@ -7,12 +7,12 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cod.constants import BlacklistSource, CodUnavailableReason
 from app.cod.models import CodBlacklistEntry, CodSettings
 from app.cod.schemas import BlacklistCreate, CodAvailability, CodSettingsUpdate
+from app.core.database import conflict_on_integrity_error
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.money import ZERO, money
 from app.core.repository import TenantScopedRepository
@@ -66,16 +66,13 @@ class CodService:
     async def update_settings(self, data: CodSettingsUpdate) -> CodSettings:
         settings = await self.get_settings()
         values = data.model_dump()
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to save the COD settings"):
             if settings is None:
                 settings = await self.settings.add(CodSettings(**values))
             else:
                 for field, value in values.items():
                     setattr(settings, field, value)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to save the COD settings") from exc
 
         return settings
 
@@ -141,11 +138,11 @@ class CodService:
             CodBlacklistEntry(phone=data.phone, reason=data.reason, source=source.value)
         )
         if commit:
-            try:
+            async with conflict_on_integrity_error(
+                self.session,
+                "This phone number is already blocked from COD",
+            ):
                 await self.session.commit()
-            except IntegrityError as exc:
-                await self.session.rollback()
-                raise ConflictError("This phone number is already blocked from COD") from exc
         return entry
 
     async def remove_from_blacklist(self, entry_id: UUID) -> None:

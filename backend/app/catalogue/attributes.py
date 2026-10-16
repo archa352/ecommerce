@@ -13,7 +13,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.trail import AUDITED
@@ -21,7 +20,7 @@ from app.auth.dependencies import require_permission
 from app.auth.permissions import Permission
 from app.catalogue.constants import MAX_PRODUCT_ATTRIBUTE_LENGTH, ProductAttribute
 from app.catalogue.models import Product, ProductAttributeValue
-from app.core.database import get_db
+from app.core.database import conflict_on_integrity_error, get_db
 from app.core.error_codes import ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.responses import ApiResponse, ok
@@ -153,11 +152,8 @@ class AttributeService:
         return item
 
     async def _commit(self) -> None:
-        try:
+        async with conflict_on_integrity_error(self.session, DUPLICATE):
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(DUPLICATE) from exc
 
 
 router = APIRouter(

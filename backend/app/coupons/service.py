@@ -6,11 +6,11 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.repository import CategoryRepository, category_subtree
 from app.core.config import get_settings
+from app.core.database import conflict_on_integrity_error
 from app.core.error_codes import CouponErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.money import ZERO, money
@@ -140,7 +140,7 @@ class CouponService:
             )
 
         
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             coupon = Coupon(
                 code=code_upper,
                 discount_type=data.discount_type.value,
@@ -163,9 +163,6 @@ class CouponService:
             if data.category_ids:
                 await self.categories.replace(coupon.id, data.category_ids)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
 
         return coupon
 
@@ -194,11 +191,8 @@ class CouponService:
             )
 
         
-        try:
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(SAVE_FAILED) from exc
 
         return coupon
 

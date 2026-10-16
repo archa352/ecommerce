@@ -9,7 +9,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.service import record_activity
@@ -23,7 +22,7 @@ from app.auth.permissions import (
 from app.auth.repository import RefreshTokenRepository
 from app.auth.schemas import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, NormalizedPhone
 from app.auth.security import hash_password
-from app.core.database import get_db
+from app.core.database import conflict_on_integrity_error, get_db
 from app.core.error_codes import UserErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import PageParams
@@ -175,7 +174,7 @@ async def create_staff(
             "That phone number is already in use", error_code=UserErrorCode.PHONE_TAKEN
         )
 
-    try:
+    async with conflict_on_integrity_error(session, "That email or phone number is already in use"):
         member = await users.create(
             tenant_id=user.tenant_id,
             phone=data.phone,
@@ -198,9 +197,6 @@ async def create_staff(
             commit=False,
         )
         await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise ConflictError("That email or phone number is already in use") from exc
     return ok(staff_read(member), message="Staff account created")
 
 

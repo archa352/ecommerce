@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import Text, and_, cast, desc, func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.constants import CatalogueStatus
@@ -25,6 +24,7 @@ from app.cms.models import (
     SiteSettings,
 )
 from app.cms.schemas import _link, slugify
+from app.core.database import conflict_on_integrity_error
 from app.core.error_codes import CommonErrorCode, ContentErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.orders.constants import OrderStatus
@@ -96,11 +96,8 @@ class CmsService:
         return list(rows.all()), int(total or 0)
 
     async def _commit(self, conflict_message: str) -> None:
-        try:
+        async with conflict_on_integrity_error(self.session, conflict_message):
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(conflict_message) from exc
 
     async def _next_position(self, model, *conditions) -> int:
         current = await self.session.scalar(

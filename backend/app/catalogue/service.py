@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.constants import (
@@ -46,6 +45,7 @@ from app.catalogue.schemas import (
     VariantOptionValue,
     VariantUpdate,
 )
+from app.core.database import conflict_on_integrity_error
 from app.core.error_codes import CommonErrorCode, InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import PageParams
@@ -102,12 +102,9 @@ class CategoryService:
             hsn_code=data.hsn_code,
             gst_rate=data.gst_rate,
         )
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to create category"):
             await self.categories.add(category)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to create category") from exc
 
         return category
 
@@ -163,11 +160,8 @@ class CategoryService:
         for field, value in changes.items():
             setattr(category, field, value)
 
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to update category"):
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to update category") from exc
 
         return category
 
@@ -248,7 +242,7 @@ class ProductService:
             seo_description=data.seo_description,
         )
 
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to create product"):
             await self.products.add(product)
 
             has_primary = any(image.is_primary for image in data.images)
@@ -265,9 +259,6 @@ class ProductService:
                 )
 
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to create product") from exc
 
         return await self.get(product.id)
 
@@ -390,11 +381,8 @@ class ProductService:
         for field, value in changes.items():
             setattr(product, field, value)
 
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to update product"):
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to update product") from exc
 
         return await self.get(product.id)
 
@@ -572,7 +560,11 @@ class VariantService:
             sale_ends_at=data.sale_ends_at,
         )
 
-        try:
+        async with conflict_on_integrity_error(
+            self.session,
+            "A variant with this SKU already exists",
+            error_code=ProductErrorCode.SKU_TAKEN,
+        ):
             await self.variants.add(variant)
             await self._sync_options(product_id, variant.id, data.options)
 
@@ -595,12 +587,6 @@ class VariantService:
                 )
 
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(
-                "A variant with this SKU already exists",
-                error_code=ProductErrorCode.SKU_TAKEN,
-            ) from exc
 
         return await self.get(variant.id)
 
@@ -651,7 +637,11 @@ class VariantService:
         for field, value in changes.items():
             setattr(variant, field, value)
 
-        try:
+        async with conflict_on_integrity_error(
+            self.session,
+            "A variant with this SKU already exists",
+            error_code=ProductErrorCode.SKU_TAKEN,
+        ):
             if options is not None:
                 await self.variant_options.clear_for_variant(variant.id)
                 await self._sync_options(
@@ -660,12 +650,6 @@ class VariantService:
                     [VariantOptionValue(**entry) for entry in options],
                 )
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(
-                "A variant with this SKU already exists",
-                error_code=ProductErrorCode.SKU_TAKEN,
-            ) from exc
 
         return await self.get(variant.id)
 
@@ -749,7 +733,7 @@ class ProductImageService:
                 error_code=ProductErrorCode.PRODUCT_ARCHIVED,
             )
 
-        try:
+        async with conflict_on_integrity_error(self.session, "Unable to add product image"):
             if is_primary:
                 await self.images.clear_primary(product_id)
 
@@ -763,9 +747,6 @@ class ProductImageService:
                 )
             )
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Unable to add product image") from exc
 
         return image
 
@@ -773,7 +754,10 @@ class ProductImageService:
         image = await self._require_image(image_id)
         changes = data.model_dump(exclude_unset=True)
 
-        try:
+        async with conflict_on_integrity_error(
+            self.session,
+            "Another image was set as primary, please retry",
+        ):
             if changes.get("is_primary") is True:
                 await self.images.clear_primary(image.product_id, exclude_id=image.id)
 
@@ -781,24 +765,19 @@ class ProductImageService:
                 setattr(image, field, value)
 
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(
-                "Another image was set as primary, please retry"
-            ) from exc
 
         return image
 
     async def set_primary(self, image_id: UUID) -> ProductImage:
         image = await self._require_image(image_id)
 
-        try:
+        async with conflict_on_integrity_error(
+            self.session,
+            "Another image was set as primary, please retry",
+        ):
             await self.images.clear_primary(image.product_id, exclude_id=image.id)
             image.is_primary = True
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError("Another image was set as primary, please retry") from exc
 
         return image
 

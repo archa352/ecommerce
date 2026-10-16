@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.uploads import store_image
+from app.core.database import conflict_on_integrity_error
 from app.core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -65,13 +65,10 @@ class ReviewService:
             ],
         )
 
-        try:
+        async with conflict_on_integrity_error(self.session, ALREADY_REVIEWED):
             await self.reviews.add(review)
             await self._close_request(order_id, customer_id)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(ALREADY_REVIEWED) from exc
 
         return review
 

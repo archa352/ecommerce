@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.repository import ProductRepository, VariantRepository
+from app.core.database import conflict_on_integrity_error
 from app.core.error_codes import InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 from app.wishlist.models import Wishlist
@@ -79,12 +80,9 @@ class WishListService:
         existing = await self.items.get_by_variant(wishlist.id, data.variant_id)
         if existing is not None:
             raise ConflictError(WISHLIST_ITEM_EXISTS)
-        try:
+        async with conflict_on_integrity_error(self.session, WISHLIST_ITEM_EXISTS):
             await self.items.add_item(wishlist.id, data.variant_id)
             await self.session.commit()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(WISHLIST_ITEM_EXISTS) from exc
         return await self.render(wishlist)
 
     async def remove_item(self, item_id: UUID) -> WishListRead:

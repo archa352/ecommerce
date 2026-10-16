@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -10,12 +12,13 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.config import get_settings
+from app.core.error_codes import ErrorCode
+from app.core.exceptions import ConflictError
 
 _settings = get_settings()
 
 engine: AsyncEngine = create_async_engine(
     _settings.database_url,
-    echo=_settings.db_echo,
     pool_pre_ping=True,
     pool_size=_settings.db_pool_size,
     max_overflow=_settings.db_max_overflow,
@@ -46,6 +49,18 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+
+
+@asynccontextmanager
+async def conflict_on_integrity_error(
+    session: AsyncSession, message: str, *, error_code: ErrorCode | None = None
+) -> AsyncIterator[None]:
+    """Turn a constraint violation inside the block into a rollback and a 409 with `message`."""
+    try:
+        yield
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ConflictError(message, error_code=error_code) from exc
 
 
 async def dispose_engine() -> None:
