@@ -41,14 +41,7 @@ async def list_customers(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(can_view),
 ) -> ApiResponse[list[CustomerSummary]]:
-    rows, total = await CustomerService(session, user.tenant_id).list(
-        params,
-        search=params.search,
-        tag=params.tag,
-        status=params.status,
-        blocked=params.blocked,
-        sort=params.sort,
-    )
+    rows, total = await CustomerService(session, user.tenant_id).list(params)
     return paginated(
         [CustomerSummary(**row) for row in rows],
         total_items=total,

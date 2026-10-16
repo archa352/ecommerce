@@ -375,16 +375,7 @@ async def list_orders(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission(Permission.ORDERS_VIEW, legacy_staff=True)),
 ) -> ApiResponse[list[OrderSummaryRead]]:
-    orders, total = await OrderService(session, user.tenant_id).list(
-        params,
-        order_number=params.order_number,
-        status=params.status,
-        payment_status=params.payment_status,
-        search=params.search,
-        payment_method=params.payment_method.value if params.payment_method else None,
-        start_date=params.start_date,
-        end_date=params.end_date,
-    )
+    orders, total = await OrderService(session, user.tenant_id).list(params)
     return paginated(
         [order_summary_read(order, tenant.currency) for order in orders],
         total_items=total,

@@ -868,29 +868,12 @@ class OrderService:
         return order
 
     async def list(
-        self,
-        params: PageParams,
-        *,
-        customer_id: UUID | None = None,
-        order_number: str | None = None,
-        status: OrderStatus | None = None,
-        payment_status: PaymentStatus | None = None,
-        search: str | None = None,
-        payment_method: str | None = None,
-        start_date=None,
-        end_date=None,
+        self, query: PageParams, *, customer_id: UUID | None = None
     ) -> tuple[list[Order], int]:
-        stmt = self.orders.list_select(
-            customer_id=customer_id,
-            order_number=order_number,
-            status=status,
-            payment_status=payment_status,
-            search=search,
-            payment_method=payment_method,
-            start_date=start_date,
-            end_date=end_date,
-        )
-        rows, total = await self.orders.paginate(stmt, params)
+        """One page of orders; an OrderQuery adds its filters, `customer_id` scopes to one buyer."""
+        filters = query.model_dump(exclude={"page", "page_size"})
+        stmt = self.orders.list_select(**filters, customer_id=customer_id)
+        rows, total = await self.orders.paginate(stmt, query)
         return list(rows), total
 
     async def update_status(

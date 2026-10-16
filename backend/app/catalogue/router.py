@@ -117,13 +117,7 @@ async def list_categories(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission(Permission.CATALOGUE_VIEW, legacy_staff=True)),
 ) -> ApiResponse[list[CategoryRead]]:
-    categories, total = await CategoryService(session, user.tenant_id).list(
-        params,
-        status=params.status,
-        include_archived=params.include_archived,
-        parent_id=params.parent_id,
-        top_level=params.top_level,
-    )
+    categories, total = await CategoryService(session, user.tenant_id).list(params)
     return paginated(
         [CategoryRead.model_validate(c) for c in categories],
         total_items=total,
@@ -200,19 +194,7 @@ async def list_products(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission(Permission.CATALOGUE_VIEW, legacy_staff=True)),
 ) -> ApiResponse[list[ProductRead]]:
-    products, total = await ProductService(session, user.tenant_id).list(
-        params,
-        category_id=params.category_id,
-        search=params.search,
-        brand=params.brand,
-        fabric=params.fabric,
-        occasion=params.occasion,
-        sleeve=params.sleeve,
-        neckline=params.neckline,
-        featured=params.featured,
-        sort=params.sort,
-        status=params.status,
-    )
+    products, total = await ProductService(session, user.tenant_id).list(params)
     return paginated(
         [ProductRead.model_validate(p) for p in products],
         total_items=total,
@@ -752,12 +734,7 @@ async def storefront_list_categories(
     params: Annotated[CategoryQuery, Query()],
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[CategoryStorefrontRead]]:
-    categories, total = await CategoryService(session, tenant.id).list(
-        params,
-        active_only=True,
-        parent_id=params.parent_id,
-        top_level=params.top_level,
-    )
+    categories, total = await CategoryService(session, tenant.id).list(params, active_only=True)
     return paginated(
         [CategoryStorefrontRead.model_validate(c) for c in categories],
         total_items=total,
@@ -792,21 +769,7 @@ async def storefront_list_products(
     params: Annotated[StorefrontProductQuery, Query()],
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[ProductSummaryStorefrontRead]]:
-    products, total = await ProductService(session, tenant.id).list(
-        params,
-        category_id=params.category_id,
-        search=params.search,
-        brand=params.brand,
-        fabric=params.fabric,
-        occasion=params.occasion,
-        sleeve=params.sleeve,
-        neckline=params.neckline,
-        featured=params.featured,
-        min_price=params.min_price,
-        max_price=params.max_price,
-        sort=params.sort,
-        active_only=True,
-    )
+    products, total = await ProductService(session, tenant.id).list(params, active_only=True)
     return paginated(
         [storefront_summary(product) for product in products],
         total_items=total,

@@ -15,6 +15,7 @@ from app.core.error_codes import UserErrorCode
 from app.core.exceptions import NotFoundError
 from app.core.money import money
 from app.customers.models import CustomerNote
+from app.customers.schemas import CustomerQuery
 from app.orders.constants import OrderStatus
 from app.orders.models import Order
 from app.users.models import User
@@ -59,22 +60,22 @@ class CustomerService:
         )
         return stmt, stats
 
-    async def list(
-        self, params, *, search=None, tag=None, status=None, blocked=None, sort="newest"
-    ):
+    async def list(self, query: CustomerQuery):
         stmt, stats = self._select()
-        if search:
-            term = f"%{search.strip()}%"
+        if query.search:
+            term = f"%{query.search.strip()}%"
             stmt = stmt.where(
                 User.name.ilike(term) | User.email.ilike(term) | User.phone.ilike(term)
             )
-        if tag:
-            stmt = stmt.where(User.tags.contains([tag.strip()]))
-        if status:
-            stmt = stmt.where(User.status == status)
-        if blocked is not None:
+        if query.tag:
+            stmt = stmt.where(User.tags.contains([query.tag.strip()]))
+        if query.status:
+            stmt = stmt.where(User.status == query.status)
+        if query.blocked is not None:
             stmt = stmt.where(
-                User.order_blocked_at.isnot(None) if blocked else User.order_blocked_at.is_(None)
+                User.order_blocked_at.isnot(None)
+                if query.blocked
+                else User.order_blocked_at.is_(None)
             )
 
         order = {
@@ -82,12 +83,12 @@ class CustomerService:
             "total_spent": (desc(func.coalesce(stats.c.total_spent, 0)),),
             "orders": (desc(func.coalesce(stats.c.total_orders, 0)),),
             "last_order": (stats.c.last_order_at.desc().nulls_last(),),
-        }[sort]
+        }[query.sort]
 
         total = await self.session.scalar(select(func.count()).select_from(stmt.subquery()))
         rows = (
             await self.session.execute(
-                stmt.order_by(*order, User.id).offset(params.offset).limit(params.limit)
+                stmt.order_by(*order, User.id).offset(query.offset).limit(query.limit)
             )
         ).all()
         return [self._row(row) for row in rows], int(total or 0)

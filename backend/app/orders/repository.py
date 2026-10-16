@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import Select, and_, exists, or_, select
 
 from app.core.repository import TenantScopedRepository
-from app.orders.constants import OrderStatus, PaymentStatus
+from app.orders.constants import OrderStatus, PaymentMethod, PaymentStatus
 from app.orders.models import Order, OrderItem
 from app.users.models import User
 
@@ -57,7 +57,7 @@ class OrderRepository(TenantScopedRepository[Order]):
         status: OrderStatus | None = None,
         payment_status: PaymentStatus | None = None,
         search: str | None = None,
-        payment_method: str | None = None,
+        payment_method: PaymentMethod | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> Select[tuple[Order]]:
@@ -67,7 +67,7 @@ class OrderRepository(TenantScopedRepository[Order]):
             stmt = stmt.where(self._matches(search.strip()))
 
         if payment_method:
-            stmt = stmt.where(Order.payment_method == payment_method)
+            stmt = stmt.where(Order.payment_method == payment_method.value)
 
         if start_date:
             stmt = stmt.where(

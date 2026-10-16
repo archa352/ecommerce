@@ -12,7 +12,6 @@ from app.catalogue.constants import (
     CatalogueStatus,
     InventoryReason,
     ProductAttribute,
-    ProductSort,
 )
 from app.catalogue.models import (
     Category,
@@ -39,11 +38,13 @@ from app.catalogue.schemas import (
     AttributeValueCreate,
     AttributeValueRead,
     CategoryCreate,
+    CategoryQuery,
     CategoryUpdate,
     ImageReorderPayload,
     ProductCreate,
     ProductImageCreate,
     ProductImageUpdate,
+    ProductQuery,
     ProductUpdate,
     VariantCreate,
     VariantOptionValue,
@@ -130,23 +131,12 @@ class CategoryService:
         return category
 
     async def list(
-        self,
-        params: PageParams,
-        *,
-        active_only: bool = False,
-        status: CatalogueStatus | None = None,
-        include_archived: bool = False,
-        parent_id: UUID | None = None,
-        top_level: bool = False,
+        self, query: CategoryQuery, *, active_only: bool = False
     ) -> tuple[list[Category], int]:
-        stmt = self.categories.list_select(
-            active_only=active_only,
-            status=status,
-            include_archived=include_archived,
-            parent_id=parent_id,
-            top_level=top_level,
-        )
-        rows, total = await self.categories.paginate(stmt, params)
+        """One page of categories matching the query's filters."""
+        filters = query.model_dump(exclude={"page", "page_size"})
+        stmt = self.categories.list_select(**filters, active_only=active_only)
+        rows, total = await self.categories.paginate(stmt, query)
         return list(rows), total
 
     async def update(self, category_id: UUID, data: CategoryUpdate) -> Category:
@@ -321,47 +311,15 @@ class ProductService:
         return product
 
     async def list(
-        self,
-        params: PageParams,
-        *,
-        category_id: UUID | None = None,
-        search: str | None = None,
-        brand: str | None = None,
-        fabric: str | None = None,
-        occasion: str | None = None,
-        sleeve: str | None = None,
-        neckline: str | None = None,
-        featured: bool | None = None,
-        min_price=None,
-        max_price=None,
-        sort: ProductSort = ProductSort.NAME_ASC,
-        active_only: bool = False,
-        status: CatalogueStatus | None = None,
+        self, query: ProductQuery, *, active_only: bool = False
     ) -> tuple[list[Product], int]:
-        if category_id is not None:
-            category = await self.categories.get(category_id)
-            if category is None:
-                raise NotFoundError(
-                    CATEGORY_NOT_FOUND,
-                    error_code=ProductErrorCode.CATEGORY_NOT_FOUND,
-                )
+        """One page of products matching the query's filters, in its sort order."""
+        if query.category_id is not None and await self.categories.get(query.category_id) is None:
+            raise NotFoundError(CATEGORY_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
 
-        stmt = self.products.list_select(
-            category_id=category_id,
-            search=search,
-            brand=brand,
-            fabric=fabric,
-            occasion=occasion,
-            sleeve=sleeve,
-            neckline=neckline,
-            featured=featured,
-            min_price=min_price,
-            max_price=max_price,
-            sort=sort,
-            active_only=active_only,
-            status=status,
-        )
-        rows, total = await self.products.paginate(stmt, params)
+        filters = query.model_dump(exclude={"page", "page_size"})
+        stmt = self.products.list_select(**filters, active_only=active_only)
+        rows, total = await self.products.paginate(stmt, query)
         return list(rows), total
 
     async def update(self, product_id: UUID, data: ProductUpdate) -> Product:

@@ -22,15 +22,7 @@ async def list_audit_logs(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission(Permission.AUDIT_VIEW)),
 ) -> ApiResponse[list[AuditLogRead]]:
-    logs, total = await AuditService(session, user.tenant_id).list(
-        params,
-        actor_id=params.actor_id,
-        entity_type=params.entity_type,
-        entity_id=params.entity_id,
-        action=params.action,
-        start_date=params.start_date,
-        end_date=params.end_date,
-    )
+    logs, total = await AuditService(session, user.tenant_id).list(params)
     return paginated(
         [AuditLogRead.model_validate(log) for log in logs],
         total_items=total,

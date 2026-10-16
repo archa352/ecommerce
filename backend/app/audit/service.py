@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -11,6 +11,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import AuditLog
+from app.audit.schemas import AuditLogQuery
 from app.core.repository import TenantScopedRepository
 from app.core.request_context import client_ip
 from app.users.models import User
@@ -107,36 +108,24 @@ class AuditService:
         self.session = session
         self.logs = AuditLogRepository(session, tenant_id)
 
-    async def list(
-        self,
-        params,
-        *,
-        actor_id: UUID | None = None,
-        entity_type: str | None = None,
-        entity_id: str | None = None,
-        action: str | None = None,
-        start_date: date | None = None,
-        end_date: date | None = None,
-    ):
+    async def list(self, query: AuditLogQuery) -> tuple[list[AuditLog], int]:
         stmt = self.logs.base_select()
-        if actor_id is not None:
-            stmt = stmt.where(AuditLog.actor_id == actor_id)
-        if entity_type:
-            stmt = stmt.where(AuditLog.entity_type == entity_type)
-        if entity_id:
-            stmt = stmt.where(AuditLog.entity_id == entity_id)
-        if action:
-            stmt = stmt.where(AuditLog.action.startswith(action))
-        if start_date:
-            stmt = stmt.where(
-                AuditLog.created_at >= datetime.combine(start_date, time.min, tzinfo=timezone.utc)
-            )
-        if end_date:
-            stmt = stmt.where(
-                AuditLog.created_at
-                < datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=timezone.utc)
-            )
+        if query.actor_id is not None:
+            stmt = stmt.where(AuditLog.actor_id == query.actor_id)
+        if query.entity_type:
+            stmt = stmt.where(AuditLog.entity_type == query.entity_type)
+        if query.entity_id:
+            stmt = stmt.where(AuditLog.entity_id == query.entity_id)
+        if query.action:
+            stmt = stmt.where(AuditLog.action.startswith(query.action))
+        if query.start_date:
+            start = datetime.combine(query.start_date, time.min, tzinfo=timezone.utc)
+            stmt = stmt.where(AuditLog.created_at >= start)
+        if query.end_date:
+            day_after = query.end_date + timedelta(days=1)
+            end = datetime.combine(day_after, time.min, tzinfo=timezone.utc)
+            stmt = stmt.where(AuditLog.created_at < end)
         rows, total = await self.logs.paginate(
-            stmt.order_by(AuditLog.created_at.desc(), AuditLog.id), params
+            stmt.order_by(AuditLog.created_at.desc(), AuditLog.id), query
         )
         return list(rows), total
