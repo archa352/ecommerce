@@ -42,7 +42,7 @@ class LocalStorage:
             shutil.rmtree(self.root)
 
 
-def build_key(tenant_id: uuid.UUID, filename: str) -> str:
+def upload_key(tenant_id: uuid.UUID, filename: str) -> str:
     """Tenant-partitioned so one storefront's files never sit among another's."""
     suffix = Path(filename).suffix.lower() or ".bin"
     return f"{tenant_id}/{uuid.uuid4().hex}{suffix}"

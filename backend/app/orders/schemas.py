@@ -10,7 +10,7 @@ from app.addresses.schemas import AddressCreate
 from app.auth.schemas import NormalizedPhone
 from app.cod.schemas import CodAvailability
 from app.core.pagination import PageParams
-from app.core.schemas import PartialUpdate, StrictModel
+from app.core.schemas import PartialUpdate, StrictModel, not_blank
 from app.orders.constants import (
     MAX_COURIER_NAME_LENGTH,
     MAX_TRACKING_DESCRIPTION_LENGTH,
@@ -116,12 +116,7 @@ class GuestContact(StrictModel):
     phone: NormalizedPhone
     email: EmailStr | None = None
 
-    @field_validator("name")
-    @classmethod
-    def _strip(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("must not be blank")
-        return value.strip()
+    _strip = field_validator("name")(not_blank)
 
 
 class GuestCheckoutCreate(StrictModel):

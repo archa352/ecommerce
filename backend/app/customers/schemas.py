@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.addresses.schemas import AddressRead
 from app.core.pagination import PageParams
-from app.core.schemas import StrictModel
+from app.core.schemas import StrictModel, not_blank
 from app.customers.models import MAX_NOTE_LENGTH
 
 MAX_TAGS = 20
@@ -87,9 +87,4 @@ class CustomerBlockUpdate(StrictModel):
 class CustomerNoteCreate(StrictModel):
     body: str = Field(min_length=1, max_length=MAX_NOTE_LENGTH)
 
-    @field_validator("body")
-    @classmethod
-    def _strip(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("must not be blank")
-        return value.strip()
+    _strip = field_validator("body")(not_blank)

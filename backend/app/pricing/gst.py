@@ -123,8 +123,9 @@ def _spread(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
     return [*shares, total - sum(shares, ZERO)]
 
 
-def _split(tax: Decimal, gst_type: GstType | None) -> tuple[Decimal, Decimal, Decimal]:
-    if gst_type is GstType.INTRA_STATE:
+def split_tax(tax: Decimal, gst_type: GstType | str | None) -> tuple[Decimal, Decimal, Decimal]:
+    """(CGST, SGST, IGST) for a tax amount: halves within a state, all IGST otherwise."""
+    if gst_type == GstType.INTRA_STATE:
         cgst = money(tax / 2)
         return cgst, tax - cgst, ZERO
     return ZERO, ZERO, tax
@@ -185,7 +186,7 @@ def compute_tax(
     by_key = {line.key: line for line in lines}
     for line, share, taxable in zip(lines, discounts, taxables, strict=True):
         tax = line_tax[line.key]
-        cgst, sgst, igst = _split(tax, gst_type)
+        cgst, sgst, igst = split_tax(tax, gst_type)
         result.lines[line.key] = LineTax(
             share, taxable, by_key[line.key].rate, tax, cgst, sgst, igst, line.hsn_code
         )
@@ -194,7 +195,7 @@ def compute_tax(
         result.igst += igst
 
     result.charges_tax = line_tax.get("__charges__", ZERO)
-    cgst, sgst, igst = _split(result.charges_tax, gst_type)
+    cgst, sgst, igst = split_tax(result.charges_tax, gst_type)
     result.cgst += cgst
     result.sgst += sgst
     result.igst += igst

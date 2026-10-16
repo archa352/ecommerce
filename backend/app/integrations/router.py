@@ -77,7 +77,8 @@ async def list_integrations(
                 "Online payments (UPI, cards, net banking, wallets) and refunds",
                 ["ccavenue_merchant_id", "ccavenue_access_code", "ccavenue_working_key"],
                 False,
-                "CCAvenue is not integrated. COD advances are confirmed by staff until a supported gateway is added.",
+                "CCAvenue is not integrated. COD advances are confirmed by staff "
+                "until a supported gateway is added.",
             ),
             _entry(
                 "shiprocket",

@@ -17,3 +17,20 @@ class PartialUpdate(StrictModel):
         if not self.model_fields_set:
             raise ValueError("at least one field must be provided")
         return self
+
+
+def not_blank(value: str | None) -> str | None:
+    """Trim a string and refuse one that is empty; None passes through."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        raise ValueError("must not be blank")
+    return value
+
+
+def blank_to_none(value: str | None) -> str | None:
+    """Trim a string; an empty one means "not set"."""
+    if value is None:
+        return None
+    return value.strip() or None

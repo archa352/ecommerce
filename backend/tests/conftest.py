@@ -15,8 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.auth.constants import UserRole, UserStatus
 from app.auth.security import create_access_token, hash_password
-from app.core import cache
-from app.core import rate_limit
+from app.core import cache, rate_limit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.exceptions import AuthenticationError

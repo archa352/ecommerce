@@ -24,20 +24,11 @@ from app.catalogue.models import Product, ProductAttributeValue
 from app.core.database import get_db
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.responses import ApiResponse, ok
-from app.core.schemas import PartialUpdate, StrictModel
+from app.core.schemas import PartialUpdate, StrictModel, not_blank
 from app.users.models import User
 
 VALUE_NOT_FOUND = "Attribute value not found"
 DUPLICATE = "This value is already in the list"
-
-
-def _strip(value: str | None) -> str | None:
-    if value is None:
-        return value
-    value = value.strip()
-    if not value:
-        raise ValueError("must not be blank")
-    return value
 
 
 class AttributeValueCreate(StrictModel):
@@ -45,7 +36,7 @@ class AttributeValueCreate(StrictModel):
     value: str = Field(min_length=1, max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH)
     is_active: bool = True
 
-    _clean = field_validator("value")(_strip)
+    _clean = field_validator("value")(not_blank)
 
 
 class AttributeValueUpdate(PartialUpdate):
@@ -53,7 +44,7 @@ class AttributeValueUpdate(PartialUpdate):
     is_active: bool | None = None
     position: int | None = Field(default=None, ge=0)
 
-    _clean = field_validator("value")(_strip)
+    _clean = field_validator("value")(not_blank)
 
 
 class AttributeValueRead(BaseModel):

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from app.core.money import ZERO, money
-from app.orders.constants import GstType, OrderStatus
+from app.orders.constants import OrderStatus
 from app.orders.models import Order
 from app.orders.schemas import (
     DeliveryAddressRead,
@@ -22,7 +20,7 @@ from app.orders.schemas import (
     TrackingEventRead,
 )
 from app.payments.serializers import payment_read
-from app.pricing.gst import state_code_for
+from app.pricing.gst import split_tax, state_code_for
 from app.pricing.models import GstSettings
 
 
@@ -124,13 +122,6 @@ def tracking_read(order: Order) -> OrderTrackingRead:
     )
 
 
-def _split(tax: Decimal, gst_type: str | None) -> tuple[Decimal, Decimal, Decimal]:
-    if gst_type == GstType.INTRA_STATE.value:
-        cgst = money(tax / 2)
-        return cgst, tax - cgst, ZERO
-    return ZERO, ZERO, tax
-
-
 def invoice_read(order: Order, seller: GstSettings | None, currency: str) -> InvoiceRead:
     """A GST tax invoice built from what the order froze at purchase.
 
@@ -146,7 +137,7 @@ def invoice_read(order: Order, seller: GstSettings | None, currency: str) -> Inv
         tax = (item.tax_amount or ZERO) if tax_split_known else ZERO
         goods_tax += tax
         if tax_split_known:
-            cgst, sgst, igst = _split(tax, order.gst_type)
+            cgst, sgst, igst = split_tax(tax, order.gst_type)
         else:
             cgst, sgst, igst = ZERO, ZERO, ZERO
         lines.append(
@@ -169,7 +160,7 @@ def invoice_read(order: Order, seller: GstSettings | None, currency: str) -> Inv
     charges = order.shipping_amount + order.cod_fee
     charges_tax = order.tax_amount - goods_tax if tax_split_known else ZERO
     if charges > ZERO or charges_tax > ZERO:
-        cgst, sgst, igst = _split(charges_tax, order.gst_type)
+        cgst, sgst, igst = split_tax(charges_tax, order.gst_type)
         rate = money(charges_tax * 100 / charges) if charges > ZERO else ZERO
         lines.append(
             InvoiceLine(

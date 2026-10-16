@@ -54,12 +54,12 @@ async def _throttle(
     ip = client_ip(request)
 
     await rate_limit.hit(
-        rate_limit.build_key(f"{scope}-ip", ip, str(tenant.id)),
+        rate_limit.key_for(f"{scope}-ip", ip, str(tenant.id)),
         limit=settings.otp_ip_rate_limit_attempts,
         window_seconds=window_seconds,
     )
 
-    subject_key = rate_limit.build_key(scope, ip, str(tenant.id), subject)
+    subject_key = rate_limit.key_for(scope, ip, str(tenant.id), subject)
     await rate_limit.hit(subject_key, limit=limit, window_seconds=window_seconds)
     return subject_key
 

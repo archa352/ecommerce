@@ -9,7 +9,7 @@ from PIL import Image, UnidentifiedImageError
 
 from app.core.config import get_settings
 from app.core.exceptions import ValidationError
-from app.core.storage import build_key, get_storage
+from app.core.storage import get_storage, upload_key
 
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
@@ -73,5 +73,5 @@ async def store_image(tenant_id: UUID, filename: str, content_type: str, data: b
     data, content_type = _shrink(data, content_type)
 
     name = filename or f"upload{ALLOWED_CONTENT_TYPES[content_type]}"
-    key = build_key(tenant_id, name)
+    key = upload_key(tenant_id, name)
     return await get_storage().save(data, key=key, content_type=content_type)

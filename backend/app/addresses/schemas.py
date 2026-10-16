@@ -12,33 +12,15 @@ from app.addresses.models import (
     MAX_POSTAL_CODE_LENGTH,
 )
 from app.auth.schemas import NormalizedPhone
-from app.core.schemas import PartialUpdate, StrictModel
+from app.core.schemas import PartialUpdate, StrictModel, blank_to_none, not_blank
 
 INDIA = {"india", "in", "ind"}
 INDIA_PIN = re.compile(r"^[1-9]\d{5}$")
 POSTAL_CODE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 -]{2,9}$")
 
 
-def _reject_blank(value: str) -> str:
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError("Must not be blank")
-    return stripped
-
-
-def _reject_blank_optional(value: str | None) -> str | None:
-    return None if value is None else _reject_blank(value)
-
-
-def _strip_optional(value: str | None) -> str | None:
-    if value is None:
-        return None
-    stripped = value.strip()
-    return stripped or None
-
-
 def _check_postal_code(value: str, info: ValidationInfo) -> str:
-    code = _reject_blank(value)
+    code = not_blank(value)
     country = (info.data.get("country") or "").strip().lower()
     pattern = INDIA_PIN if country in INDIA else POSTAL_CODE
     if not pattern.match(code):
@@ -61,12 +43,12 @@ class AddressCreate(StrictModel):
     postal_code: str = Field(max_length=MAX_POSTAL_CODE_LENGTH)
     is_default: bool = False
 
-    _strip_full_name = field_validator("full_name")(_reject_blank)
-    _strip_line_1 = field_validator("address_line_1")(_reject_blank)
-    _strip_line_2 = field_validator("address_line_2")(_strip_optional)
-    _strip_city = field_validator("city")(_reject_blank)
-    _strip_state = field_validator("state")(_reject_blank)
-    _strip_country = field_validator("country")(_reject_blank)
+    _strip_full_name = field_validator("full_name")(not_blank)
+    _strip_line_1 = field_validator("address_line_1")(not_blank)
+    _strip_line_2 = field_validator("address_line_2")(blank_to_none)
+    _strip_city = field_validator("city")(not_blank)
+    _strip_state = field_validator("state")(not_blank)
+    _strip_country = field_validator("country")(not_blank)
     _check_postal_code = field_validator("postal_code")(_check_postal_code)
 
 
@@ -81,12 +63,12 @@ class AddressUpdate(PartialUpdate):
     postal_code: str | None = Field(default=None, max_length=MAX_POSTAL_CODE_LENGTH)
     is_default: bool | None = None
 
-    _strip_full_name = field_validator("full_name")(_reject_blank_optional)
-    _strip_line_1 = field_validator("address_line_1")(_reject_blank_optional)
-    _strip_line_2 = field_validator("address_line_2")(_strip_optional)
-    _strip_city = field_validator("city")(_reject_blank_optional)
-    _strip_state = field_validator("state")(_reject_blank_optional)
-    _strip_country = field_validator("country")(_reject_blank_optional)
+    _strip_full_name = field_validator("full_name")(not_blank)
+    _strip_line_1 = field_validator("address_line_1")(not_blank)
+    _strip_line_2 = field_validator("address_line_2")(blank_to_none)
+    _strip_city = field_validator("city")(not_blank)
+    _strip_state = field_validator("state")(not_blank)
+    _strip_country = field_validator("country")(not_blank)
     _check_postal_code = field_validator("postal_code")(_check_postal_code_optional)
 
 

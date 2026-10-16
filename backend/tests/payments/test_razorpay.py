@@ -6,9 +6,9 @@ from uuid import UUID
 
 import pytest
 
-from app.payments import razorpay
 from app.orders.models import Order
 from app.orders.repository import OrderRepository
+from app.payments import razorpay
 from tests.conftest import headers_for
 from tests.payments.conftest import ADMIN_ORDERS, CUSTOMERS, ORDERS, PAYMENTS
 

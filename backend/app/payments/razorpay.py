@@ -95,7 +95,7 @@ def signature_is_valid(order_id: str, payment_id: str, signature: str) -> bool:
     secret = credentials().key_secret.encode("utf-8")
     expected = hmac.new(
         secret,
-        f"{order_id}|{payment_id}".encode("utf-8"),
+        f"{order_id}|{payment_id}".encode(),
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, signature)

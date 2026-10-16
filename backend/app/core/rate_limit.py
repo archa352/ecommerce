@@ -11,7 +11,7 @@ logger = get_logger("rate_limit")
 KEY_PREFIX = "ratelimit"
 
 
-def build_key(scope: str, *parts: str) -> str:
+def key_for(scope: str, *parts: str) -> str:
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
     return f"{KEY_PREFIX}:{scope}:{digest}"
 
@@ -42,7 +42,7 @@ async def hit(key: str, *, limit: int, window_seconds: int) -> None:
 
 async def enforce(scope: str, *parts: str, limit: int, window_seconds: int) -> None:
     """Throttle one scope for whoever the caller identifies as the subject."""
-    await hit(build_key(scope, *parts), limit=limit, window_seconds=window_seconds)
+    await hit(key_for(scope, *parts), limit=limit, window_seconds=window_seconds)
 
 
 async def reset(key: str) -> None:

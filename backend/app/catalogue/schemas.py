@@ -43,7 +43,7 @@ from app.catalogue.constants import (
 )
 from app.core.config import get_settings
 from app.core.pagination import PageParams
-from app.core.schemas import PartialUpdate, StrictModel
+from app.core.schemas import PartialUpdate, StrictModel, blank_to_none, not_blank
 from app.core.slugs import SLUG_PATTERN
 
 SKU_PATTERN = r"^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$"
@@ -61,29 +61,12 @@ ProductInfo = Field(default=None, max_length=MAX_PRODUCT_INFO_LENGTH)
 SalePrice = Field(default=None, ge=0, max_digits=PRICE_PRECISION, decimal_places=PRICE_SCALE)
 
 
-def _reject_blank(value: str) -> str:
-    if not value.strip():
-        raise ValueError("must not be blank")
-    return value.strip()
-
-
-def _reject_blank_optional(value: str | None) -> str | None:
-    return value if value is None else _reject_blank(value)
-
-
 def _strip_optional(value: str | None) -> str | None:
     return value if value is None else value.strip()
 
 
-def _strip_to_none(value: str | None) -> str | None:
-    """Trim an optional attribute; a blank one means "not set"."""
-    if value is None:
-        return None
-    return value.strip() or None
-
-
 def _require_url(value: str) -> str:
-    url = _reject_blank(value)
+    url = not_blank(value)
     parsed = urlsplit(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("must be a valid http or https URL")
@@ -92,7 +75,7 @@ def _require_url(value: str) -> str:
 
 def _require_image_url(value: str) -> str:
     """An http(s) URL, or a file this store uploaded itself (e.g. /media/<tenant>/x.jpg)."""
-    url = _reject_blank(value)
+    url = not_blank(value)
     base = get_settings().storage_public_base_url.rstrip("/")
     if base.startswith("/") and url.startswith(base + "/"):
         if ".." in url.split("/") or "\\" in url or "?" in url or "#" in url:
@@ -115,7 +98,7 @@ class CategoryCreate(StrictModel):
     hsn_code: str | None = HsnCode
     gst_rate: Decimal | None = GstRate
 
-    _strip_name = field_validator("name")(_reject_blank)
+    _strip_name = field_validator("name")(not_blank)
 
 
 class CategoryUpdate(PartialUpdate):
@@ -128,7 +111,7 @@ class CategoryUpdate(PartialUpdate):
     hsn_code: str | None = HsnCode
     gst_rate: Decimal | None = GstRate
 
-    _strip_name = field_validator("name")(_reject_blank_optional)
+    _strip_name = field_validator("name")(not_blank)
 
 
 class CategoryRead(BaseModel):
@@ -237,8 +220,8 @@ class VariantOptionValue(StrictModel):
     name: str = Field(min_length=1, max_length=MAX_OPTION_NAME_LENGTH)
     value: str = Field(min_length=1, max_length=MAX_OPTION_VALUE_LENGTH)
 
-    _strip_name = field_validator("name")(_reject_blank)
-    _strip_value = field_validator("value")(_reject_blank)
+    _strip_name = field_validator("name")(not_blank)
+    _strip_value = field_validator("value")(not_blank)
 
 
 class ProductOptionRead(BaseModel):
@@ -320,7 +303,7 @@ class VariantCreate(StrictModel):
     sale_starts_at: datetime | None = None
     sale_ends_at: datetime | None = None
 
-    _strip_name = field_validator("name")(_reject_blank)
+    _strip_name = field_validator("name")(not_blank)
 
     @field_validator("options")
     @classmethod
@@ -349,7 +332,7 @@ class VariantUpdate(PartialUpdate):
     sale_starts_at: datetime | None = None
     sale_ends_at: datetime | None = None
 
-    _strip_name = field_validator("name")(_reject_blank_optional)
+    _strip_name = field_validator("name")(not_blank)
 
 
 class VariantRead(BaseModel):
@@ -398,7 +381,7 @@ class SizeChartRow(StrictModel):
     size: str = Field(min_length=1, max_length=MAX_SIZE_CHART_LABEL_LENGTH)
     values: dict[str, Decimal] = Field(min_length=1)
 
-    _strip_size = field_validator("size")(_reject_blank)
+    _strip_size = field_validator("size")(not_blank)
 
     @field_validator("values")
     @classmethod
@@ -420,7 +403,7 @@ class SizeChart(StrictModel):
     @field_validator("measurements")
     @classmethod
     def _clean_measurements(cls, value: list[str]) -> list[str]:
-        cleaned = [_reject_blank(name) for name in value]
+        cleaned = [not_blank(name) for name in value]
         if any(len(name) > MAX_SIZE_CHART_LABEL_LENGTH for name in cleaned):
             raise ValueError("measurement names are too long")
         if len({name.lower() for name in cleaned}) != len(cleaned):
@@ -538,15 +521,15 @@ class ProductCreate(StrictModel):
 
     images: list[ProductImageCreate] = Field(min_length=MIN_PRODUCT_IMAGES)
 
-    _strip_name = field_validator("name")(_reject_blank)
+    _strip_name = field_validator("name")(not_blank)
     _strip_short_description = field_validator("short_description")(_strip_optional)
     _strip_brand = field_validator("brand")(_strip_optional)
     _clean_attributes = field_validator("fabric", "occasion", "sleeve", "neckline")(
-        _strip_to_none
+        blank_to_none
     )
     _clean_info = field_validator(
         "fabric_details", "washing_instructions", "country_of_origin"
-    )(_strip_to_none)
+    )(blank_to_none)
 
     @field_validator("images")
     @classmethod
@@ -585,15 +568,15 @@ class ProductUpdate(PartialUpdate):
         default=None, max_length=MAX_SEO_DESCRIPTION_LENGTH
     )
 
-    _strip_name = field_validator("name")(_reject_blank_optional)
+    _strip_name = field_validator("name")(not_blank)
     _strip_short_description = field_validator("short_description")(_strip_optional)
     _strip_brand = field_validator("brand")(_strip_optional)
     _clean_attributes = field_validator("fabric", "occasion", "sleeve", "neckline")(
-        _strip_to_none
+        blank_to_none
     )
     _clean_info = field_validator(
         "fabric_details", "washing_instructions", "country_of_origin"
-    )(_strip_to_none)
+    )(blank_to_none)
 
 
 class ProductRead(BaseModel):

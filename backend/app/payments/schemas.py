@@ -6,8 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.core.schemas import StrictModel
 from app.core.pagination import PageParams
+from app.core.schemas import StrictModel
 from app.payments.constants import PaymentProvider, PaymentStatus
 
 

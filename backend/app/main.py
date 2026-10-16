@@ -40,7 +40,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Request-Id"],
+        expose_headers=["X-Request-Id", "Content-Disposition"],
     )
 
     @app.middleware("http")

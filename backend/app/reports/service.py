@@ -605,7 +605,8 @@ class ReportService:
                                 (
                                     and_(
                                         Order.status != CANCELLED,
-                                        Order.payment_method == PaymentMethod.CASH_ON_DELIVERY.value,
+                                        Order.payment_method
+                                        == PaymentMethod.CASH_ON_DELIVERY.value,
                                     ),
                                     Order.total_amount,
                                 )
