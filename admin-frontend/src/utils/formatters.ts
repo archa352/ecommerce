@@ -14,18 +14,10 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 // Shows only the start of a UUID in tables; the full value is in the title tooltip.
-export function shortId(id: string | null | undefined): string {
-  return id ? id.slice(0, 8) : "-";
-}
-
 // Turns an empty input into null, which the backend treats as "not set".
 export function emptyToNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === "" ? null : trimmed;
-}
-
-export function numberOrNull(value: string): number | null {
-  return value.trim() === "" ? null : Number(value);
 }
 
 // <input type="datetime-local"> <-> ISO string conversions.

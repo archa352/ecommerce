@@ -12,7 +12,6 @@ export interface Category {
 }
 
 export type ProductGender = "MEN" | "WOMEN" | "UNISEX";
-export const PRODUCT_GENDERS: ProductGender[] = ["MEN", "WOMEN", "UNISEX"];
 
 export interface ProductImage {
   id: string;

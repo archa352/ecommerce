@@ -4,7 +4,6 @@ export const DASHBOARD_PAGE_SIZE = 50;
 export type { SalesTrendPoint as TrendPoint } from "../../types/dashboard";
 export interface SalesRow { period: string; orders: number; revenue: string; average_order_value: string }
 export interface SalesReport { rows: SalesRow[]; summary: { orders: number; revenue: string; average_order_value: string }; currency: string }
-export interface ReturnsReport { returned_orders: number; return_rate: number | null; by_product: { product_id: string; product_name: string; units_returned: number; orders: number }[] }
 export interface InventoryRow extends StockItem { sellable_quantity: number; stock_status: "LOW" | "OUT_OF_STOCK" | "IN_STOCK" }
 
 export function inventoryProducts(rows: InventoryRow[]) {

@@ -42,14 +42,6 @@ export interface CodSettings {
   auto_blacklist_threshold: number | null;
 }
 
-export interface BlacklistEntry {
-  id: string;
-  phone: string;
-  reason: string | null;
-  source: "MANUAL" | "AUTO";
-  created_at: string;
-}
-
 export interface CodCollection {
   payment_id: string;
   order_id: string;

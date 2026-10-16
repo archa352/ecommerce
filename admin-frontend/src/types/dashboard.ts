@@ -69,11 +69,4 @@ export interface DashboardOverview {
   } | null;
 }
 
-export interface TopProduct {
-  product_id: string;
-  product_name: string;
-  quantity_sold: number;
-  revenue_generated: string;
-}
-
 export interface SalesTrendPoint { date: string; order_count: number; revenue: string }

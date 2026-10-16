@@ -22,4 +22,3 @@ export const P = {
   audit: "audit.view",
 } as const;
 
-export type Permission = (typeof P)[keyof typeof P];

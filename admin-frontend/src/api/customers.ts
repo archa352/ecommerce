@@ -3,7 +3,6 @@ import type { CustomerDetail, CustomerNote, CustomerSummary } from "../types/use
 import { request } from "./client";
 
 export const listCustomers = (query: object) => request<CustomerSummary[]>("/admin/customers", { query });
-export const listCustomerTags = () => request<string[]>("/admin/customers/tags");
 export const getCustomer = (id: string) => request<CustomerDetail>(`/admin/customers/${id}`);
 export const getCustomerOrders = (id: string, page = 1) =>
   request<OrderSummary[]>(`/admin/customers/${id}/orders`, { query: { page } });
