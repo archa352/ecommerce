@@ -1,22 +1,19 @@
 """Per-tenant shipping, delivery-area, tax and GST-invoice settings."""
 
-import uuid
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    ForeignKey,
     Integer,
     Numeric,
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 from app.pricing.constants import (
     DEFAULT_INVOICE_PREFIX,
     DEFAULT_MAX_DELIVERY_DAYS,
@@ -28,7 +25,7 @@ TAX_PRECISION = 5
 TAX_SCALE = 2
 
 
-class ShippingSettings(Base, TimestampMixin):
+class ShippingSettings(IdMixin, TenantMixin, TimestampMixin, Base):
     """One tenant's delivery charge, free above `free_shipping_minimum`."""
 
     __tablename__ = "shipping_settings"
@@ -44,16 +41,6 @@ class ShippingSettings(Base, TimestampMixin):
             "min_delivery_days >= 0 AND max_delivery_days >= min_delivery_days",
             name="delivery_days_ordered",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     shipping_amount: Mapped[Decimal] = mapped_column(
@@ -87,7 +74,7 @@ class ShippingSettings(Base, TimestampMixin):
     )
 
 
-class PincodeRule(Base, TimestampMixin):
+class PincodeRule(IdMixin, TenantMixin, TimestampMixin, Base):
     """Delivery rules for one pincode: served or not, how fast, at what cost, COD or not."""
 
     __tablename__ = "pincode_rules"
@@ -105,16 +92,6 @@ class PincodeRule(Base, TimestampMixin):
             " OR (min_delivery_days >= 0 AND max_delivery_days >= min_delivery_days))",
             name="delivery_days_ordered",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     pincode: Mapped[str] = mapped_column(String(6), nullable=False)
@@ -135,22 +112,12 @@ class PincodeRule(Base, TimestampMixin):
     state: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
-class GstSettings(Base, TimestampMixin):
+class GstSettings(IdMixin, TenantMixin, TimestampMixin, Base):
     """The seller's GST identity, printed on invoices and used to split CGST/SGST/IGST."""
 
     __tablename__ = "gst_settings"
 
     __table_args__ = (UniqueConstraint("tenant_id", name="uq_gst_settings_tenant_id"),)
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
 
     gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)
     legal_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -167,7 +134,7 @@ class GstSettings(Base, TimestampMixin):
     shipping_sac_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
 
-class TaxSettings(Base, TimestampMixin):
+class TaxSettings(IdMixin, TenantMixin, TimestampMixin, Base):
     """One tenant's tax rate, as a percentage: 18.00 means 18%."""
 
     __tablename__ = "tax_settings"
@@ -178,16 +145,6 @@ class TaxSettings(Base, TimestampMixin):
             f"tax_percentage >= 0 AND tax_percentage <= {MAX_TAX_PERCENTAGE}",
             name="tax_percentage_in_range",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     tax_percentage: Mapped[Decimal] = mapped_column(

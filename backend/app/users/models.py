@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.auth.constants import UserRole, UserStatus
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TimestampMixin
 
 _ROLE_VALUES = ", ".join(f"'{role.value}'" for role in UserRole)
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in UserStatus)
@@ -14,7 +14,7 @@ _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in UserStatus)
 _E164_SQL = r"phone ~ '^\+[1-9][0-9]{7,14}$'"
 
 
-class User(Base, TimestampMixin):
+class User(IdMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     __table_args__ = (
@@ -29,12 +29,6 @@ class User(Base, TimestampMixin):
             "(role = 'CUSTOMER') = (password_hash IS NULL)",
             name="password_matches_role",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

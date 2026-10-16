@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     DateTime,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     String,
@@ -14,11 +13,11 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, IdMixin, TenantMixin
 from app.search_filter.constants import MAX_QUERY_LENGTH
 
 
-class SearchHistory(Base):
+class SearchHistory(IdMixin, TenantMixin, Base):
     """One row per phrase a shopper has searched; a repeat bumps searched_at."""
 
     __tablename__ = "search_history"
@@ -43,18 +42,6 @@ class SearchHistory(Base):
             "user_id",
             "searched_at",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

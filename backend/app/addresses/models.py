@@ -3,7 +3,6 @@ import uuid
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     String,
@@ -13,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 MAX_NAME_LENGTH = 150
 MAX_LINE_LENGTH = 255
@@ -21,7 +20,7 @@ MAX_CITY_LENGTH = 100
 MAX_POSTAL_CODE_LENGTH = 20
 
 
-class Address(Base, TimestampMixin):
+class Address(IdMixin, TenantMixin, TimestampMixin, Base):
     """A customer's delivery address, copied onto orders at checkout."""
 
     __tablename__ = "addresses"
@@ -47,16 +46,6 @@ class Address(Base, TimestampMixin):
             postgresql_where=text("is_default"),
         ),
         Index("ix_addresses_tenant_id_customer_id", "tenant_id", "customer_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

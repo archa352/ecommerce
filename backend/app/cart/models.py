@@ -5,7 +5,6 @@ from enum import Enum
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -17,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 
 class CartStatus(str, Enum):
@@ -33,7 +32,7 @@ GUEST_TOKEN_HASH_LENGTH = 64
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CartStatus)
 
 
-class Cart(Base, TimestampMixin):
+class Cart(IdMixin, TenantMixin, TimestampMixin, Base):
     """A working basket, owned by a customer or by a guest's cart token.
 
     One ACTIVE cart per customer per tenant. A guest cart has no customer;
@@ -71,16 +70,6 @@ class Cart(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     guest_token_hash: Mapped[str | None] = mapped_column(
@@ -100,7 +89,7 @@ class Cart(Base, TimestampMixin):
     )
 
 
-class CartItem(Base, TimestampMixin):
+class CartItem(IdMixin, TenantMixin, TimestampMixin, Base):
     """A variant and its quantity; catalogue data is read live, never copied in."""
 
     __tablename__ = "cart_items"
@@ -121,16 +110,6 @@ class CartItem(Base, TimestampMixin):
         ),
         CheckConstraint("quantity > 0", name="quantity_positive"),
         Index("ix_cart_items_tenant_id_cart_id", "tenant_id", "cart_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     cart_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

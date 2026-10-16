@@ -11,7 +11,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -31,7 +30,7 @@ from app.cms.constants import (
     PageType,
     SectionType,
 )
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 
 def _values(enum) -> str:
@@ -56,13 +55,6 @@ def _editors(table: str):
     )
 
 
-class _Tenanted:
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
-
-
 class _Edited:
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     updated_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
@@ -76,7 +68,7 @@ class _Published:
     published_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
-class CmsMedia(_Tenanted, Base, TimestampMixin):
+class CmsMedia(IdMixin, TenantMixin, TimestampMixin, Base):
     """An uploaded image. The file lives in app storage; the row holds its URL."""
 
     __tablename__ = "cms_media"
@@ -98,7 +90,7 @@ class CmsMedia(_Tenanted, Base, TimestampMixin):
     uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
-class HomeSection(_Tenanted, _Edited, Base, TimestampMixin):
+class HomeSection(IdMixin, TenantMixin, _Edited, TimestampMixin, Base):
     """One block on the homepage: banners, a promo strip or a product shelf."""
 
     __tablename__ = "cms_home_sections"
@@ -125,7 +117,7 @@ class HomeSection(_Tenanted, _Edited, Base, TimestampMixin):
     settings: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
-class ContentPage(_Tenanted, _Edited, _Published, Base, TimestampMixin):
+class ContentPage(IdMixin, TenantMixin, _Edited, _Published, TimestampMixin, Base):
     """A static page (About, policies, contact...). Body is Markdown."""
 
     __tablename__ = "cms_pages"
@@ -144,7 +136,7 @@ class ContentPage(_Tenanted, _Edited, _Published, Base, TimestampMixin):
     seo_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
-class FaqCategory(_Tenanted, _Edited, Base, TimestampMixin):
+class FaqCategory(IdMixin, TenantMixin, _Edited, TimestampMixin, Base):
     __tablename__ = "cms_faq_categories"
     __table_args__ = (
         *_editors("cms_faq_categories"),
@@ -157,7 +149,7 @@ class FaqCategory(_Tenanted, _Edited, Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
-class Faq(_Tenanted, _Edited, _Published, Base, TimestampMixin):
+class Faq(IdMixin, TenantMixin, _Edited, _Published, TimestampMixin, Base):
     __tablename__ = "cms_faqs"
     __table_args__ = (
         *_editors("cms_faqs"),
@@ -178,7 +170,7 @@ class Faq(_Tenanted, _Edited, _Published, Base, TimestampMixin):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
-class NavigationItem(_Tenanted, _Edited, Base, TimestampMixin):
+class NavigationItem(IdMixin, TenantMixin, _Edited, TimestampMixin, Base):
     __tablename__ = "cms_navigation_items"
     __table_args__ = (
         *_editors("cms_navigation_items"),
@@ -207,7 +199,7 @@ class NavigationItem(_Tenanted, _Edited, Base, TimestampMixin):
     open_in_new_tab: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
-class BlogPost(_Tenanted, _Edited, _Published, Base, TimestampMixin):
+class BlogPost(IdMixin, TenantMixin, _Edited, _Published, TimestampMixin, Base):
     """An article. Body is Markdown."""
 
     __tablename__ = "cms_blog_posts"
@@ -230,7 +222,7 @@ class BlogPost(_Tenanted, _Edited, _Published, Base, TimestampMixin):
     seo_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
-class SiteSettings(_Tenanted, Base, TimestampMixin):
+class SiteSettings(IdMixin, TenantMixin, TimestampMixin, Base):
     """Website-wide content the store manages itself: logo, tagline, contact
     details and social links. One row per store; absent until first saved."""
 

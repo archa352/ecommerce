@@ -14,30 +14,18 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.auth.constants import OtpPurpose
-from app.models.base import Base
+from app.models.base import Base, IdMixin, TenantMixin
 
 _PURPOSE_VALUES = ", ".join(f"'{purpose.value}'" for purpose in OtpPurpose)
 
 
-class OtpRequest(Base):
+class OtpRequest(IdMixin, TenantMixin, Base):
     __tablename__ = "otp_requests"
 
     __table_args__ = (
         CheckConstraint(f"purpose IN ({_PURPOSE_VALUES})", name="purpose_valid"),
         CheckConstraint("attempts >= 0", name="attempts_not_negative"),
         Index("ix_otp_requests_tenant_id_phone_purpose", "tenant_id", "phone", "purpose"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -68,20 +56,8 @@ class OtpRequest(Base):
     )
 
 
-class AdminAuthChallenge(Base):
+class AdminAuthChallenge(IdMixin, TenantMixin, Base):
     __tablename__ = "admin_auth_challenges"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -110,26 +86,14 @@ class AdminAuthChallenge(Base):
     )
 
 
-class RefreshToken(Base):
+class RefreshToken(IdMixin, TenantMixin, Base):
     __tablename__ = "refresh_tokens"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     token_hash: Mapped[str] = mapped_column(

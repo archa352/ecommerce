@@ -3,14 +3,14 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Index, String, func
+from sqlalchemy import DateTime, ForeignKeyConstraint, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, IdMixin, TenantMixin
 
 
-class AuditLog(Base):
+class AuditLog(IdMixin, TenantMixin, Base):
     """One recorded admin action. Append-only."""
 
     __tablename__ = "audit_logs"
@@ -26,14 +26,6 @@ class AuditLog(Base):
         Index("ix_audit_logs_tenant_id_created_at", "tenant_id", "created_at"),
         Index("ix_audit_logs_tenant_id_entity", "tenant_id", "entity_type", "entity_id"),
         Index("ix_audit_logs_tenant_id_actor_id", "tenant_id", "actor_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

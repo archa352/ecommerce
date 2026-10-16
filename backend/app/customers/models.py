@@ -3,16 +3,16 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Index, String, func
+from sqlalchemy import DateTime, ForeignKeyConstraint, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, IdMixin, TenantMixin
 
 MAX_NOTE_LENGTH = 2000
 
 
-class CustomerNote(Base):
+class CustomerNote(IdMixin, TenantMixin, Base):
     __tablename__ = "customer_notes"
 
     __table_args__ = (
@@ -31,10 +31,6 @@ class CustomerNote(Base):
         Index("ix_customer_notes_tenant_id_customer_id", "tenant_id", "customer_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     author_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     author_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

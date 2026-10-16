@@ -1,13 +1,13 @@
 import uuid
 
-from sqlalchemy import ForeignKey, ForeignKeyConstraint, Index, UniqueConstraint
+from sqlalchemy import ForeignKeyConstraint, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID  # type: ignore
 from sqlalchemy.orm import Mapped, mapped_column  # type: ignore
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 
-class Wishlist(Base, TimestampMixin):
+class Wishlist(IdMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "wishlists"
 
     __table_args__ = (
@@ -26,17 +26,10 @@ class Wishlist(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
 
-class WishlistItem(Base, TimestampMixin):
+class WishlistItem(IdMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "wishlist_items"
 
     __table_args__ = (
@@ -54,12 +47,6 @@ class WishlistItem(Base, TimestampMixin):
             ondelete="CASCADE",
         ),
         Index("ix_wishlist_items_tenant_id_wishlist_id", "tenant_id", "wishlist_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
 
     wishlist_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

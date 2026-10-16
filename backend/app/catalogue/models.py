@@ -6,7 +6,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -46,7 +45,7 @@ from app.catalogue.constants import (
     InventoryReason,
     ProductGender,
 )
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in CatalogueStatus)
 _REASON_VALUES = ", ".join(f"'{reason.value}'" for reason in InventoryReason)
@@ -55,7 +54,7 @@ _GENDER_VALUES = ", ".join(f"'{gender.value}'" for gender in ProductGender)
 _GST_RATE_IN_RANGE = f"gst_rate IS NULL OR (gst_rate >= 0 AND gst_rate <= {MAX_GST_RATE})"
 
 
-class Category(Base, TimestampMixin):
+class Category(IdMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "categories"
 
     __table_args__ = (
@@ -72,18 +71,6 @@ class Category(Base, TimestampMixin):
         CheckConstraint(_GST_RATE_IN_RANGE, name="gst_rate_in_range"),
         Index("ix_categories_tenant_id_status", "tenant_id", "status"),
         Index("ix_categories_tenant_id_parent_id", "tenant_id", "parent_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
@@ -108,7 +95,7 @@ class Category(Base, TimestampMixin):
     )
 
 
-class Product(Base, TimestampMixin):
+class Product(IdMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "products"
 
     __table_args__ = (
@@ -133,18 +120,6 @@ class Product(Base, TimestampMixin):
         Index("ix_products_tenant_id_sleeve", "tenant_id", "sleeve"),
         Index("ix_products_tenant_id_neckline", "tenant_id", "neckline"),
         UniqueConstraint("tenant_id", "slug", name="uq_products_tenant_id_slug"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -258,7 +233,7 @@ class Product(Base, TimestampMixin):
     )
 
 
-class ProductRelation(Base, TimestampMixin):
+class ProductRelation(IdMixin, TenantMixin, TimestampMixin, Base):
     """A hand-picked "you may also like" link from one product to another."""
 
     __tablename__ = "product_relations"
@@ -287,16 +262,6 @@ class ProductRelation(Base, TimestampMixin):
         Index("ix_product_relations_tenant_id_product_id", "tenant_id", "product_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     related_product_id: Mapped[uuid.UUID] = mapped_column(
@@ -306,7 +271,7 @@ class ProductRelation(Base, TimestampMixin):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
-class ProductOption(Base, TimestampMixin):
+class ProductOption(IdMixin, TenantMixin, TimestampMixin, Base):
     """A dimension a product varies along, such as Color or Size."""
 
     __tablename__ = "product_options"
@@ -327,16 +292,6 @@ class ProductOption(Base, TimestampMixin):
         Index("ix_product_options_tenant_id_product_id", "tenant_id", "product_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     name: Mapped[str] = mapped_column(String(MAX_OPTION_NAME_LENGTH), nullable=False)
@@ -344,7 +299,7 @@ class ProductOption(Base, TimestampMixin):
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
-class ProductVariant(Base, TimestampMixin):
+class ProductVariant(IdMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "product_variants"
 
     __table_args__ = (
@@ -368,16 +323,6 @@ class ProductVariant(Base, TimestampMixin):
             name="sale_window_ordered",
         ),
         Index("ix_product_variants_tenant_id_product_id", "tenant_id", "product_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -433,7 +378,7 @@ class ProductVariant(Base, TimestampMixin):
     )
 
 
-class ProductVariantOption(Base, TimestampMixin):
+class ProductVariantOption(IdMixin, TenantMixin, TimestampMixin, Base):
     """One option value for one variant -- "Color = Black"."""
 
     __tablename__ = "product_variant_options"
@@ -461,16 +406,6 @@ class ProductVariantOption(Base, TimestampMixin):
         Index("ix_product_variant_options_tenant_id_option_id", "tenant_id", "option_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     option_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -492,7 +427,7 @@ class ProductVariantOption(Base, TimestampMixin):
     )
 
 
-class ProductImage(Base, TimestampMixin):
+class ProductImage(IdMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "product_images"
 
     __table_args__ = (
@@ -514,16 +449,6 @@ class ProductImage(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     product_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     url: Mapped[str] = mapped_column(String(MAX_IMAGE_URL_LENGTH), nullable=False)
@@ -537,7 +462,7 @@ class ProductImage(Base, TimestampMixin):
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
-class InventoryItem(Base, TimestampMixin):
+class InventoryItem(IdMixin, TenantMixin, TimestampMixin, Base):
     """Stock for one variant; sellable stock is available minus reserved."""
 
     __tablename__ = "inventory_items"
@@ -560,16 +485,6 @@ class InventoryItem(Base, TimestampMixin):
         CheckConstraint("low_stock_threshold >= 0", name="threshold_not_negative"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     available_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -579,7 +494,7 @@ class InventoryItem(Base, TimestampMixin):
     low_stock_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
-class InventoryMovement(Base):
+class InventoryMovement(IdMixin, TenantMixin, Base):
     """Append-only record of every stock change."""
 
     __tablename__ = "inventory_movements"
@@ -600,16 +515,6 @@ class InventoryMovement(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     variant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     delta: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -625,7 +530,7 @@ class InventoryMovement(Base):
     )
 
 
-class ProductAttributeValue(Base, TimestampMixin):
+class ProductAttributeValue(IdMixin, TenantMixin, TimestampMixin, Base):
     """One allowed value of a filterable attribute, e.g. fabric = "Cotton".
 
     Products still store the value as text, so values that were typed in before
@@ -648,12 +553,6 @@ class ProductAttributeValue(Base, TimestampMixin):
         CheckConstraint("length(trim(value)) > 0", name="value_not_blank"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
     attribute: Mapped[str] = mapped_column(String(20), nullable=False)
     value: Mapped[str] = mapped_column(String(MAX_PRODUCT_ATTRIBUTE_LENGTH), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

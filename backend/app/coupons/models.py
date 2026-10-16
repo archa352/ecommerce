@@ -21,11 +21,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
 from app.coupons.constants import DiscountType
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 _DISCOUNT_TYPE_VALUES = ", ".join(f"'{t.value}'" for t in DiscountType)
 
-class Coupon(Base, TimestampMixin):
+class Coupon(IdMixin, TimestampMixin, Base):
     """Discount vouchers usable during checkout."""
 
     __tablename__ = "coupons"
@@ -79,10 +79,6 @@ class Coupon(Base, TimestampMixin):
             name="starts_before_expires"
         ),
         Index("ix_coupons_tenant_id_created_at", "tenant_id", "created_at"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -148,7 +144,7 @@ class Coupon(Base, TimestampMixin):
     valid_weekdays: Mapped[list[int] | None] = mapped_column(JSONB, nullable=True)
 
 
-class CouponCategory(Base, TimestampMixin):
+class CouponCategory(IdMixin, TenantMixin, TimestampMixin, Base):
     """Limits a coupon to products in these categories (and their sub-categories)."""
 
     __tablename__ = "coupon_categories"
@@ -172,22 +168,12 @@ class CouponCategory(Base, TimestampMixin):
         Index("ix_coupon_categories_tenant_id_coupon_id", "tenant_id", "coupon_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     coupon_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
 
-class CouponUsage(Base, TimestampMixin):
+class CouponUsage(IdMixin, TimestampMixin, Base):
     """Tracks historical coupon redemption per order and customer."""
 
     __tablename__ = "coupon_usages"
@@ -214,10 +200,6 @@ class CouponUsage(Base, TimestampMixin):
             "coupon_id",
             "customer_id",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

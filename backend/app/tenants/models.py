@@ -4,11 +4,11 @@ from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TimestampMixin
 from app.tenants.constants import CURRENCY_CODE_LENGTH, DEFAULT_CURRENCY
 
 
-class Tenant(Base, TimestampMixin):
+class Tenant(IdMixin, TimestampMixin, Base):
     __tablename__ = "tenants"
 
     __table_args__ = (
@@ -16,12 +16,6 @@ class Tenant(Base, TimestampMixin):
             f"currency = upper(currency) AND length(currency) = {CURRENCY_CODE_LENGTH}",
             name="currency_is_iso_4217",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
     )
 
     name: Mapped[str] = mapped_column(
@@ -50,18 +44,12 @@ class Tenant(Base, TimestampMixin):
     )
 
 
-class TenantDomain(Base, TimestampMixin):
+class TenantDomain(IdMixin, TimestampMixin, Base):
     __tablename__ = "tenant_domains"
 
     __table_args__ = (
         CheckConstraint("domain = lower(domain)", name="domain_is_lowercase"),
         CheckConstraint("length(trim(domain)) > 0", name="domain_not_blank"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(

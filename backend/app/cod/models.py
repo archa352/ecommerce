@@ -1,28 +1,25 @@
 """Cash-on-delivery controls: one settings row per tenant and a phone blacklist."""
 
-import uuid
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    ForeignKey,
     Integer,
     Numeric,
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
 from app.cod.constants import MAX_REASON_LENGTH, BlacklistSource
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 
 _SOURCE_VALUES = ", ".join(f"'{source.value}'" for source in BlacklistSource)
 
 
-class CodSettings(Base, TimestampMixin):
+class CodSettings(IdMixin, TenantMixin, TimestampMixin, Base):
     """A tenant's COD rules. No row at all means COD is on with no limits or fee."""
 
     __tablename__ = "cod_settings"
@@ -52,16 +49,6 @@ class CodSettings(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     # Master switch for the whole shop.
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -87,7 +74,7 @@ class CodSettings(Base, TimestampMixin):
     auto_blacklist_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
-class CodBlacklistEntry(Base, TimestampMixin):
+class CodBlacklistEntry(IdMixin, TenantMixin, TimestampMixin, Base):
     """A phone number that may only order prepaid."""
 
     __tablename__ = "cod_blacklist"
@@ -96,16 +83,6 @@ class CodBlacklistEntry(Base, TimestampMixin):
         UniqueConstraint("tenant_id", "phone", name="uq_cod_blacklist_tenant_phone"),
         CheckConstraint(r"phone ~ '^\+[1-9][0-9]{7,14}$'", name="phone_is_e164"),
         CheckConstraint(f"source IN ({_SOURCE_VALUES})", name="source_valid"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     phone: Mapped[str] = mapped_column(String(16), nullable=False)

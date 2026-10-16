@@ -6,7 +6,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    ForeignKey,
     ForeignKeyConstraint,
     Index,
     Numeric,
@@ -18,7 +17,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 from app.payments.constants import PaymentProvider, PaymentPurpose, PaymentStatus
 
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in PaymentStatus)
@@ -26,7 +25,7 @@ _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in PaymentProvid
 _PURPOSE_VALUES = ", ".join(f"'{purpose.value}'" for purpose in PaymentPurpose)
 
 
-class Payment(Base, TimestampMixin):
+class Payment(IdMixin, TenantMixin, TimestampMixin, Base):
     """What is owed on one order, and whether it has been collected."""
 
     __tablename__ = "payments"
@@ -53,16 +52,6 @@ class Payment(Base, TimestampMixin):
         ),
         Index("ix_payments_tenant_id_order_id", "tenant_id", "order_id"),
         Index("ix_payments_tenant_id_status", "tenant_id", "status"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

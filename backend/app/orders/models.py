@@ -34,7 +34,7 @@ from app.catalogue.constants import (
     PRICE_PRECISION,
     PRICE_SCALE,
 )
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, IdMixin, TenantMixin, TimestampMixin
 from app.orders.constants import (
     MAX_COURIER_NAME_LENGTH,
     MAX_IDEMPOTENCY_KEY_LENGTH,
@@ -64,7 +64,7 @@ ORDER_NUMBER_SEQUENCE = Sequence(
 )
 
 
-class Order(Base, TimestampMixin):
+class Order(IdMixin, TenantMixin, TimestampMixin, Base):
     """One placed order, with prices and the delivery address copied in at checkout."""
 
     __tablename__ = "orders"
@@ -123,16 +123,6 @@ class Order(Base, TimestampMixin):
         Index("ix_orders_tenant_id_customer_id", "tenant_id", "customer_id"),
         Index("ix_orders_tenant_id_status", "tenant_id", "status"),
         Index("ix_orders_tenant_id_payment_status", "tenant_id", "payment_status"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -321,7 +311,7 @@ class Order(Base, TimestampMixin):
     )
 
 
-class OrderItem(Base, TimestampMixin):
+class OrderItem(IdMixin, TenantMixin, TimestampMixin, Base):
     """One order line, with the product details frozen at purchase time."""
 
     __tablename__ = "order_items"
@@ -352,16 +342,6 @@ class OrderItem(Base, TimestampMixin):
             "subtotal = unit_price * quantity", name="subtotal_is_price_times_quantity"
         ),
         Index("ix_order_items_tenant_id_order_id", "tenant_id", "order_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -404,7 +384,7 @@ class OrderItem(Base, TimestampMixin):
     )
 
 
-class OrderTrackingEvent(Base, TimestampMixin):
+class OrderTrackingEvent(IdMixin, TenantMixin, TimestampMixin, Base):
     """One step in an order's journey: a status change or a courier scan."""
 
     __tablename__ = "order_tracking_events"
@@ -426,16 +406,6 @@ class OrderTrackingEvent(Base, TimestampMixin):
             "order_id",
             "occurred_at",
         ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
