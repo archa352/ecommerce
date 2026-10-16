@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, useId } from "react";
 import type { ReactElement, ReactNode } from "react";
-import ContextualGuidance from "../admin/ContextualGuidance";
+import ContextualGuidance from "../guidance/ContextualGuidance";
 
 // A labelled form control with an optional hint.
 function Field({ label, hint, guidance, guidanceDismissible = false, children, wide, required = false, error }: { label: string; hint?: string; guidance?: string; guidanceDismissible?: boolean; children: ReactNode; wide?: boolean; required?: boolean; error?: string | null }) {

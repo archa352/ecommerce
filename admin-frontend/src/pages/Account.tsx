@@ -2,8 +2,8 @@ import { Link, useOutletContext } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { P } from "../auth/permissions";
 import PageHeader from "../components/common/PageHeader";
-import type { GuidanceControls } from "../components/admin/guidanceConfig";
-import ContextualGuidance from "../components/admin/ContextualGuidance";
+import type { GuidanceControls } from "../components/guidance/guidanceConfig";
+import ContextualGuidance from "../components/guidance/ContextualGuidance";
 
 export function Profile() {
   const { user } = useAuth();

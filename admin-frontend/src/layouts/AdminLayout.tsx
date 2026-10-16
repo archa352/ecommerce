@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import Header from "../components/admin/Header";
-import { GuidanceContext } from "../components/admin/GuidanceContext";
-import { guidanceForPath, guidanceStorageKey, readGuidance, writeGuidance } from "../components/admin/guidanceConfig";
-import type { GuidanceControls, GuidancePreference } from "../components/admin/guidanceConfig";
+import Header from "./Header";
+import { GuidanceContext } from "../components/guidance/GuidanceContext";
+import { guidanceForPath, guidanceStorageKey, readGuidance, writeGuidance } from "../components/guidance/guidanceConfig";
+import type { GuidanceControls, GuidancePreference } from "../components/guidance/guidanceConfig";
 import { useAuth } from "../auth/AuthContext";
 import AdminRefreshProvider from "./AdminRefreshProvider";
-import Sidebar from "../components/admin/Sidebar";
+import Sidebar from "./Sidebar";
 
 // The signed-in shell: sidebar navigation, header and the current screen.
 function AdminLayout() {

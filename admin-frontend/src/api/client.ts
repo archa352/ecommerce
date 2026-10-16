@@ -44,7 +44,7 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   unauthorizedHandler = handler;
 }
 
-export function buildUrl(path: string, query?: object): string {
+export function apiUrl(path: string, query?: object): string {
   const url = new URL(`${API_BASE_URL}${path}`);
   if (query) {
     for (const [key, value] of Object.entries(query as Record<string, QueryValue>)) {
@@ -89,7 +89,7 @@ async function refreshSession(accessToken: string | null): Promise<boolean> {
     if (getToken() !== accessToken || getRefreshToken() !== refreshToken) return !!getToken();
     let response: Response;
     try {
-      response = await fetch(buildUrl("/auth/refresh"), {
+      response = await fetch(apiUrl("/auth/refresh"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -134,7 +134,7 @@ async function send(path: string, options: RequestOptions, retry: boolean): Prom
 
   let response: Response;
   try {
-    response = await fetch(buildUrl(path, query), {
+    response = await fetch(apiUrl(path, query), {
       method, headers, body: requestBody,
       // Workspace refresh must read current authenticated data, not a cached response.
       cache: auth && method === "GET" ? "no-store" : undefined,
