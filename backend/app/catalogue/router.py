@@ -18,12 +18,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.trail import AUDITED
 from app.auth.dependencies import require_permission
 from app.auth.permissions import Permission
+from app.catalogue.constants import (
+    DEFAULT_RELATED_LIMIT,
+    MAX_RELATED_LIMIT,
+    CatalogueStatus,
+    ProductAttribute,
+)
 from app.catalogue.importer import ProductImporter, template_csv, template_xlsx
 from app.catalogue.schemas import (
     AdminCategoryQuery,
     AdminProductQuery,
+    AttributeValueCreate,
+    AttributeValueRead,
+    AttributeValueUpdate,
     CategoryCreate,
+    CategoryQuery,
     CategoryRead,
+    CategoryStorefrontRead,
     CategoryUpdate,
     FilterOptionsQuery,
     FilterOptionsRead,
@@ -39,16 +50,29 @@ from app.catalogue.schemas import (
     ProductImageUpdate,
     ProductImportResult,
     ProductRead,
+    ProductStorefrontRead,
+    ProductSummaryStorefrontRead,
     ProductUpdate,
     RelatedProductRead,
+    RelatedProductsStorefrontRead,
     RelatedProductsUpdate,
+    StorefrontProductQuery,
     UploadedImageRead,
     VariantCreate,
     VariantRead,
+    VariantStorefrontRead,
     VariantUpdate,
 )
-from app.catalogue.serializers import admin_variant, filter_options_read, inventory_status
+from app.catalogue.serializers import (
+    admin_variant,
+    filter_options_read,
+    inventory_status,
+    storefront_product,
+    storefront_summary,
+    storefront_variant,
+)
 from app.catalogue.service import (
+    AttributeService,
     CategoryService,
     InventoryService,
     ProductImageService,
@@ -57,10 +81,12 @@ from app.catalogue.service import (
 )
 from app.catalogue.uploads import store_image
 from app.core.database import get_db
-from app.core.exceptions import ValidationError
+from app.core.error_codes import ProductErrorCode
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
 from app.reports.exports import XLSX_MEDIA_TYPE
+from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 
 router = APIRouter(prefix="/catalogue", tags=["Admin-Catalogue_management"], dependencies=AUDITED)
@@ -664,3 +690,242 @@ async def delete_product_image(
 ) -> Response:
     await ProductImageService(session, user.tenant_id).delete(image_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/attributes",
+    response_model=ApiResponse[list[AttributeValueRead]],
+    summary="Managed values for fabric, occasion, sleeve and neckline",
+)
+async def list_attribute_values(
+    attribute: ProductAttribute | None = Query(default=None),
+    active_only: bool = Query(default=False),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.CATALOGUE_VIEW, legacy_staff=True)),
+) -> ApiResponse[list[AttributeValueRead]]:
+    service = AttributeService(session, user.tenant_id)
+    rows = await service.list(attribute, active_only)
+    return ok([await service.read(row) for row in rows], message="Attribute values")
+
+
+@router.post(
+    "/attributes",
+    response_model=ApiResponse[AttributeValueRead],
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a value to a list",
+)
+async def create_attribute_value(
+    data: AttributeValueCreate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.CATALOGUE_MANAGE)),
+) -> ApiResponse[AttributeValueRead]:
+    service = AttributeService(session, user.tenant_id)
+    return ok(await service.read(await service.create(data)), message="Value added")
+
+
+@router.patch(
+    "/attributes/{value_id}",
+    response_model=ApiResponse[AttributeValueRead],
+    summary="Rename (while unused), reorder or switch a value on/off",
+)
+async def update_attribute_value(
+    value_id: UUID,
+    data: AttributeValueUpdate,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.CATALOGUE_MANAGE)),
+) -> ApiResponse[AttributeValueRead]:
+    service = AttributeService(session, user.tenant_id)
+    item = await service.update(value_id, data.model_dump(exclude_unset=True))
+    return ok(await service.read(item), message="Value updated")
+
+
+storefront_router = APIRouter(prefix="/storefront", tags=["Storefront-Catalogue"])
+
+
+@storefront_router.get(
+    "/categories",
+    response_model=ApiResponse[list[CategoryStorefrontRead]],
+    summary="List public categories",
+)
+async def storefront_list_categories(
+    tenant: CurrentTenant,
+    params: Annotated[CategoryQuery, Query()],
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[list[CategoryStorefrontRead]]:
+    categories, total = await CategoryService(session, tenant.id).list(
+        params,
+        active_only=True,
+        parent_id=params.parent_id,
+        top_level=params.top_level,
+    )
+    return paginated(
+        [CategoryStorefrontRead.model_validate(c) for c in categories],
+        total_items=total,
+        params=params,
+        message="Categories retrieved",
+    )
+
+
+@storefront_router.get(
+    "/categories/{category_id}",
+    response_model=ApiResponse[CategoryStorefrontRead],
+    summary="Get public category",
+)
+async def storefront_get_category(
+    category_id: UUID,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[CategoryStorefrontRead]:
+    category = await CategoryService(session, tenant.id).get_public(category_id)
+    return ok(
+        CategoryStorefrontRead.model_validate(category), message="Category retrieved"
+    )
+
+
+@storefront_router.get(
+    "/products",
+    response_model=ApiResponse[list[ProductSummaryStorefrontRead]],
+    summary="List, search, filter and sort public products",
+)
+async def storefront_list_products(
+    tenant: CurrentTenant,
+    params: Annotated[StorefrontProductQuery, Query()],
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[list[ProductSummaryStorefrontRead]]:
+    products, total = await ProductService(session, tenant.id).list(
+        params,
+        category_id=params.category_id,
+        search=params.search,
+        brand=params.brand,
+        fabric=params.fabric,
+        occasion=params.occasion,
+        sleeve=params.sleeve,
+        neckline=params.neckline,
+        featured=params.featured,
+        min_price=params.min_price,
+        max_price=params.max_price,
+        sort=params.sort,
+        active_only=True,
+    )
+    return paginated(
+        [storefront_summary(product) for product in products],
+        total_items=total,
+        params=params,
+        message="Products retrieved",
+    )
+
+
+@storefront_router.get(
+    "/filter-options",
+    response_model=ApiResponse[FilterOptionsRead],
+    summary="Fabric, occasion, sleeve and neckline values for filter dropdowns",
+)
+async def filter_options(
+    tenant: CurrentTenant,
+    params: Annotated[FilterOptionsQuery, Query()],
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[FilterOptionsRead]:
+    options = await ProductService(session, tenant.id).filter_options(
+        active_only=True, category_id=params.category_id
+    )
+    return ok(filter_options_read(options), message="Filter options retrieved")
+
+
+@storefront_router.get(
+    "/products/{product_id}/related",
+    response_model=ApiResponse[RelatedProductsStorefrontRead],
+    summary="'You may also like' and 'customers also bought' for a product",
+)
+async def related_products(
+    product_id: UUID,
+    tenant: CurrentTenant,
+    limit: int = Query(default=DEFAULT_RELATED_LIMIT, ge=1, le=MAX_RELATED_LIMIT),
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[RelatedProductsStorefrontRead]:
+    liked, bought = await ProductService(session, tenant.id).related_for_storefront(
+        product_id, limit=limit
+    )
+    return ok(
+        RelatedProductsStorefrontRead(
+            you_may_also_like=[storefront_summary(p) for p in liked],
+            customers_also_bought=[storefront_summary(p) for p in bought],
+        ),
+        message="Related products retrieved",
+    )
+
+
+@storefront_router.get(
+    "/products/by-slug/{slug}",
+    response_model=ApiResponse[ProductStorefrontRead],
+    summary="Get a public product by its URL slug",
+)
+async def get_product_by_slug(
+    slug: str,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[ProductStorefrontRead]:
+    products = ProductService(session, tenant.id)
+    product = await products.get_public_by_slug(slug)
+    category = await products.categories.get(product.category_id)
+    return ok(storefront_product(product, category), message="Product retrieved")
+
+
+@storefront_router.get(
+    "/products/{product_id}",
+    response_model=ApiResponse[ProductStorefrontRead],
+    summary="Get public product with images, options and variants",
+)
+async def storefront_get_product(
+    product_id: UUID,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[ProductStorefrontRead]:
+    products = ProductService(session, tenant.id)
+    product = await products.get_public(product_id)
+    category = await products.categories.get(product.category_id)
+
+    return ok(storefront_product(product, category), message="Product retrieved")
+
+
+@storefront_router.get(
+    "/products/{product_id}/variants",
+    response_model=ApiResponse[list[VariantStorefrontRead]],
+    summary="List public product variants",
+)
+async def storefront_list_variants(
+    product_id: UUID,
+    tenant: CurrentTenant,
+    params: Annotated[PageParams, Query()],
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[list[VariantStorefrontRead]]:
+    await ProductService(session, tenant.id).get_public(product_id)
+
+    variants, total = await VariantService(session, tenant.id).list_for_product(
+        product_id, params, active_only=True
+    )
+    return paginated(
+        [storefront_variant(variant) for variant in variants],
+        total_items=total,
+        params=params,
+        message="Variants retrieved",
+    )
+
+
+@storefront_router.get(
+    "/variants/{variant_id}",
+    response_model=ApiResponse[VariantStorefrontRead],
+    summary="Get public variant",
+)
+async def storefront_get_variant(
+    variant_id: UUID,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[VariantStorefrontRead]:
+    variant = await VariantService(session, tenant.id).get(variant_id)
+
+    if variant.status != CatalogueStatus.ACTIVE.value:
+        raise NotFoundError("Variant not found", error_code=ProductErrorCode.VARIANT_NOT_FOUND)
+
+    await ProductService(session, tenant.id).get_public(variant.product_id)
+
+    return ok(storefront_variant(variant), message="Variant retrieved")

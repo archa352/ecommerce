@@ -1,90 +1,67 @@
+"""Every route of API v1, in the order FastAPI matches them."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.addresses.router import router as addresses_router
-from app.audit.router import router as audit_router
-from app.auth.router import admin_router as auth_admin_router
-from app.auth.router import router as auth_router
-from app.auth.router import staff_router as auth_staff_router
-from app.cart.router import router as cart_router
-from app.catalogue.attributes import router as catalogue_attributes_router
-from app.catalogue.router import router as catalogue_router
-from app.catalogue.storefront import router as storefront_router
-from app.cms.router import router as cms_router
-from app.cms.storefront import router as cms_storefront_router
-from app.cod.router import router as cod_router
-from app.coupons.router import admin_router as coupons_admin_router
-from app.coupons.router import router as coupons_router
-from app.customers.router import router as customers_router
-from app.dashboard.router import router as dashboard_router
-from app.integrations.router import router as integrations_router
-from app.orders.router import admin_router as orders_admin_router
-from app.orders.router import checkout_router
-from app.orders.router import router as orders_router
-from app.orders.router import tracking_router as order_tracking_router
-from app.payments.router import admin_router as payments_admin_router
-from app.payments.router import router as payments_router
-from app.pricing.router import (
-    delivery_router,
-    gst_router,
-    pincode_router,
-    shipping_router,
-    tax_router,
-)
-from app.ratings.router import admin_router as ratings_admin_router
-from app.ratings.router import router as ratings_router
-from app.reports.router import router as reports_router
-from app.returns.router import router as return_reasons_router
-from app.search_filter.router import router as search_filter_router
-from app.users.router import router as users_router
-from app.users.staff import router as staff_router
-from app.wishlist.router import router as wishlist_router
+from app.addresses import router as addresses
+from app.audit import router as audit
+from app.auth import router as auth
+from app.cart import router as cart
+from app.catalogue import router as catalogue
+from app.cms import router as cms
+from app.cod import router as cod
+from app.coupons import router as coupons
+from app.customers import router as customers
+from app.dashboard import router as dashboard
+from app.integrations import router as integrations
+from app.orders import router as orders
+from app.payments import router as payments
+from app.pricing import router as pricing
+from app.ratings import router as ratings
+from app.reports import router as reports
+from app.returns import router as returns
+from app.search_filter import router as search_filter
+from app.users import router as users
+from app.wishlist import router as wishlist
 
 api_router = APIRouter()
 
-api_router.include_router(auth_router)
-api_router.include_router(auth_admin_router)
-api_router.include_router(auth_staff_router)
-api_router.include_router(users_router)
-api_router.include_router(staff_router)
-api_router.include_router(audit_router)
-api_router.include_router(customers_router)
-
-api_router.include_router(catalogue_router)
-api_router.include_router(catalogue_attributes_router)
-api_router.include_router(storefront_router)
-
-api_router.include_router(cart_router)
-
-api_router.include_router(addresses_router)
-api_router.include_router(checkout_router)
-api_router.include_router(orders_router)
-api_router.include_router(orders_admin_router)
-api_router.include_router(order_tracking_router)
-
-api_router.include_router(wishlist_router)
-
-api_router.include_router(payments_router)
-api_router.include_router(payments_admin_router)
-
-api_router.include_router(shipping_router)
-api_router.include_router(tax_router)
-api_router.include_router(pincode_router)
-api_router.include_router(delivery_router)
-api_router.include_router(gst_router)
-api_router.include_router(cod_router)
-
-api_router.include_router(coupons_router)
-api_router.include_router(coupons_admin_router)
-api_router.include_router(ratings_router)
-api_router.include_router(ratings_admin_router)
-
-api_router.include_router(search_filter_router)
-
-api_router.include_router(dashboard_router)
-api_router.include_router(reports_router)
-api_router.include_router(return_reasons_router)
-api_router.include_router(integrations_router)
-api_router.include_router(cms_router)
-api_router.include_router(cms_storefront_router)
+for router in (
+    auth.router,
+    auth.admin_router,
+    auth.staff_router,
+    users.router,
+    users.admin_router,
+    audit.router,
+    customers.router,
+    catalogue.router,
+    catalogue.storefront_router,
+    cart.router,
+    addresses.router,
+    orders.checkout_router,
+    orders.router,
+    orders.admin_router,
+    orders.tracking_router,
+    wishlist.router,
+    payments.router,
+    payments.admin_router,
+    pricing.shipping_router,
+    pricing.tax_router,
+    pricing.pincode_router,
+    pricing.delivery_router,
+    pricing.gst_router,
+    cod.router,
+    coupons.router,
+    coupons.admin_router,
+    ratings.router,
+    ratings.admin_router,
+    search_filter.router,
+    dashboard.router,
+    reports.router,
+    returns.router,
+    integrations.router,
+    cms.router,
+    cms.storefront_router,
+):
+    api_router.include_router(router)

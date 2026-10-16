@@ -37,6 +37,7 @@ from app.catalogue.constants import (
     PRICE_SCALE,
     CatalogueStatus,
     InventoryReason,
+    ProductAttribute,
     ProductGender,
     ProductSort,
     SizeChartUnit,
@@ -768,3 +769,31 @@ class ProductImportResult(BaseModel):
     variants: int
     dry_run: bool
     errors: list[ImportErrorRow]
+
+
+# Managed value lists for fabric, occasion, sleeve and neckline.
+
+
+class AttributeValueCreate(StrictModel):
+    attribute: ProductAttribute
+    value: str = Field(min_length=1, max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH)
+    is_active: bool = True
+
+    _clean = field_validator("value")(not_blank)
+
+
+class AttributeValueUpdate(PartialUpdate):
+    value: str | None = Field(default=None, min_length=1, max_length=MAX_PRODUCT_ATTRIBUTE_LENGTH)
+    is_active: bool | None = None
+    position: int | None = Field(default=None, ge=0)
+
+    _clean = field_validator("value")(not_blank)
+
+
+class AttributeValueRead(BaseModel):
+    id: UUID
+    attribute: ProductAttribute
+    value: str
+    is_active: bool
+    position: int
+    product_count: int = Field(description="Products using this value (any status)")

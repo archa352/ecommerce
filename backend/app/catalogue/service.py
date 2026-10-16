@@ -11,6 +11,7 @@ from app.catalogue.constants import (
     MIN_PRODUCT_IMAGES,
     CatalogueStatus,
     InventoryReason,
+    ProductAttribute,
     ProductSort,
 )
 from app.catalogue.models import (
@@ -18,6 +19,7 @@ from app.catalogue.models import (
     InventoryItem,
     InventoryMovement,
     Product,
+    ProductAttributeValue,
     ProductImage,
     ProductOption,
     ProductVariant,
@@ -34,6 +36,8 @@ from app.catalogue.repository import (
     VariantRepository,
 )
 from app.catalogue.schemas import (
+    AttributeValueCreate,
+    AttributeValueRead,
     CategoryCreate,
     CategoryUpdate,
     ImageReorderPayload,
@@ -60,6 +64,8 @@ PARENT_NOT_FOUND = "Parent category not found"
 SELLABLE_VARIANT_NOT_FOUND = "Product variant not found"
 VARIANT_UNAVAILABLE = "Product variant is not available"
 PRODUCT_UNAVAILABLE = "Product is not available"
+ATTRIBUTE_VALUE_NOT_FOUND = "Attribute value not found"
+DUPLICATE_ATTRIBUTE_VALUE = "This value is already in the list"
 
 
 def _check_sale(price, sale_price, starts_at, ends_at) -> None:
@@ -1021,6 +1027,113 @@ class InventoryService:
             stmt.offset(params.offset).limit(params.limit)
         )
         return list(rows.all()), int(total or 0)
+
+
+class AttributeService:
+    """Managed value lists for fabric, occasion, sleeve and neckline.
+
+    The product editor offers the active values; products keep storing plain text,
+    so older free-text values stay valid. A value can only be renamed while no
+    product uses it (renaming would silently change those products' filters).
+    """
+
+    def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
+        self.session = session
+        self.tenant_id = tenant_id
+
+    def _column(self, attribute: str):
+        return getattr(Product, ProductAttribute(attribute).value)
+
+    async def _usage(self, attribute: str, value: str) -> int:
+        column = self._column(attribute)
+        return int(
+            await self.session.scalar(
+                select(func.count(Product.id)).where(
+                    Product.tenant_id == self.tenant_id, func.lower(column) == value.lower()
+                )
+            )
+            or 0
+        )
+
+    async def read(self, item: ProductAttributeValue) -> AttributeValueRead:
+        return AttributeValueRead(
+            id=item.id,
+            attribute=item.attribute,
+            value=item.value,
+            is_active=item.is_active,
+            position=item.position,
+            product_count=await self._usage(item.attribute, item.value),
+        )
+
+    async def list(
+        self, attribute: ProductAttribute | None, active_only: bool
+    ) -> list[ProductAttributeValue]:
+        stmt = select(ProductAttributeValue).where(
+            ProductAttributeValue.tenant_id == self.tenant_id
+        )
+        if attribute is not None:
+            stmt = stmt.where(ProductAttributeValue.attribute == attribute.value)
+        if active_only:
+            stmt = stmt.where(ProductAttributeValue.is_active.is_(True))
+        rows = await self.session.scalars(
+            stmt.order_by(
+                ProductAttributeValue.attribute,
+                ProductAttributeValue.position,
+                func.lower(ProductAttributeValue.value),
+            )
+        )
+        return list(rows.all())
+
+    async def get(self, value_id: UUID) -> ProductAttributeValue:
+        item = await self.session.scalar(
+            select(ProductAttributeValue).where(
+                ProductAttributeValue.tenant_id == self.tenant_id,
+                ProductAttributeValue.id == value_id,
+            )
+        )
+        if item is None:
+            raise NotFoundError(ATTRIBUTE_VALUE_NOT_FOUND)
+        return item
+
+    async def create(self, data: AttributeValueCreate) -> ProductAttributeValue:
+        top = await self.session.scalar(
+            select(func.max(ProductAttributeValue.position)).where(
+                ProductAttributeValue.tenant_id == self.tenant_id,
+                ProductAttributeValue.attribute == data.attribute.value,
+            )
+        )
+        item = ProductAttributeValue(
+            tenant_id=self.tenant_id,
+            attribute=data.attribute.value,
+            value=data.value,
+            is_active=data.is_active,
+            position=0 if top is None else top + 1,
+        )
+        self.session.add(item)
+        await self._commit()
+        await self.session.refresh(item)
+        return item
+
+    async def update(self, value_id: UUID, changes: dict) -> ProductAttributeValue:
+        item = await self.get(value_id)
+        new_value = changes.get("value")
+        if new_value is not None and new_value != item.value:
+            in_use = await self._usage(item.attribute, item.value)
+            if in_use and new_value.lower() != item.value.lower():
+                raise ConflictError(
+                    f"{in_use} product(s) use '{item.value}'. Add a new value and "
+                    "switch this one off instead of renaming it.",
+                    error_code=ProductErrorCode.VALUE_IN_USE,
+                )
+        for field, value in changes.items():
+            setattr(item, field, value)
+        await self._commit()
+        await self.session.refresh(item)
+        return item
+
+    async def _commit(self) -> None:
+        async with conflict_on_integrity_error(self.session, DUPLICATE_ATTRIBUTE_VALUE):
+            await self.session.commit()
 
 
 async def get_sellable_variant(
