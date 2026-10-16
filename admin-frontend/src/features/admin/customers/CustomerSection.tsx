@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { listCustomers } from "../../../api/customers";
 import Badge from "../../../components/common/Badge";
 import GuidedControl from "../../../components/admin/GuidedControl";
@@ -8,11 +8,12 @@ import DataTable from "../../../components/common/DataTable";
 import PageHeader from "../../../components/common/PageHeader";
 import Pagination from "../../../components/common/Pagination";
 import { useApi } from "../../../hooks/useApi";
+import { useUrlFilters } from "../../../hooks/useUrlFilters";
 import { formatDate, formatMoney } from "../../../utils/formatters";
 
 function CustomerSection() {
   const navigate = useNavigate();
-  const [params, setParams] = useSearchParams();
+  const { params, setFilter, setPage } = useUrlFilters();
   const [search, setSearch] = useState(params.get("search") ?? "");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const list = useApi(
@@ -27,13 +28,6 @@ function CustomerSection() {
     [params.toString()]
   );
 
-  const setFilter = (key: string, value: string) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    next.delete("page");
-    setParams(next);
-  };
 
   return (
     <div className="record-page">
@@ -80,7 +74,7 @@ function CustomerSection() {
             { key: "status", header: "Status", render: (c) => <>{<Badge value={c.status} />} {c.order_blocked && <Badge value="BLOCKED" />}</> },
           ]}
         />
-        <Pagination meta={list.meta} onPageChange={(p) => setParams((prev) => { const n = new URLSearchParams(prev); n.set("page", String(p)); return n; })} />
+        <Pagination meta={list.meta} onPageChange={setPage} />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { fetchAllPages } from "../../../api/client";
 import { archiveCategory, createCategory, listCategories, updateCategory } from "../../../api/categories";
 import { useAuth } from "../../../auth/AuthContext";
 import { P } from "../../../auth/permissions";
@@ -23,20 +24,6 @@ import "./categories.css";
 const FETCH_SIZE = 100;
 const PAGE_SIZE = 20;
 type CategoryLoad = { rows: Category[] | null; error: string | null };
-
-async function loadCategories(): Promise<Category[]> {
-  const query = { include_archived: true, page_size: FETCH_SIZE };
-  const first = await listCategories({ ...query, page: 1 });
-  if (!first.meta) throw new Error("Category pagination is unavailable. Refresh to try again.");
-  const pages = [first.data];
-  for (let page = 2; page <= first.meta.total_pages; page += 4) {
-    const batch = await Promise.all(Array.from({ length: Math.min(4, first.meta.total_pages - page + 1) }, (_, offset) => listCategories({ ...query, page: page + offset })));
-    pages.push(...batch.map((result) => result.data));
-  }
-  const rows = pages.flat();
-  if (rows.length !== first.meta.total_items || new Set(rows.map((row) => row.id)).size !== rows.length) throw new Error("Categories changed while loading. Refresh to try again.");
-  return rows;
-}
 
 function ordered(categories: Category[]): (Category & { depth: number })[] {
   const byParent = new Map<string, Category[]>();
@@ -74,7 +61,7 @@ function CategorySection() {
 
   useEffect(() => {
     let active = true;
-    loadCategories().then((rows) => { if (active) setLoaded({ rows, error: null }); })
+    fetchAllPages((page) => listCategories({ include_archived: true, page, page_size: FETCH_SIZE }), "categories").then(({ data: rows }) => { if (active) setLoaded({ rows, error: null }); })
       .catch((error: Error) => { if (active) setLoaded({ rows: null, error: error.message }); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

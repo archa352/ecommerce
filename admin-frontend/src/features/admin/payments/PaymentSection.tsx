@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { fetchAllPages } from "../../../api/client";
 import { listPayments, markAdvancePaid } from "../../../api/payments";
 import { useAuth } from "../../../auth/AuthContext";
 import { P } from "../../../auth/permissions";
@@ -12,7 +13,7 @@ import PageHeader from "../../../components/common/PageHeader";
 import Pagination from "../../../components/common/Pagination";
 import StatusMessage from "../../../components/common/StatusMessage";
 import { useAction } from "../../../hooks/useAction";
-import { useAdminRefresh } from "../../../hooks/AdminRefreshContext";
+import { useApi } from "../../../hooks/useApi";
 import type { PageMeta } from "../../../types/api";
 import type { Payment } from "../../../types/order";
 import { formatDate, formatMoney, label } from "../../../utils/formatters";
@@ -23,27 +24,6 @@ const FETCH_SIZE = 100;
 const MAIN_STATUSES = ["PENDING", "PAID", "FAILED", "REFUND_PENDING", "REFUNDED"];
 const OTHER_STATUSES = ["PROCESSING", "CANCELLED", "PARTIALLY_REFUNDED", "EXPIRED"];
 const providerLabel = (provider: string) => ({ COD: "COD", PREPAID: "Manual prepaid", RAZORPAY: "Razorpay" })[provider as "COD" | "PREPAID" | "RAZORPAY"] ?? label(provider);
-type PaymentLoad = { key: string; rows: Payment[] | null; error: string | null };
-
-// The existing endpoint only filters by status/order ID. Reading its pages
-// gives client filters and totals the complete set of actual payment records.
-async function loadAllPayments(): Promise<Payment[]> {
-  const first = await listPayments({ page: 1, page_size: FETCH_SIZE });
-  if (!first.meta) throw new Error("Payment pagination is unavailable.");
-  const pages: Payment[][] = [first.data];
-  for (let page = 2; page <= first.meta.total_pages; page += 4) {
-    const batch = await Promise.all(Array.from(
-      { length: Math.min(4, first.meta.total_pages - page + 1) },
-      (_, offset) => listPayments({ page: page + offset, page_size: FETCH_SIZE }),
-    ));
-    pages.push(...batch.map((result) => result.data));
-  }
-  const rows = pages.flat();
-  if (rows.length !== first.meta.total_items || new Set(rows.map((row) => row.id)).size !== rows.length) {
-    throw new Error("Payment records changed while loading. Refresh to try again.");
-  }
-  return rows;
-}
 
 function utcDate(value: string): string {
   const date = new Date(value);
@@ -53,10 +33,6 @@ function utcDate(value: string): string {
 
 function PaymentSection() {
   const { can } = useAuth();
-  const refresh = useAdminRefresh();
-  const [reload, setReload] = useState(0);
-  const key = `${refresh?.version ?? 0}:${reload}`;
-  const [loaded, setLoaded] = useState<PaymentLoad>({ key: "", rows: null, error: null });
   const [status, setStatus] = useState("");
   const [method, setMethod] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -67,21 +43,10 @@ function PaymentSection() {
   const [selected, setSelected] = useState<Payment | null>(null);
   const action = useAction();
 
-  useEffect(() => {
-    let active = true;
-    refresh?.begin();
-    void loadAllPayments().then((rows) => {
-      if (active) setLoaded({ key, rows, error: null });
-    }).catch((error: Error) => {
-      if (active) setLoaded({ key, rows: null, error: error.message });
-    }).finally(() => refresh?.end());
-    return () => { active = false; };
-    // The key includes the workspace refresh version; begin/end are stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  const payments = useApi(() => fetchAllPages((page) => listPayments({ page, page_size: FETCH_SIZE }), "payment records"), []);
 
-  const loading = loaded.key !== key;
-  const records = loading ? null : loaded.rows;
+  const loading = payments.loading;
+  const records = payments.data;
   const dateError = startDate && endDate && endDate < startDate ? "End date must be on or after start date." : null;
   const availableStatuses = [...MAIN_STATUSES, ...OTHER_STATUSES.filter((candidate) => records?.some((row) => row.status === candidate) || status === candidate)];
   const dateRows = useMemo(() => records?.filter((row) => {
@@ -139,7 +104,7 @@ function PaymentSection() {
         <DataTable
           rows={rows}
           loading={loading}
-          error={loading ? null : loaded.error}
+          error={loading ? null : payments.error}
           empty={filtered.length === 0 && (status || method || purpose || startDate || endDate || search) ? "No payments match these filters." : "No payment records yet."}
           rowKey={(payment) => payment.id}
           columns={[
@@ -151,7 +116,7 @@ function PaymentSection() {
             { key: "status", header: "Status", render: (payment) => <Badge value={payment.status} /> },
             { key: "amount", header: "Amount", align: "right", render: (payment) => formatMoney(payment.amount, payment.currency) },
             { key: "actions", header: "", render: (payment) => payment.purpose === "ADVANCE" && payment.status === "PENDING" && can(P.paymentsManage) ? (
-              <ConfirmButton className="" message="Confirm the COD advance was received?" disabled={action.busy} onConfirm={() => action.run(async () => { await markAdvancePaid(payment.id); setReload((value) => value + 1); }, "Advance marked as paid", "Could not update payment")}>Mark advance received</ConfirmButton>
+              <ConfirmButton className="" message="Confirm the COD advance was received?" disabled={action.busy} onConfirm={() => action.run(async () => { await markAdvancePaid(payment.id); payments.reload(); }, "Advance marked as paid", "Could not update payment")}>Mark advance received</ConfirmButton>
             ) : null },
           ]}
         />

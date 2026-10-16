@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { fetchAllPages } from "../../../api/client";
 import { listCategories } from "../../../api/categories";
 import { listProducts } from "../../../api/products";
 import { getReport } from "../../../api/reports";
@@ -7,13 +8,13 @@ import { useAuth } from "../../../auth/AuthContext";
 import { P } from "../../../auth/permissions";
 import Badge from "../../../components/common/Badge";
 import DataTable from "../../../components/common/DataTable";
+import type { Column } from "../../../components/common/DataTable";
 import PageHeader from "../../../components/common/PageHeader";
 import GuidedControl from "../../../components/admin/GuidedControl";
 import Pagination from "../../../components/common/Pagination";
 import Tabs from "../../../components/common/Tabs";
 import { useApi } from "../../../hooks/useApi";
-import type { ApiResponse, PageMeta } from "../../../types/api";
-import type { Category, Product } from "../../../types/catalogue";
+import type { PageMeta } from "../../../types/api";
 import { saveCsv } from "../../../utils/csv";
 import { formatDate, formatMoney } from "../../../utils/formatters";
 import ProductImage from "../products/ProductImage";
@@ -52,17 +53,16 @@ const VIEW_STATUSES: Record<Exclude<View, "unsold">, InventoryRow["stock_status"
 };
 const PAGE_SIZE = 50;
 
-async function loadAll<T extends { id: string }>(fetchPage: (page: number) => Promise<ApiResponse<T[]>>): Promise<ApiResponse<T[]>> {
-  const first = await fetchPage(1);
-  if (!first.meta) throw new Error("Catalogue pagination is unavailable.");
-  const pages = [first.data];
-  for (let page = 2; page <= first.meta.total_pages; page += 4) {
-    const batch = await Promise.all(Array.from({ length: Math.min(4, first.meta!.total_pages - page + 1) }, (_, offset) => fetchPage(page + offset)));
-    pages.push(...batch.map((result) => result.data));
-  }
-  const data = pages.flat();
-  if (data.length !== first.meta.total_items || new Set(data.map((item) => item.id)).size !== data.length) throw new Error("Catalogue changed while loading. Refresh to try again.");
-  return { ...first, data, meta: null };
+type VariantRow = { product_id: string; product_name: string; variant_id: string };
+
+/** The columns both stock tables start with: picture, product and variant. */
+function variantColumns<T extends VariantRow>(imageFor: (productId: string) => string | null | undefined): Column<T>[] {
+  return [
+    { key: "image", header: "", render: (row) => <ProductImage className="inventory-thumb" url={imageFor(row.product_id)} alt={`${row.product_name} thumbnail`} /> },
+    { key: "product_id", header: "Product ID", render: (row) => <span className="inventory-record-id" title={row.product_id}>{row.product_id}</span> },
+    { key: "product_name", header: "Product", render: (row) => <Link to={`/products/${row.product_id}`}>{row.product_name}</Link> },
+    { key: "variant_id", header: "Variant ID", render: (row) => <span className="inventory-record-id" title={row.variant_id}>{row.variant_id}</span> },
+  ];
 }
 
 function InventorySection() {
@@ -77,8 +77,8 @@ function InventorySection() {
   const unsold = useApi(() => view === "unsold"
     ? getReport<UnsoldRow[]>("unsold", { days: 30 })
     : Promise.resolve({ success: true, message: "", data: [] as UnsoldRow[], meta: null }), [view]);
-  const products = useApi(() => loadAll<Product>((number) => listProducts({ page: number, page_size: 100 })), []);
-  const categories = useApi(() => loadAll<Category>((number) => listCategories({ page: number, page_size: 100 })), []);
+  const products = useApi(() => fetchAllPages((page) => listProducts({ page, page_size: 100 }), "catalogue"), []);
+  const categories = useApi(() => fetchAllPages((page) => listCategories({ page, page_size: 100 }), "catalogue"), []);
   const productMap = useMemo(() => new Map((products.data ?? []).map((product) => [product.id, product])), [products.data]);
   const categoryList = useMemo(() => categories.data ?? [], [categories.data]);
   const categoryNames = useMemo(() => new Map(categoryList.map((category) => [category.id, category.name])), [categoryList]);
@@ -144,19 +144,13 @@ function InventorySection() {
       {products.error && <p className="muted inventory-data-note">Product images and category filtering are unavailable: {products.error}</p>}
       <div className="panel record-table-panel inventory-table-panel">
         {view === "unsold" ? <DataTable rows={unsold.data ? visible as UnsoldRow[] : null} loading={unsold.loading} error={unsold.error} empty={empty} rowKey={(row) => row.variant_id} columns={[
-          { key: "image", header: "", render: (row) => <ProductImage className="inventory-thumb" url={imageFor(row.product_id)} alt={`${row.product_name} thumbnail`} /> },
-          { key: "product_id", header: "Product ID", render: (row) => <span className="inventory-record-id" title={row.product_id}>{row.product_id}</span> },
-          { key: "product_name", header: "Product", render: (row) => <Link to={`/products/${row.product_id}`}>{row.product_name}</Link> },
-          { key: "variant_id", header: "Variant ID", render: (row) => <span className="inventory-record-id" title={row.variant_id}>{row.variant_id}</span> },
+          ...variantColumns(imageFor),
           { key: "sku", header: "SKU" },
           { key: "sellable_quantity", header: "Sellable", align: "right" },
           { key: "last_sold_at", header: "Last sold", render: (row) => formatDate(row.last_sold_at) },
           { key: "listed_since", header: "Listed since", render: (row) => formatDate(row.listed_since) },
         ]} /> : <DataTable rows={inventory.data ? visible as InventoryRow[] : null} loading={inventory.loading} error={inventory.error} empty={empty} rowKey={(row) => row.variant_id} columns={[
-          { key: "image", header: "", render: (row) => <ProductImage className="inventory-thumb" url={imageFor(row.product_id)} alt={`${row.product_name} thumbnail`} /> },
-          { key: "product_id", header: "Product ID", render: (row) => <span className="inventory-record-id" title={row.product_id}>{row.product_id}</span> },
-          { key: "product_name", header: "Product", render: (row) => <Link to={`/products/${row.product_id}`}>{row.product_name}</Link> },
-          { key: "variant_id", header: "Variant ID", render: (row) => <span className="inventory-record-id" title={row.variant_id}>{row.variant_id}</span> },
+          ...variantColumns(imageFor),
           { key: "variant_name", header: "Variant" },
           { key: "sku", header: "SKU" },
           { key: "available_quantity", header: "Available", align: "right" },

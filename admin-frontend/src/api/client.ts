@@ -178,6 +178,31 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return (json ?? { success: true, message: "Done", data: null, meta: null }) as ApiResponse<T>;
 }
 
+/**
+ * Every row of a paginated listing: page 1, then the rest four requests at a time.
+ * Throws if rows were added or removed while paging, so totals are never built on a partial list.
+ */
+export async function fetchAllPages<T extends { id: string }>(
+  fetchPage: (page: number) => Promise<ApiResponse<T[]>>,
+  what: string
+): Promise<ApiResponse<T[]>> {
+  const first = await fetchPage(1);
+  const meta = first.meta;
+  if (!meta) throw new Error(`The ${what} list cannot be paged. Refresh to try again.`);
+  const pages = [first.data];
+  for (let page = 2; page <= meta.total_pages; page += 4) {
+    const batch = await Promise.all(
+      Array.from({ length: Math.min(4, meta.total_pages - page + 1) }, (_, offset) => fetchPage(page + offset))
+    );
+    pages.push(...batch.map((result) => result.data));
+  }
+  const rows = pages.flat();
+  if (rows.length !== meta.total_items || new Set(rows.map((row) => row.id)).size !== rows.length) {
+    throw new Error(`The ${what} changed while loading. Refresh to try again.`);
+  }
+  return { ...first, data: rows, meta: null };
+}
+
 /** Fetch a file (PDF/CSV/XLSX) with the session and hand it to the browser as a download. */
 export async function download(
   path: string,

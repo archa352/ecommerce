@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { fetchAllPages } from "../../../api/client";
 import { listCategories } from "../../../api/categories";
 import { createCoupon, deleteCoupon, listCoupons, updateCoupon } from "../../../api/coupons";
 import { useAuth } from "../../../auth/AuthContext";
@@ -11,7 +12,6 @@ import PageHeader from "../../../components/common/PageHeader";
 import Pagination from "../../../components/common/Pagination";
 import StatusMessage from "../../../components/common/StatusMessage";
 import { useAction } from "../../../hooks/useAction";
-import { useAdminRefresh } from "../../../hooks/AdminRefreshContext";
 import { useApi } from "../../../hooks/useApi";
 import type { PageMeta } from "../../../types/api";
 import type { Coupon } from "../../../types/coupon";
@@ -22,25 +22,6 @@ import "./coupons.css";
 
 const PAGE_SIZE = 20;
 const FETCH_SIZE = 100;
-type CouponLoad = { key: string; rows: Coupon[] | null; error: string | null };
-
-async function loadAllCoupons(): Promise<Coupon[]> {
-  const first = await listCoupons({ page: 1, page_size: FETCH_SIZE });
-  if (!first.meta) throw new Error("Coupon pagination is unavailable.");
-  const pages: Coupon[][] = [first.data];
-  for (let page = 2; page <= first.meta.total_pages; page += 4) {
-    const batch = await Promise.all(Array.from(
-      { length: Math.min(4, first.meta.total_pages - page + 1) },
-      (_, offset) => listCoupons({ page: page + offset, page_size: FETCH_SIZE }),
-    ));
-    pages.push(...batch.map((result) => result.data));
-  }
-  const rows = pages.flat();
-  if (rows.length !== first.meta.total_items || new Set(rows.map((row) => row.id)).size !== rows.length) {
-    throw new Error("Coupons changed while loading. Refresh to try again.");
-  }
-  return rows;
-}
 
 function describe(c: Coupon): string {
   switch (c.discount_type) {
@@ -65,10 +46,6 @@ function couponStatus(coupon: Coupon, now: Date) {
 function CouponSection() {
   const { can } = useAuth();
   const canManage = can(P.couponsManage);
-  const refresh = useAdminRefresh();
-  const [reload, setReload] = useState(0);
-  const key = `${refresh?.version ?? 0}:${reload}`;
-  const [loaded, setLoaded] = useState<CouponLoad>({ key: "", rows: null, error: null });
   const [activeOnly, setActiveOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -78,21 +55,10 @@ function CouponSection() {
   const [editing, setEditing] = useState<Coupon | "new" | null>(null);
   const action = useAction();
 
-  useEffect(() => {
-    let active = true;
-    refresh?.begin();
-    void loadAllCoupons().then((rows) => {
-      if (active) setLoaded({ key, rows, error: null });
-    }).catch((error: Error) => {
-      if (active) setLoaded({ key, rows: null, error: error.message });
-    }).finally(() => refresh?.end());
-    return () => { active = false; };
-    // The key includes the workspace refresh version; begin/end are stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  const coupons = useApi(() => fetchAllPages((page) => listCoupons({ page, page_size: FETCH_SIZE }), "coupons"), []);
 
-  const loading = loaded.key !== key;
-  const records = loading ? null : loaded.rows;
+  const loading = coupons.loading;
+  const records = coupons.data;
   const filtered = useMemo(() => records?.filter((coupon) =>
     (!activeOnly || coupon.is_active) &&
     (!search || coupon.code.toLowerCase().includes(search.trim().toLowerCase())) &&
@@ -124,7 +90,7 @@ function CouponSection() {
         <DataTable
           rows={rows}
           loading={loading}
-          error={loading ? null : loaded.error}
+          error={loading ? null : coupons.error}
           empty={activeOnly || search || status || offer ? "No coupons match these filters." : "No coupons yet."}
           rowKey={(c) => c.id}
           onRowClick={canManage ? (c) => setEditing(c) : undefined}
@@ -155,7 +121,7 @@ function CouponSection() {
               header: "",
               render: (c) =>
                 canManage && (
-                  <ConfirmButton message={`Delete coupon ${c.code}?`} onConfirm={() => action.run(async () => { await deleteCoupon(c.id); setReload((value) => value + 1); }, "Coupon deleted", "Could not delete coupon")}>
+                  <ConfirmButton message={`Delete coupon ${c.code}?`} onConfirm={() => action.run(async () => { await deleteCoupon(c.id); coupons.reload(); }, "Coupon deleted", "Could not delete coupon")}>
                     Delete
                   </ConfirmButton>
                 ),
@@ -179,7 +145,7 @@ function CouponSection() {
               );
               if (ok) {
                 setEditing(null);
-                setReload((value) => value + 1);
+                coupons.reload();
               }
             }}
           />

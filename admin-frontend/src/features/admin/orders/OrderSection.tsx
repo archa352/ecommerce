@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { downloadShippingLabels, listOrders } from "../../../api/orders";
 import StatusMessage from "../../../components/common/StatusMessage";
 import { useAction } from "../../../hooks/useAction";
@@ -11,6 +11,7 @@ import GuidedControl from "../../../components/admin/GuidedControl";
 import Pagination from "../../../components/common/Pagination";
 import { useAdminRefresh } from "../../../hooks/AdminRefreshContext";
 import { useApi } from "../../../hooks/useApi";
+import { useUrlFilters } from "../../../hooks/useUrlFilters";
 import type { OrderSummary, PaymentStatus } from "../../../types/order";
 import { ORDER_STATUSES, PAYMENT_METHODS, PAYMENT_STATUSES, SHIPPING_LABEL_STATUSES } from "../../../types/order";
 import { formatDate, formatMoney, label } from "../../../utils/formatters";
@@ -73,7 +74,7 @@ function usePaymentOptions(status: string, search: string, method: string, start
 
 // Orders list. Filters live in the URL so a filtered view can be bookmarked/shared.
 function OrderSection() {
-  const [params, setParams] = useSearchParams();
+  const { params, setParams, setFilter: setUrlFilter, setPage } = useUrlFilters();
   const [search, setSearch] = useState(params.get("search") ?? "");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const query = Object.fromEntries(FILTERS.map((k) => [k, params.get(k) ?? undefined]));
@@ -110,13 +111,9 @@ function OrderSection() {
 
   const setFilter = (key: string, value: string) => {
     if ((params.get(key) ?? "") === value) return;
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    next.delete("page");
     setSelected({});
     action.setStatus(null);
-    setParams(next);
+    setUrlFilter(key, value);
   };
   const submitSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -189,7 +186,7 @@ function OrderSection() {
         queryKey={params.toString()}
         selected={selected}
         setSelected={setSelected}
-        onPageChange={(nextPage) => setParams((prev) => { const next = new URLSearchParams(prev); next.set("page", String(nextPage)); return next; })}
+        onPageChange={setPage}
       />}
     </div>
   );

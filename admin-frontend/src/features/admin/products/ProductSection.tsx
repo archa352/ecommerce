@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { fetchAllPages } from "../../../api/client";
 import { listCategories } from "../../../api/categories";
 import { archiveProduct, downloadImportTemplate, importProducts, listProducts } from "../../../api/products";
 import { useAuth } from "../../../auth/AuthContext";
@@ -14,63 +15,38 @@ import GuidedControl from "../../../components/admin/GuidedControl";
 import Pagination from "../../../components/common/Pagination";
 import StatusMessage from "../../../components/common/StatusMessage";
 import { useAction } from "../../../hooks/useAction";
-import { useAdminRefresh } from "../../../hooks/AdminRefreshContext";
 import { useApi } from "../../../hooks/useApi";
+import { useUrlFilters } from "../../../hooks/useUrlFilters";
 import type { PageMeta } from "../../../types/api";
-import type { ImportResult, Product } from "../../../types/catalogue";
+import type { ImportResult } from "../../../types/catalogue";
 import ProductImage from "./ProductImage";
 import "./products.css";
 
 const PAGE_SIZE = 20;
 const FETCH_SIZE = 100;
-type ProductLoad = { key: string; rows: Product[] | null; error: string | null };
-
-async function loadProducts(query: object): Promise<Product[]> {
-  const first = await listProducts({ ...query, page: 1, page_size: FETCH_SIZE });
-  if (!first.meta) throw new Error("Product pagination is unavailable.");
-  const pages: Product[][] = [first.data];
-  for (let page = 2; page <= first.meta.total_pages; page += 4) {
-    const batch = await Promise.all(Array.from(
-      { length: Math.min(4, first.meta.total_pages - page + 1) },
-      (_, offset) => listProducts({ ...query, page: page + offset, page_size: FETCH_SIZE }),
-    ));
-    pages.push(...batch.map((result) => result.data));
-  }
-  const rows = pages.flat();
-  if (rows.length !== first.meta.total_items || new Set(rows.map((row) => row.id)).size !== rows.length) {
-    throw new Error("Products changed while loading. Refresh to try again.");
-  }
-  return rows;
-}
 
 function ProductSection() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const canManage = can(P.catalogueManage);
-  const [params, setParams] = useSearchParams();
+  const { params, setParams, setFilter, setPage } = useUrlFilters();
   const [search, setSearch] = useState(params.get("search") ?? "");
   const [importing, setImporting] = useState(false);
   const [lastArchived, setLastArchived] = useState<{ id: string; name: string } | null>(null);
   const categories = useApi(() => listCategories(), []);
-  const refresh = useAdminRefresh();
-  const [reload, setReload] = useState(0);
-  const serverKey = JSON.stringify([params.get("search"), params.get("category_id"), params.get("featured"), params.get("sort") ?? "newest", params.get("status"), refresh?.version ?? 0, reload]);
-  const [loaded, setLoaded] = useState<ProductLoad>({ key: "", rows: null, error: null });
-  useEffect(() => {
-    let active = true;
-    const [term, category, featured, sort, status] = JSON.parse(serverKey) as [string | null, string | null, string | null, string, string | null];
-    refresh?.begin();
-    void loadProducts({ search: term, category_id: category, featured, sort, status }).then((rows) => {
-      if (active) setLoaded({ key: serverKey, rows, error: null });
-    }).catch((error: Error) => {
-      if (active) setLoaded({ key: serverKey, rows: null, error: error.message });
-    }).finally(() => refresh?.end());
-    return () => { active = false; };
-    // serverKey contains the workspace refresh version; begin/end are stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverKey]);
-  const loading = loaded.key !== serverKey;
-  const records = loading ? null : loaded.rows;
+  const query = {
+    search: params.get("search"),
+    category_id: params.get("category_id"),
+    featured: params.get("featured"),
+    sort: params.get("sort") ?? "newest",
+    status: params.get("status"),
+  };
+  const products = useApi(
+    () => fetchAllPages((page) => listProducts({ ...query, page, page_size: FETCH_SIZE }), "products"),
+    [query.search, query.category_id, query.featured, query.sort, query.status]
+  );
+  const loading = products.loading;
+  const records = products.data;
   const selectedStatus = params.get("status") ?? "";
   const filtered = useMemo(() => records?.filter((product) =>
     (!selectedStatus || product.status === selectedStatus)
@@ -84,13 +60,6 @@ function ProductSection() {
   const categoryName = (id: string) => categories.data?.find((c) => c.id === id)?.name ?? "-";
   const clearFilters = () => { setSearch(""); setParams(new URLSearchParams()); };
 
-  const setFilter = (key: string, value: string) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    next.delete("page");
-    setParams(next);
-  };
 
   return (
     <div className="record-page products-page">
@@ -122,7 +91,7 @@ function ProductSection() {
         <DataTable
           rows={rows}
           loading={loading}
-          error={loading ? null : loaded.error}
+          error={loading ? null : products.error}
           empty={selectedStatus === "ARCHIVED" ? "No archived products match these filters." : "No products found."}
           rowKey={(p) => p.id}
           onRowClick={(p) => navigate(`/products/${p.id}`)}
@@ -139,14 +108,14 @@ function ProductSection() {
               header: "",
               render: (p) =>
                 canManage && p.status !== "ARCHIVED" && (
-                  <ConfirmButton message={`Archive ${p.name}? Shoppers will no longer see it.`} disabled={action.busy} onConfirm={() => action.run(async () => { await archiveProduct(p.id); setLastArchived({ id: p.id, name: p.name }); setReload((value) => value + 1); }, "Product archived", "Could not archive")}>Archive</ConfirmButton>
+                  <ConfirmButton message={`Archive ${p.name}? Shoppers will no longer see it.`} disabled={action.busy} onConfirm={() => action.run(async () => { await archiveProduct(p.id); setLastArchived({ id: p.id, name: p.name }); products.reload(); }, "Product archived", "Could not archive")}>Archive</ConfirmButton>
                 ),
             },
           ]}
         />
-        <Pagination meta={meta} onPageChange={(nextPage) => setParams((prev) => { const n = new URLSearchParams(prev); n.set("page", String(nextPage)); return n; })} />
+        <Pagination meta={meta} onPageChange={setPage} />
       </div>
-      {importing && <ImportModal onClose={() => setImporting(false)} onImported={() => setReload((value) => value + 1)} />}
+      {importing && <ImportModal onClose={() => setImporting(false)} onImported={() => products.reload()} />}
     </div>
   );
 }
