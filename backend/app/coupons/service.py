@@ -8,6 +8,9 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cart.repository import CartItemRepository
+from app.cart.service import CartService
+from app.catalogue.prices import effective_price
 from app.catalogue.repository import CategoryRepository, category_subtree
 from app.core.config import get_settings
 from app.core.database import conflict_on_integrity_error
@@ -23,6 +26,8 @@ from app.coupons.repository import (
     CouponUsageRepository,
 )
 from app.coupons.schemas import CouponCreate, CouponUpdate
+from app.orders.constants import OrderStatus
+from app.orders.models import Order
 from app.pricing.constants import PERCENT
 
 COUPON_NOT_FOUND = "Coupon not found"
@@ -223,9 +228,6 @@ class CouponService:
         return covered
 
     async def _has_earlier_order(self, customer_id: UUID) -> bool:
-        from app.orders.constants import OrderStatus
-        from app.orders.models import Order
-
         count = await self.session.scalar(
             select(func.count(Order.id)).where(
                 Order.tenant_id == self.tenant_id,
@@ -399,7 +401,6 @@ class CouponService:
         if coupon is None or not self._needs_lines(coupon, covered is not None):
             return await self.evaluate(coupon, subtotal, customer_id)
 
-        from app.cart.service import CartService
 
         cart = await CartService(self.session, self.tenant_id, customer_id).active_cart()
         lines = await cart_lines(self.session, self.tenant_id, cart.id) if cart else []
@@ -462,11 +463,9 @@ class CouponService:
 
     async def lock(self, coupon_id: UUID) -> Coupon | None:
         """Re-read a coupon with a row lock before spending it."""
-        from app.coupons.models import Coupon as CouponModel
-
         return await self.session.scalar(
-            select(CouponModel)
-            .where(CouponModel.tenant_id == self.tenant_id, CouponModel.id == coupon_id)
+            select(Coupon)
+            .where(Coupon.tenant_id == self.tenant_id, Coupon.id == coupon_id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )
@@ -552,9 +551,6 @@ class CouponService:
 
 async def cart_lines(session, tenant_id: UUID, cart_id: UUID) -> list[CouponLine]:
     """A cart's lines, priced at what the shopper pays now, for coupon rules."""
-    from app.cart.repository import CartItemRepository
-    from app.catalogue.pricing import effective_price
-
     rows = await CartItemRepository(session, tenant_id).list_with_catalogue(cart_id)
     return [
         CouponLine(

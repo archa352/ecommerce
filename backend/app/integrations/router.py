@@ -8,26 +8,17 @@ it today, so pending work is visible instead of faked.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
 from app.auth.dependencies import require_permission
 from app.auth.permissions import Permission
 from app.core.config import get_settings
 from app.core.responses import ApiResponse, ok
+from app.integrations.schemas import IntegrationStatus
 from app.users.models import User
 
 router = APIRouter(prefix="/admin/integrations", tags=["Admin-Integrations"])
 
 
-class IntegrationStatus(BaseModel):
-    key: str
-    name: str
-    purpose: str
-    credentials_configured: bool
-    integrated: bool
-    status: str
-    required_settings: list[str]
-    note: str
 
 
 def _entry(key, name, purpose, settings_names, integrated, note) -> IntegrationStatus:

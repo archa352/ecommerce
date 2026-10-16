@@ -13,7 +13,7 @@ from app.cart.models import Cart, CartStatus
 from app.cart.repository import CartItemRepository, CartRepository
 from app.cart.schemas import CartItemCreate, CartItemRead, CartItemUpdate, CartRead
 from app.catalogue.constants import CatalogueStatus
-from app.catalogue.pricing import effective_price
+from app.catalogue.prices import effective_price
 from app.catalogue.repository import ProductImageRepository
 from app.catalogue.schemas import ProductImageSummary
 from app.catalogue.serializers import sellable_quantity

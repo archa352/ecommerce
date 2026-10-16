@@ -12,7 +12,7 @@ import asyncio
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal, dispose_engine
-from app.ratings.requests import ReviewRequestService
+from app.ratings.service import ReviewRequestService
 from app.tenants.models import Tenant
 
 

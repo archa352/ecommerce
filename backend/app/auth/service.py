@@ -7,6 +7,7 @@ from fastapi import Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.service import record_login
 from app.auth.constants import (
     OTP_MAX_ATTEMPTS,
     OtpPurpose,
@@ -189,8 +190,6 @@ class AuthService:
         self, identifier: str, password: str, role: UserRole, request: Request | None
     ) -> User:
         """Record admin/staff login outcomes without persisting submitted credentials."""
-        from app.audit.service import record_login
-
         roles = frozenset({role.value})
         try:
             user = await self._verify_password_user(identifier, password, roles=roles)

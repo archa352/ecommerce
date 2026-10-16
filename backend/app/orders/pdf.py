@@ -1,9 +1,13 @@
-"""Render the GST invoice as a PDF.
+"""The PDFs an order produces: GST invoice, packing slip and shipping label.
 
-This module only lays out data. Every figure comes from `InvoiceRead`, the
-same model the JSON invoice endpoint returns (built by
+This module only lays out data. Every invoice figure comes from `InvoiceRead`,
+the same model the JSON invoice endpoint returns (built by
 `orders.serializers.invoice_read` from what the order froze at checkout), so
 the PDF can never disagree with the JSON invoice or the order.
+
+The packing slip and label show no prices or tax -- they go to the packing
+table and on the parcel. A courier's own label (AWB barcode) needs a courier
+integration; this label is the store's address label for the box.
 """
 
 from __future__ import annotations
@@ -15,13 +19,22 @@ from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, A6
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from app.orders.constants import GstType, OrderStatus
+from app.orders.models import Order
 from app.orders.schemas import InvoiceRead
+from app.pricing.models import GstSettings
 
 PDF_MEDIA_TYPE = "application/pdf"
 
@@ -43,6 +56,20 @@ _TITLE = ParagraphStyle(
 _GRID = colors.HexColor("#B8BCC4")
 _SHADE = colors.HexColor("#EEF0F4")
 
+# Side-by-side address boxes.
+_BOXES_STYLE = [
+    ("BOX", (0, 0), (-1, -1), 0.5, _GRID),
+    ("INNERGRID", (0, 0), (-1, -1), 0.5, _GRID),
+    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+]
+# A list of lines under a shaded header row.
+_LINES_STYLE = [
+    ("BACKGROUND", (0, 0), (-1, 0), _SHADE),
+    ("BOX", (0, 0), (-1, -1), 0.5, _GRID),
+    ("INNERGRID", (0, 0), (-1, -1), 0.25, _GRID),
+    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+]
+
 
 def invoice_filename(invoice: InvoiceRead) -> str:
     """`INV-ORD-100001.pdf`; anything unsafe in a header (e.g. '/') becomes '-'."""
@@ -62,6 +89,21 @@ def _lines_of(*parts: str | None) -> str:
     return "<br/>".join(escape(part) for part in parts if part)
 
 
+def _document(
+    buffer: io.BytesIO, title: str, store_name: str, *, pagesize=A4, margin: float = 14 * mm
+) -> SimpleDocTemplate:
+    return SimpleDocTemplate(
+        buffer,
+        pagesize=pagesize,
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=margin,
+        bottomMargin=margin,
+        title=title,
+        author=store_name,
+    )
+
+
 def render_invoice_pdf(
     invoice: InvoiceRead,
     *,
@@ -71,16 +113,7 @@ def render_invoice_pdf(
 ) -> bytes:
     """Build the invoice PDF and return its bytes."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=14 * mm,
-        rightMargin=14 * mm,
-        topMargin=14 * mm,
-        bottomMargin=14 * mm,
-        title=f"Tax Invoice {invoice.invoice_number}",
-        author=store_name,
-    )
+    doc = _document(buffer, f"Tax Invoice {invoice.invoice_number}", store_name)
     width = doc.width
     story = [Paragraph("TAX INVOICE", _TITLE)]
 
@@ -168,15 +201,7 @@ def _parties(
     bill_to = Paragraph("<b>Bill to</b><br/>" + billing, _BODY)
     ship_to = Paragraph("<b>Ship to</b><br/>" + address, _BODY)
     table = Table([[bill_to, ship_to]], colWidths=[width / 2, width / 2])
-    table.setStyle(
-        TableStyle(
-            [
-                ("BOX", (0, 0), (-1, -1), 0.5, _GRID),
-                ("INNERGRID", (0, 0), (-1, -1), 0.5, _GRID),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ]
-        )
-    )
+    table.setStyle(TableStyle(_BOXES_STYLE))
     return table
 
 
@@ -230,14 +255,8 @@ def _items(invoice: InvoiceRead, width: float) -> Table:
     table = Table(rows, colWidths=fixed, repeatRows=1)
     table.setStyle(
         TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), _SHADE),
-                ("BOX", (0, 0), (-1, -1), 0.5, _GRID),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, _GRID),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 2),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-            ]
+            _LINES_STYLE
+            + [("LEFTPADDING", (0, 0), (-1, -1), 2), ("RIGHTPADDING", (0, 0), (-1, -1), 2)]
         )
     )
     return table
@@ -279,3 +298,143 @@ def _totals(invoice: InvoiceRead, width: float) -> Table:
         )
     )
     return table
+
+
+def _address(order: Order) -> str:
+    return _lines_of(
+        order.delivery_name,
+        order.delivery_address_line_1,
+        order.delivery_address_line_2,
+        f"{order.delivery_city}, {order.delivery_state} {order.delivery_postal_code}",
+        order.delivery_country,
+        f"Phone: {order.delivery_phone}",
+    )
+
+
+def _sender(store_name: str, seller: GstSettings | None) -> str:
+    if seller is None:
+        return _lines_of(store_name)
+    legal_name = seller.legal_name if seller.legal_name != store_name else None
+    return _lines_of(store_name, legal_name, seller.address)
+
+
+def render_packing_slip(order: Order, *, store_name: str, seller: GstSettings | None) -> bytes:
+    buffer = io.BytesIO()
+    doc = _document(buffer, f"Packing slip {order.order_number}", store_name)
+    width = doc.width
+    story = [Paragraph("PACKING SLIP", _TITLE)]
+
+    meta = Table(
+        [
+            [
+                Paragraph("<b>From</b><br/>" + _sender(store_name, seller), _BODY),
+                Paragraph("<b>Ship to</b><br/>" + _address(order), _BODY),
+            ],
+        ],
+        colWidths=[width / 2, width / 2],
+    )
+    meta.setStyle(TableStyle(_BOXES_STYLE))
+    story += [
+        Paragraph(
+            f"<b>Order</b> {escape(order.order_number)} &nbsp;&nbsp; "
+            f"<b>Date</b> {order.created_at:%d %b %Y} &nbsp;&nbsp; "
+            f"<b>Payment</b> {escape(order.payment_method)}"
+            + (
+                f" &nbsp;&nbsp; <b>Courier</b> {escape(order.courier_name)}"
+                if order.courier_name
+                else ""
+            )
+            + (
+                f" &nbsp;&nbsp; <b>Tracking</b> {escape(order.tracking_number)}"
+                if order.tracking_number
+                else ""
+            ),
+            _BODY,
+        ),
+        Spacer(1, 3 * mm),
+        meta,
+        Spacer(1, 4 * mm),
+    ]
+
+    rows = [[Paragraph(h, _CELL_BOLD) for h in ("#", "Item", "SKU", "Qty", "Packed")]]
+    for index, item in enumerate(order.items, start=1):
+        rows.append(
+            [
+                Paragraph(str(index), _CELL),
+                Paragraph(escape(f"{item.product_name} - {item.variant_name}"), _CELL),
+                Paragraph(escape(item.sku), _CELL),
+                Paragraph(str(item.quantity), _CELL_RIGHT),
+                Paragraph("&#9744;", _CELL),
+            ]
+        )
+    units = sum(item.quantity for item in order.items)
+    rows.append(
+        [
+            "",
+            Paragraph("<b>Total units</b>", _CELL),
+            "",
+            Paragraph(f"<b>{units}</b>", _CELL_RIGHT),
+            "",
+        ]
+    )
+    widths = [8 * mm, width - 78 * mm, 40 * mm, 15 * mm, 15 * mm]
+    table = Table(rows, colWidths=widths, repeatRows=1)
+    table.setStyle(TableStyle(_LINES_STYLE))
+    story.append(table)
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def _label_box(order: Order, width: float, *, store_name: str, seller: GstSettings | None):
+    """One parcel label: ship-to, order number, COD amount, courier, sender."""
+    cod_due = sum(
+        (p.amount for p in order.payments if p.provider == "COD" and p.status == "PENDING"), 0
+    )
+    lines = [
+        Paragraph(f"<b>SHIP TO</b><br/>{_address(order)}", _BODY),
+        Spacer(1, 3 * mm),
+        Paragraph(f"<b>Order:</b> {escape(order.order_number)}", _BOLD),
+        Paragraph(
+            f"<b>{'COD - collect' if cod_due else 'PREPAID'}</b>"
+            + (f" {cod_due:,.2f}" if cod_due else ""),
+            _BOLD,
+        ),
+    ]
+    if order.courier_name or order.tracking_number:
+        lines.append(
+            Paragraph(
+                escape(" ".join(p for p in (order.courier_name, order.tracking_number) if p)),
+                _BODY,
+            )
+        )
+    lines += [Spacer(1, 3 * mm), Paragraph(f"<b>FROM</b><br/>{_sender(store_name, seller)}", _BODY)]
+    box = Table([[lines]], colWidths=[width])
+    box.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, colors.black)]))
+    return box
+
+
+def render_shipping_label(order: Order, *, store_name: str, seller: GstSettings | None) -> bytes:
+    """An A6 address label for the parcel (order number, COD amount, addresses)."""
+    buffer = io.BytesIO()
+    doc = _document(
+        buffer, f"Shipping label {order.order_number}", store_name, pagesize=A6, margin=6 * mm
+    )
+    doc.build([_label_box(order, doc.width, store_name=store_name, seller=seller)])
+    return buffer.getvalue()
+
+
+def render_shipping_labels(
+    orders: list[Order], *, store_name: str, seller: GstSettings | None
+) -> bytes:
+    """Many orders' labels in one PDF, one A6 label per page, in the given order."""
+    buffer = io.BytesIO()
+    doc = _document(
+        buffer, f"Shipping labels ({len(orders)})", store_name, pagesize=A6, margin=6 * mm
+    )
+    story = []
+    for index, order in enumerate(orders):
+        if index:
+            story.append(PageBreak())
+        story.append(_label_box(order, doc.width, store_name=store_name, seller=seller))
+    doc.build(story)
+    return buffer.getvalue()

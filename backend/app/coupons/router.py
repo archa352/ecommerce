@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.trail import AUDITED
+from app.audit.dependencies import AUDITED
 from app.auth.dependencies import require_customer, require_permission
 from app.auth.permissions import Permission
 from app.core import rate_limit

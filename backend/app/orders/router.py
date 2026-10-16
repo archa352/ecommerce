@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.dependencies import AUDITED
 from app.audit.service import record_activity
-from app.audit.trail import AUDITED
 from app.auth.dependencies import require_customer, require_permission
 from app.auth.permissions import Permission
 from app.cart.router import CART_TOKEN_HEADER, MAX_CART_TOKEN_LENGTH
@@ -21,12 +21,14 @@ from app.core.pagination import PageParams
 from app.core.request_context import client_ip
 from app.core.responses import ApiResponse, ok, paginated
 from app.orders.constants import MAX_IDEMPOTENCY_KEY_LENGTH, PaymentMethod
-from app.orders.documents_pdf import (
+from app.orders.pdf import (
+    PDF_MEDIA_TYPE,
+    invoice_filename,
+    render_invoice_pdf,
     render_packing_slip,
     render_shipping_label,
     render_shipping_labels,
 )
-from app.orders.invoice_pdf import PDF_MEDIA_TYPE, invoice_filename, render_invoice_pdf
 from app.orders.schemas import (
     BulkLabelRequest,
     CheckoutCreate,

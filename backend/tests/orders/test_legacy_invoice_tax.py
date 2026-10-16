@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from pypdf import PdfReader
 
 from app.orders.constants import GstType
-from app.orders.invoice_pdf import render_invoice_pdf
+from app.orders.pdf import render_invoice_pdf
 from app.orders.serializers import invoice_read
 
 

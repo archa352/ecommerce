@@ -17,8 +17,10 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
-from app.catalogue.pricing import effective_price_sql
+from app.catalogue.prices import effective_price_sql
 from app.core.repository import TenantScopedRepository, escape_like
+from app.orders.constants import OrderStatus
+from app.orders.models import Order, OrderItem
 
 
 def category_subtree(tenant_id: UUID, category_id: UUID) -> Select[tuple[UUID]]:
@@ -275,9 +277,6 @@ class ProductRepository(TenantScopedRepository[Product]):
 
     async def bought_together(self, product_id: UUID, *, limit: int) -> list[UUID]:
         """Products most often in the same (non-cancelled) orders as this one."""
-        from app.orders.constants import OrderStatus
-        from app.orders.models import Order, OrderItem
-
         mine = aliased(OrderItem)
         other = aliased(OrderItem)
         stmt = (

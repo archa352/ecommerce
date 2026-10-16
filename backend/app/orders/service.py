@@ -18,7 +18,7 @@ from app.cart.repository import CartItemRepository
 from app.cart.service import CartService
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import Category
-from app.catalogue.pricing import effective_price, is_on_sale
+from app.catalogue.prices import effective_price, is_on_sale
 from app.catalogue.repository import CategoryRepository
 from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
@@ -71,6 +71,8 @@ from app.pricing.service import (
     ShippingService,
     TaxService,
 )
+from app.ratings.service import ReviewRequestService
+from app.returns.service import ReturnReasonService
 from app.users.models import User
 from app.users.repository import UserRepository
 
@@ -925,8 +927,6 @@ class OrderService:
             )
         reason = None
         if return_reason_id is not None:
-            from app.returns.service import ReturnReasonService
-
             reason = await ReturnReasonService(self.session, self.tenant_id).require_active(
                 return_reason_id
             )
@@ -1032,8 +1032,6 @@ class OrderService:
                     order, extra_phones=[customer.phone] if customer else []
                 )
             if new_status is OrderStatus.DELIVERED:
-                from app.ratings.requests import ReviewRequestService
-
                 await ReviewRequestService(self.session, self.tenant_id).schedule_for(order)
 
             await self.session.commit()

@@ -9,7 +9,7 @@ from app.core.repository import TenantScopedRepository
 from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
 from app.ratings.constants import MAX_RATING, MIN_RATING
-from app.ratings.models import Review
+from app.ratings.models import Review, ReviewRequest, ReviewRequestStatus
 
 
 class ReviewRepository(TenantScopedRepository[Review]):
@@ -78,3 +78,16 @@ class ReviewRepository(TenantScopedRepository[Review]):
         counts = {star: 0 for star in range(MIN_RATING, MAX_RATING + 1)}
         counts.update({rating: count for rating, count in result.all()})
         return counts
+
+
+class ReviewRequestRepository(TenantScopedRepository[ReviewRequest]):
+    model = ReviewRequest
+
+    async def for_order(self, order_id: UUID) -> ReviewRequest | None:
+        return await self.find_one(ReviewRequest.order_id == order_id)
+
+    def list_select(self, *, status: ReviewRequestStatus | None = None) -> Select:
+        stmt = self.base_select()
+        if status is not None:
+            stmt = stmt.where(ReviewRequest.status == status.value)
+        return stmt.order_by(ReviewRequest.send_after.desc())

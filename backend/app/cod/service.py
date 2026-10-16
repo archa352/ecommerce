@@ -16,6 +16,10 @@ from app.core.database import conflict_on_integrity_error
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.money import ZERO, money
 from app.core.repository import TenantScopedRepository
+from app.orders.constants import OrderStatus, PaymentMethod
+from app.orders.models import Order
+from app.payments.constants import PaymentProvider, PaymentPurpose, PaymentStatus
+from app.payments.models import Payment
 
 _MESSAGES = {
     CodUnavailableReason.DISABLED: "Cash on delivery is not available right now",
@@ -157,9 +161,6 @@ class CodService:
 
         Runs inside the caller's transaction (no commit of its own).
         """
-        from app.orders.constants import OrderStatus, PaymentMethod
-        from app.orders.models import Order
-
         settings = await self.get_settings()
         if settings is None or not settings.auto_blacklist_threshold:
             return
@@ -187,11 +188,6 @@ class CodService:
     # ----------------------------------------------------------------- report
 
     async def report(self, start: date, end: date) -> dict:
-        from app.orders.constants import OrderStatus, PaymentMethod
-        from app.orders.models import Order
-        from app.payments.constants import PaymentProvider, PaymentPurpose, PaymentStatus
-        from app.payments.models import Payment
-
         start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
         end_dt = datetime.combine(end + timedelta(days=1), time.min, tzinfo=timezone.utc)
         scope = and_(
@@ -289,9 +285,6 @@ class CodService:
     # ------------------------------------------------------------ remittance
 
     def _collected(self):
-        from app.payments.constants import PaymentProvider, PaymentStatus
-        from app.payments.models import Payment
-
         return and_(
             Payment.tenant_id == self.tenant_id,
             Payment.provider == PaymentProvider.COD.value,
@@ -299,9 +292,6 @@ class CodService:
         )
 
     async def collections(self, params, *, remitted: bool):
-        from app.orders.models import Order
-        from app.payments.models import Payment
-
         stmt = (
             select(Payment, Order.order_number)
             .join(Order, and_(Order.tenant_id == Payment.tenant_id, Order.id == Payment.order_id))
@@ -333,8 +323,6 @@ class CodService:
         self, payment_ids: list[UUID], reference: str, remitted_on: date | None
     ) -> dict:
         """Mark collected COD payments as received from the courier."""
-        from app.payments.models import Payment
-
         payments = list(
             (
                 await self.session.scalars(

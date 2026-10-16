@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.trail import AUDITED
+from app.audit.dependencies import AUDITED
 from app.auth.dependencies import require_customer, require_permission
 from app.auth.permissions import Permission
 from app.core import rate_limit
@@ -16,7 +16,6 @@ from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
 from app.ratings.constants import MAX_ALT_TEXT_LENGTH
 from app.ratings.models import ReviewRequestStatus
-from app.ratings.requests import ReviewRequestService
 from app.ratings.schemas import (
     PendingReviewRead,
     RatingSummaryRead,
@@ -29,7 +28,7 @@ from app.ratings.schemas import (
     ReviewRequestRead,
     ReviewUpdate,
 )
-from app.ratings.service import ReviewService
+from app.ratings.service import ReviewRequestService, ReviewService
 from app.tenants.resolver import CurrentTenant
 from app.users.models import User
 

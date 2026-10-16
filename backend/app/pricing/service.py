@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import conflict_on_integrity_error
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.money import ZERO, money
+from app.orders.constants import OrderStatus
+from app.orders.models import Order, OrderItem
 from app.pricing.constants import (
     DEFAULT_MAX_DELIVERY_DAYS,
     DEFAULT_MIN_DELIVERY_DAYS,
@@ -293,9 +295,6 @@ class GstService:
 
     async def report(self, start: date, end: date) -> dict:
         """Taxable value and CGST/SGST/IGST per GST type and rate, for non-cancelled orders."""
-        from app.orders.constants import OrderStatus
-        from app.orders.models import Order, OrderItem
-
         start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
         end_dt = datetime.combine(end + timedelta(days=1), time.min, tzinfo=timezone.utc)
         in_range = and_(

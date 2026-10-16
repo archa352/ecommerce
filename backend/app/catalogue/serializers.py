@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import Category, InventoryItem, Product, ProductVariant
-from app.catalogue.pricing import effective_price, is_on_sale
+from app.catalogue.prices import effective_price, is_on_sale
 from app.catalogue.schemas import (
     CategoryStorefrontRead,
     FilterOptionsRead,

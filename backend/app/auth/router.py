@@ -26,8 +26,7 @@ from app.core.request_context import client_ip
 from app.core.responses import ApiResponse, ok
 from app.tenants.models import Tenant
 from app.tenants.resolver import CurrentTenant
-from app.users.erasure import AccountErasureService
-from app.users.service import UserService
+from app.users.service import AccountErasureService, UserService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 

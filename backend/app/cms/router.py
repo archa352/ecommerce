@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.trail import AUDITED
+from app.audit.dependencies import AUDITED
 from app.auth.dependencies import require_permission
 from app.auth.permissions import Permission, has_permission
 from app.catalogue.serializers import storefront_summary

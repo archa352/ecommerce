@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.constants import UserRole
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.models import Category, InventoryItem, Product, ProductVariant
-from app.catalogue.pricing import effective_price_sql
+from app.catalogue.prices import effective_price_sql
 from app.core.money import ZERO, money
 from app.coupons.models import Coupon, CouponUsage
 from app.orders.constants import OrderStatus, PaymentMethod

@@ -16,7 +16,7 @@ from app.catalogue.models import (
     ProductVariant,
     ProductVariantOption,
 )
-from app.catalogue.pricing import effective_price_sql
+from app.catalogue.prices import effective_price_sql
 from app.catalogue.repository import attribute_matches, category_subtree
 from app.core.pagination import PageParams
 from app.core.repository import TenantScopedRepository, escape_like

@@ -8,6 +8,7 @@ from sqlalchemy import Select, and_, exists, or_, select
 from app.core.repository import TenantScopedRepository
 from app.orders.constants import OrderStatus, PaymentStatus
 from app.orders.models import Order, OrderItem
+from app.users.models import User
 
 
 def _escape_like(term: str) -> str:
@@ -95,8 +96,6 @@ class OrderRepository(TenantScopedRepository[Order]):
 
     def _matches(self, term: str):
         """Order number, customer name/phone/email, delivery name/phone, product or SKU."""
-        from app.users.models import User
-
         pattern = f"%{_escape_like(term)}%"
         customer = select(User.id).where(
             User.tenant_id == self.tenant_id,

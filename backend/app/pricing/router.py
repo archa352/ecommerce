@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.trail import AUDITED
+from app.audit.dependencies import AUDITED
 from app.auth.dependencies import require_permission
 from app.auth.permissions import Permission
 from app.cod.service import CodService
