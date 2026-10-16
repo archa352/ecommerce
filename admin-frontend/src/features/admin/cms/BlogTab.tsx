@@ -3,21 +3,21 @@ import type { FormEvent } from "react";
 import { createPost, deletePost, getPost, listPosts, updatePost } from "../../../api/cms";
 import { useAuth } from "../../../auth/AuthContext";
 import { P } from "../../../auth/permissions";
-import ConfirmButton from "../../../components/common/ConfirmButton";
 import DataTable from "../../../components/common/DataTable";
 import Field from "../../../components/common/Field";
-import Modal from "../../../components/common/Modal";
 import Pagination from "../../../components/common/Pagination";
 import StatusMessage from "../../../components/common/StatusMessage";
 import { useAction } from "../../../hooks/useAction";
 import { useApi } from "../../../hooks/useApi";
 import type { BlogPost } from "../../../types/cms";
+import { slugProblem } from "../../../utils/slug";
 import { emptyToNull, formatDate } from "../../../utils/formatters";
 import MediaPicker from "./MediaPicker";
-import { SLUG } from "./PagesTab";
-import MarkdownPreview from "../../../components/common/MarkdownPreview";
+import ContentEditor from "./ContentEditor";
+import type { ContentFormProps } from "./ContentEditor";
 import ContentRowActions from "./ContentRowActions";
-import PublishControls, { LiveState } from "./PublishControls";
+import MarkdownField from "./MarkdownField";
+import { LiveState } from "./PublishControls";
 
 function BlogTab() {
   const { can } = useAuth();
@@ -70,43 +70,25 @@ function BlogTab() {
         ]}
       />
       <Pagination meta={posts.meta} onPageChange={setPage} />
-      {editingId && <PostEditor postId={editingId === "new" ? null : editingId} canEdit={canEdit} onClose={() => { setEditingId(null); posts.reload(); }} onCreated={setEditingId} />}
+      {editingId && (
+        <ContentEditor
+          kind="blog"
+          itemId={editingId === "new" ? null : editingId}
+          canEdit={canEdit}
+          load={getPost}
+          create={createPost}
+          update={updatePost}
+          remove={deletePost}
+          onClose={() => { setEditingId(null); posts.reload(); }}
+          onCreated={setEditingId}
+          renderForm={(form) => <PostForm {...form} canEdit={canEdit} />}
+        />
+      )}
     </div>
   );
 }
 
-function PostEditor({ postId, canEdit, onClose, onCreated }: { postId: string | null; canEdit: boolean; onClose: () => void; onCreated: (id: string) => void }) {
-  const loaded = useApi(() => (postId ? getPost(postId) : Promise.resolve({ success: true, message: "", data: null, meta: null })), [postId]);
-  const action = useAction();
-  const post = loaded.data;
-  return (
-    <Modal title={post ? `Edit “${post.title}”` : "New article"} onClose={onClose} wide>
-      <StatusMessage status={action.status} />
-      {loaded.error && <div className="status status-error">{loaded.error}</div>}
-      {post && <PublishControls kind="blog" item={post} action={action} onDone={loaded.reload} />}
-      {(post || !postId) && (
-        <PostForm
-          key={post?.updated_at ?? "new"}
-          post={post}
-          canEdit={canEdit}
-          busy={action.busy}
-          onSubmit={async (data) => {
-            const saved = await action.run(() => (post ? updatePost(post.id, data) : createPost(data)), "Article saved", "Could not save article");
-            if (saved && !post) onCreated(saved.data.id);
-            else if (saved) loaded.reload();
-          }}
-        />
-      )}
-      {post && canEdit && (
-        <div className="form-actions" style={{ marginTop: 12 }}>
-          <ConfirmButton message="Delete this article permanently?" onConfirm={() => action.run(async () => { await deletePost(post.id); onClose(); }, "Deleted", "Could not delete")}>Delete article</ConfirmButton>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function PostForm({ post, canEdit, busy, onSubmit }: { post: BlogPost | null; canEdit: boolean; busy: boolean; onSubmit: (d: object) => void }) {
+function PostForm({ item: post, busy, onSubmit, canEdit }: ContentFormProps<BlogPost> & { canEdit: boolean }) {
   const [f, setF] = useState({
     title: post?.title ?? "",
     slug: post?.slug ?? "",
@@ -119,12 +101,11 @@ function PostForm({ post, canEdit, busy, onSubmit }: { post: BlogPost | null; ca
     seo_title: post?.seo_title ?? "",
     seo_description: post?.seo_description ?? "",
   });
-  const [preview, setPreview] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((prev) => ({ ...prev, [k]: e.target.value }));
   const [uploading, setUploading] = useState(false);
   const titleError = !f.title.trim() ? "Article title is required." : null;
-  const slugError = f.slug && !SLUG.test(f.slug) ? "URL slug must use lowercase letters, numbers and single hyphens." : null;
+  const slugError = slugProblem(f.slug);
   const imageError = f.featured_image_url && !/^(\/|https?:\/\/)/.test(f.featured_image_url) ? "Featured image must start with / or https://" : null;
 
   const submit = (e: FormEvent) => {
@@ -158,11 +139,7 @@ function PostForm({ post, canEdit, busy, onSubmit }: { post: BlogPost | null; ca
           <MediaPicker label="Featured image" hint="Shown at the top of the article and in the article list" value={f.featured_image_url} onChange={(v) => setF((prev) => ({ ...prev, featured_image_url: v }))} onUploadingChange={setUploading} />
           <Field label="Excerpt" wide><textarea value={f.excerpt} onChange={set("excerpt")} /></Field>
         </div>
-        <div className="toolbar">
-          <button type="button" className={preview ? "" : "primary"} onClick={() => setPreview(false)}>Write</button>
-          <button type="button" className={preview ? "primary" : ""} onClick={() => setPreview(true)}>Preview</button>
-        </div>
-        {preview ? <MarkdownPreview source={f.content} /> : <Field label="Article text" hint="Tip: ## makes a heading, - starts a bullet, **bold**, [link text](/faq)" wide><textarea value={f.content} onChange={set("content")} rows={16} aria-label="Article text" /></Field>}
+        <MarkdownField label="Article text" value={f.content} onChange={(content) => setF((prev) => ({ ...prev, content }))} rows={16} />
         <div className="form-grid">
           <Field label="SEO title"><input value={f.seo_title} onChange={set("seo_title")} /></Field>
           <Field label="SEO description" wide><textarea value={f.seo_description} onChange={set("seo_description")} /></Field>

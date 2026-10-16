@@ -8,7 +8,7 @@ import { createAttributeValue, listAttributeValues } from "../../../api/products
 import { useApi } from "../../../hooks/useApi";
 import type { AttributeName } from "../../../types/catalogue";
 import { emptyToNull } from "../../../utils/formatters";
-import { SLUG } from "../cms/PagesTab";
+import { slugProblem } from "../../../utils/slug";
 import AttributeSelect from "./AttributeSelect";
 import { IMAGE_TYPES, MAX_IMAGE_BYTES, checkNewImages } from "./newImages";
 import type { NewImages } from "./newImages";
@@ -100,7 +100,8 @@ function ProductForm({
       const imageProblem = imageSelectionError ?? checkNewImages(files);
       if (imageProblem) problems.photos = imageProblem;
     }
-    if (slug && !SLUG.test(slug)) problems.slug = "URL slug must use lowercase letters, numbers and single hyphens.";
+    const slugError = slugProblem(slug);
+    if (slugError) problems.slug = slugError;
     if (text.hsn_code && !/^\d{4}(\d{2}){0,2}$/.test(text.hsn_code.trim())) problems.hsn = "HSN code must be 4, 6 or 8 digits.";
     if (text.gst_rate.trim() && !(Number(text.gst_rate) >= 0 && Number(text.gst_rate) <= 100)) problems.gst = "GST rate must be between 0 and 100.";
     return problems;

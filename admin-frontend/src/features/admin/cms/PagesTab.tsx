@@ -3,23 +3,22 @@ import type { FormEvent } from "react";
 import { createPage, deletePage, getPage, listPages, updatePage } from "../../../api/cms";
 import { useAuth } from "../../../auth/AuthContext";
 import { P } from "../../../auth/permissions";
-import ConfirmButton from "../../../components/common/ConfirmButton";
 import DataTable from "../../../components/common/DataTable";
 import Field from "../../../components/common/Field";
-import Modal from "../../../components/common/Modal";
 import Pagination from "../../../components/common/Pagination";
 import StatusMessage from "../../../components/common/StatusMessage";
 import { useAction } from "../../../hooks/useAction";
 import { useApi } from "../../../hooks/useApi";
 import type { CmsPage, PageType } from "../../../types/cms";
 import { PAGE_TYPES } from "../../../types/cms";
+import { slugProblem } from "../../../utils/slug";
 import { emptyToNull, formatDate, label } from "../../../utils/formatters";
-import MarkdownPreview from "../../../components/common/MarkdownPreview";
+import ContentEditor from "./ContentEditor";
+import type { ContentFormProps } from "./ContentEditor";
 import ContentRowActions from "./ContentRowActions";
+import MarkdownField from "./MarkdownField";
 import { StorefrontPages } from "./OverviewTab";
-import PublishControls, { LiveState } from "./PublishControls";
-
-export const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+import { LiveState } from "./PublishControls";
 
 function PagesTab() {
   const { can } = useAuth();
@@ -75,12 +74,17 @@ function PagesTab() {
       />
       <Pagination meta={pages.meta} onPageChange={setPage} />
       {editingId && (
-        <PageEditor
-          pageId={editingId === "new" ? null : editingId}
+        <ContentEditor
+          kind="pages"
+          itemId={editingId === "new" ? null : editingId}
           canEdit={canEdit}
-          startInPreview={previewing}
+          load={getPage}
+          create={createPage}
+          update={updatePage}
+          remove={deletePage}
           onClose={() => { setEditingId(null); pages.reload(); }}
-          onCreated={(id) => setEditingId(id)}
+          onCreated={setEditingId}
+          renderForm={(form) => <PageForm {...form} canEdit={canEdit} startInPreview={previewing} />}
         />
       )}
     </div>
@@ -89,51 +93,16 @@ function PagesTab() {
   );
 }
 
-function PageEditor({ pageId, canEdit, startInPreview, onClose, onCreated }: { pageId: string | null; canEdit: boolean; startInPreview: boolean; onClose: () => void; onCreated: (id: string) => void }) {
-  const loaded = useApi(() => (pageId ? getPage(pageId) : Promise.resolve({ success: true, message: "", data: null, meta: null })), [pageId]);
-  const action = useAction();
-  const page = loaded.data;
-  return (
-    <Modal title={page ? `Edit “${page.title}”` : "New page"} onClose={onClose} wide>
-      <StatusMessage status={action.status} />
-      {loaded.error && <div className="status status-error">{loaded.error}</div>}
-      {page && <PublishControls kind="pages" item={page} action={action} onDone={loaded.reload} />}
-      {(page || !pageId) && (
-        <PageForm
-          // Keyed by id, not by save time: publishing reloads the page and must not
-          // wipe changes typed but not saved yet.
-          key={page?.id ?? "new"}
-          page={page}
-          canEdit={canEdit}
-          startInPreview={startInPreview}
-          busy={action.busy}
-          onSubmit={async (data) => {
-            const saved = await action.run(() => (page ? updatePage(page.id, data) : createPage(data)), "Page saved", "Could not save page");
-            if (saved && !page) onCreated(saved.data.id);
-            else if (saved) loaded.reload();
-          }}
-        />
-      )}
-      {page && canEdit && (
-        <div className="form-actions" style={{ marginTop: 12 }}>
-          <ConfirmButton message="Delete this page permanently?" onConfirm={() => action.run(async () => { await deletePage(page.id); onClose(); }, "Page deleted", "Could not delete page")}>Delete page</ConfirmButton>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function PageForm({ page, canEdit, startInPreview, busy, onSubmit }: { page: CmsPage | null; canEdit: boolean; startInPreview: boolean; busy: boolean; onSubmit: (d: object) => void }) {
+function PageForm({ item: page, busy, onSubmit, canEdit, startInPreview }: ContentFormProps<CmsPage> & { canEdit: boolean; startInPreview: boolean }) {
   const [title, setTitle] = useState(page?.title ?? "");
   const [slug, setSlug] = useState(page?.slug ?? "");
   const [type, setType] = useState<PageType>(page?.page_type ?? "CUSTOM");
   const [body, setBody] = useState(page?.body ?? "");
   const [seoTitle, setSeoTitle] = useState(page?.seo_title ?? "");
   const [seoDescription, setSeoDescription] = useState(page?.seo_description ?? "");
-  const [preview, setPreview] = useState(startInPreview);
   const [attempted, setAttempted] = useState(false);
   const titleError = !title.trim() ? "Page title is required." : null;
-  const slugError = slug && !SLUG.test(slug) ? "URL slug must use lowercase letters, numbers and single hyphens." : null;
+  const slugError = slugProblem(slug);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -155,11 +124,7 @@ function PageForm({ page, canEdit, startInPreview, busy, onSubmit }: { page: Cms
             </select>
           </Field>
         </div>
-        <div className="toolbar">
-          <button type="button" className={preview ? "" : "primary"} onClick={() => setPreview(false)}>Write</button>
-          <button type="button" className={preview ? "primary" : ""} onClick={() => setPreview(true)}>Preview</button>
-        </div>
-        {preview ? <MarkdownPreview source={body} /> : <Field label="Page text" hint="Tip: ## makes a heading, - starts a bullet, **bold**, [link text](/faq)" wide><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={14} aria-label="Page text" /></Field>}
+        <MarkdownField label="Page text" value={body} onChange={setBody} rows={14} startInPreview={startInPreview} />
         <div className="form-grid">
           <Field label="SEO title"><input value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} /></Field>
           <Field label="SEO description" wide><textarea value={seoDescription} onChange={(e) => setSeoDescription(e.target.value)} /></Field>
