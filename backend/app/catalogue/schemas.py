@@ -202,6 +202,15 @@ class ProductImageRead(BaseModel):
     is_primary: bool
 
 
+class ProductImageSummary(BaseModel):
+    """The one image shown beside a cart or wishlist line."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    url: str
+    alt_text: str | None = None
+
+
 class ProductImageStorefrontRead(BaseModel):
     """Public view. Exposes the URL only -- never a storage path or credential."""
 

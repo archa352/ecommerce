@@ -2,10 +2,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-
-class WishlistItemImage(BaseModel):
-    url: str
-    alt_text: str | None = None
+from app.catalogue.schemas import ProductImageSummary
 
 
 class WishListItemCreate(BaseModel):
@@ -20,7 +17,7 @@ class WishListItemRead(BaseModel):
     variant_name: str
     sku: str
     unit_price: float
-    image: WishlistItemImage | None = None
+    image: ProductImageSummary | None = None
 
 
 class WishListRead(BaseModel):

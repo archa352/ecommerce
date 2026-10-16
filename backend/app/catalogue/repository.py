@@ -418,6 +418,19 @@ class ProductImageRepository(TenantScopedRepository[ProductImage]):
         )
         return int(total or 0)
 
+    async def primary_for(self, product_ids: list[UUID]) -> dict[UUID, ProductImage]:
+        """Primary image per product, for a whole list of products in one query."""
+        if not product_ids:
+            return {}
+        rows = await self.session.scalars(
+            select(ProductImage).where(
+                ProductImage.tenant_id == self.tenant_id,
+                ProductImage.product_id.in_(product_ids),
+                ProductImage.is_primary.is_(True),
+            )
+        )
+        return {image.product_id: image for image in rows.all()}
+
     async def clear_primary(
         self, product_id: UUID, *, exclude_id: UUID | None = None
     ) -> None:

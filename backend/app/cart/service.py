@@ -11,19 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cart.models import Cart, CartStatus
 from app.cart.repository import CartItemRepository, CartRepository
-from app.cart.schemas import CartItemCreate, CartItemImage, CartItemRead, CartItemUpdate, CartRead
+from app.cart.schemas import CartItemCreate, CartItemRead, CartItemUpdate, CartRead
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.pricing import effective_price
-from app.catalogue.repository import ProductRepository, VariantRepository
+from app.catalogue.repository import ProductImageRepository
+from app.catalogue.schemas import ProductImageSummary
 from app.catalogue.serializers import sellable_quantity
-from app.catalogue.service import InventoryService
+from app.catalogue.service import InventoryService, get_sellable_variant
 from app.core.config import get_settings
-from app.core.error_codes import CartErrorCode, InventoryErrorCode, ProductErrorCode
+from app.core.error_codes import CartErrorCode, InventoryErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 
-VARIANT_NOT_FOUND = "Product variant not found"
-VARIANT_UNAVAILABLE = "Product variant is not available"
-PRODUCT_UNAVAILABLE = "Product is not available"
 ITEM_NOT_FOUND = "Cart item not found"
 GUEST_CART_NOT_FOUND = "Cart not found or expired"
 
@@ -67,8 +65,7 @@ class CartService:
 
         self.carts = CartRepository(session, tenant_id)
         self.items = CartItemRepository(session, tenant_id)
-        self.variants = VariantRepository(session, tenant_id)
-        self.products = ProductRepository(session, tenant_id)
+        self.images = ProductImageRepository(session, tenant_id)
         self.inventory = InventoryService(session, tenant_id)
 
     # ------------------------------------------------------------------ carts
@@ -254,22 +251,7 @@ class CartService:
 
     async def _check_available(self, variant_id: UUID, quantity: int) -> None:
         """Check stock for this quantity; nothing is reserved here."""
-        variant = await self.variants.get(variant_id)
-        if variant is None:
-            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
-
-        if variant.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(
-                VARIANT_UNAVAILABLE,
-                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
-            )
-
-        product = await self.products.get(variant.product_id)
-        if product is None or product.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(
-                PRODUCT_UNAVAILABLE,
-                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
-            )
+        await get_sellable_variant(self.session, self.tenant_id, variant_id)
 
         available = sellable_quantity(await self.inventory.get(variant_id))
         if quantity > available:
@@ -284,7 +266,7 @@ class CartService:
 
     async def _render(self, cart: Cart) -> CartRead:
         rows = await self.items.list_with_catalogue(cart.id)
-        images = await self.items.primary_images(
+        images = await self.images.primary_for(
             [product.id for _item, _variant, product in rows]
         )
 
@@ -309,7 +291,7 @@ class CartService:
                     quantity=item.quantity,
                     unit_price=unit_price,
                     subtotal=line_total,
-                    image=_image_of(images.get(product.id)),
+                    image=_summary(images.get(product.id)),
                 )
             )
 
@@ -324,7 +306,5 @@ class CartService:
         )
 
 
-def _image_of(image) -> CartItemImage | None:
-    if image is None:
-        return None
-    return CartItemImage(url=image.url, alt_text=image.alt_text)
+def _summary(image) -> ProductImageSummary | None:
+    return ProductImageSummary.model_validate(image) if image is not None else None

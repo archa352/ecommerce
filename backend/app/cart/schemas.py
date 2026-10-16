@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.catalogue.schemas import ProductImageSummary
 from app.core.schemas import StrictModel
 
 MAX_ITEM_QUANTITY = 999
@@ -20,11 +21,6 @@ class CartItemUpdate(StrictModel):
     quantity: int = Field(ge=1, le=MAX_ITEM_QUANTITY)
 
 
-class CartItemImage(BaseModel):
-    url: str
-    alt_text: str | None = None
-
-
 class CartItemRead(BaseModel):
     id: UUID
     variant_id: UUID
@@ -35,7 +31,7 @@ class CartItemRead(BaseModel):
     quantity: int
     unit_price: Decimal
     subtotal: Decimal
-    image: CartItemImage | None = None
+    image: ProductImageSummary | None = None
 
 
 class CartRead(BaseModel):

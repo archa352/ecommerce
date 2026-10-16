@@ -3,23 +3,19 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalogue.constants import CatalogueStatus
-from app.catalogue.repository import ProductRepository, VariantRepository
+from app.catalogue.repository import ProductImageRepository
+from app.catalogue.schemas import ProductImageSummary
+from app.catalogue.service import get_sellable_variant
 from app.core.database import conflict_on_integrity_error
-from app.core.error_codes import InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 from app.wishlist.models import Wishlist
 from app.wishlist.repository import WishlistItemRepository, WishlistRepository
 from app.wishlist.schemas import (
     WishListItemCreate,
-    WishlistItemImage,
     WishListItemRead,
     WishListRead,
 )
 
-VARIANT_NOT_FOUND = "Product variant not found"
-VARIANT_UNAVAILABLE = "Product variant is not available"
-PRODUCT_UNAVAILABLE = "Product is not available"
 ITEM_NOT_FOUND = "Wishlist item not found"
 WISHLIST_ITEM_EXISTS = "Item already in wishlist"
 
@@ -31,8 +27,7 @@ class WishListService:
         self.customer_id = customer_id
         self.wishlists = WishlistRepository(session, tenant_id)
         self.items = WishlistItemRepository(session, tenant_id)
-        self.variants = VariantRepository(session, tenant_id)
-        self.products = ProductRepository(session, tenant_id)
+        self.images = ProductImageRepository(session, tenant_id)
 
     async def get_or_create_wishlist(self) -> Wishlist:
         wishlist = await self.wishlists.get_by_customer(customer_id=self.customer_id)
@@ -53,7 +48,7 @@ class WishListService:
 
     async def render(self, wishlist: Wishlist) -> WishListRead:
         rows = await self.items.list_with_catalogue(wishlist.id)
-        images = await self.items.primary_images([product.id for _item, _variant, product in rows])
+        images = await self.images.primary_for([product.id for _item, _variant, product in rows])
         items: list[WishListItemRead] = []
         for item, variant, product in rows:
             items.append(
@@ -65,7 +60,7 @@ class WishListService:
                     variant_name=variant.name,
                     sku=variant.sku,
                     unit_price=variant.price,
-                    image=_image_of(images.get(product.id)),
+                    image=_summary(images.get(product.id)),
                 )
             )
         return WishListRead(id=wishlist.id, items=items, item_count=len(items))
@@ -76,7 +71,7 @@ class WishListService:
 
     async def add_item(self, data: WishListItemCreate) -> WishListRead:
         wishlist = await self.get_or_create_wishlist()
-        await self.check_available(data.variant_id)
+        await get_sellable_variant(self.session, self.tenant_id, data.variant_id)
         existing = await self.items.get_by_variant(wishlist.id, data.variant_id)
         if existing is not None:
             raise ConflictError(WISHLIST_ITEM_EXISTS)
@@ -100,26 +95,6 @@ class WishListService:
         await self.session.commit()
         return await self.render(wishlist)
 
-    async def check_available(self, variant_id: UUID) -> None:
-        variant = await self.variants.get(variant_id)
-        if variant is None:
-            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
 
-        if variant.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(
-                VARIANT_UNAVAILABLE,
-                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
-            )
-
-        product = await self.products.get(variant.product_id)
-        if product is None or product.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(
-                PRODUCT_UNAVAILABLE,
-                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
-            )
-
-
-def _image_of(image) -> WishlistItemImage | None:
-    if image is None:
-        return None
-    return WishlistItemImage(url=image.url, alt_text=image.alt_text)
+def _summary(image) -> ProductImageSummary | None:
+    return ProductImageSummary.model_validate(image) if image is not None else None

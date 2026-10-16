@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession  # type: ignore
 
-from app.catalogue.models import Product, ProductImage, ProductVariant
+from app.catalogue.models import Product, ProductVariant
 from app.wishlist.models import Wishlist, WishlistItem
 
 
@@ -113,15 +113,3 @@ class WishlistItemRepository:
             .order_by(WishlistItem.created_at)
         )
         return list((await self.session.execute(stmt)).all())
-
-    async def primary_images(self, product_ids: list[UUID]) -> dict[UUID, ProductImage]:
-        if not product_ids:
-            return {}
-        rows = await self.session.scalars(
-            select(ProductImage).where(
-                ProductImage.tenant_id == self.tenant_id,
-                ProductImage.product_id.in_(product_ids),
-                ProductImage.is_primary.is_(True),
-            )
-        )
-        return {image.product_id: image for image in rows.all()}

@@ -57,6 +57,9 @@ VARIANT_NOT_FOUND = "Variant not found"
 IMAGE_NOT_FOUND = "Product image not found"
 LAST_IMAGE = "A product must have at least one image"
 PARENT_NOT_FOUND = "Parent category not found"
+SELLABLE_VARIANT_NOT_FOUND = "Product variant not found"
+VARIANT_UNAVAILABLE = "Product variant is not available"
+PRODUCT_UNAVAILABLE = "Product is not available"
 
 
 def _check_sale(price, sale_price, starts_at, ends_at) -> None:
@@ -1018,3 +1021,21 @@ class InventoryService:
             stmt.offset(params.offset).limit(params.limit)
         )
         return list(rows.all()), int(total or 0)
+
+
+async def get_sellable_variant(
+    session: AsyncSession, tenant_id: UUID, variant_id: UUID
+) -> ProductVariant:
+    """The variant a shopper may add to a cart or wishlist: it and its product are ACTIVE."""
+    variant = await VariantRepository(session, tenant_id).get(variant_id)
+    if variant is None:
+        raise NotFoundError(
+            SELLABLE_VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND
+        )
+    if variant.status != CatalogueStatus.ACTIVE.value:
+        raise ConflictError(VARIANT_UNAVAILABLE, error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE)
+
+    product = await ProductRepository(session, tenant_id).get(variant.product_id)
+    if product is None or product.status != CatalogueStatus.ACTIVE.value:
+        raise ConflictError(PRODUCT_UNAVAILABLE, error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE)
+    return variant
