@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.error_codes import TenantErrorCode
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.tenants.models import Tenant
@@ -55,7 +56,9 @@ async def resolve_tenant(
             )
 
     if tenant is None:
-        raise NotFoundError("Unknown storefront domain", error_code="UNKNOWN_STOREFRONT")
+        raise NotFoundError(
+            "Unknown storefront domain", error_code=TenantErrorCode.UNKNOWN_STOREFRONT
+        )
 
     return tenant
 

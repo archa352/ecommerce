@@ -46,6 +46,7 @@ from app.catalogue.schemas import (
     VariantOptionValue,
     VariantUpdate,
 )
+from app.core.error_codes import CommonErrorCode, InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import PageParams
 from app.core.slugs import slugify, with_suffix
@@ -81,9 +82,12 @@ class CategoryService:
         """A sub-category's parent must exist in this tenant and not be archived."""
         parent = await self.categories.get(parent_id)
         if parent is None:
-            raise NotFoundError(PARENT_NOT_FOUND)
+            raise NotFoundError(PARENT_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
         if parent.status == CatalogueStatus.ARCHIVED.value:
-            raise ConflictError("Parent category is archived and cannot take sub-categories")
+            raise ConflictError(
+                "Parent category is archived and cannot take sub-categories",
+                error_code=ProductErrorCode.CATEGORY_ARCHIVED,
+            )
         return parent
 
     async def create(self, data: CategoryCreate) -> Category:
@@ -110,13 +114,13 @@ class CategoryService:
     async def get(self, category_id: UUID) -> Category:
         category = await self.categories.get(category_id)
         if category is None:
-            raise NotFoundError(CATEGORY_NOT_FOUND)
+            raise NotFoundError(CATEGORY_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
         return category
 
     async def get_public(self, category_id: UUID) -> Category:
         category = await self.get(category_id)
         if category.status != CatalogueStatus.ACTIVE.value:
-            raise NotFoundError(CATEGORY_NOT_FOUND)
+            raise NotFoundError(CATEGORY_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
         return category
 
     async def list(
@@ -172,13 +176,19 @@ class CategoryService:
         category = await self.get(category_id)
 
         if category.status == CatalogueStatus.ARCHIVED.value:
-            raise NotFoundError(CATEGORY_NOT_FOUND)
+            raise NotFoundError(CATEGORY_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
 
         if await self.products.has_products_in_category(category.id):
-            raise ConflictError("Category still has active products and cannot be deleted")
+            raise ConflictError(
+                "Category still has active products and cannot be deleted",
+                error_code=ProductErrorCode.CATEGORY_IN_USE,
+            )
 
         if await self.categories.has_live_children(category.id):
-            raise ConflictError("Category still has sub-categories and cannot be deleted")
+            raise ConflictError(
+                "Category still has sub-categories and cannot be deleted",
+                error_code=ProductErrorCode.CATEGORY_IN_USE,
+            )
 
         category.status = CatalogueStatus.ARCHIVED.value
         await self.session.commit()
@@ -197,9 +207,12 @@ class ProductService:
     async def _require_category(self, category_id: UUID) -> Category:
         category = await self.categories.get(category_id)
         if category is None:
-            raise NotFoundError(CATEGORY_NOT_FOUND)
+            raise NotFoundError(CATEGORY_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
         if category.status == CatalogueStatus.ARCHIVED.value:
-            raise ConflictError("Category is archived and cannot take products")
+            raise ConflictError(
+                "Category is archived and cannot take products",
+                error_code=ProductErrorCode.CATEGORY_ARCHIVED,
+            )
         return category
 
     async def create(self, data: ProductCreate) -> Product:
@@ -261,7 +274,7 @@ class ProductService:
     async def get(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
         if product is None:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
         return product
 
     async def _slug_taken(self, slug: str, exclude: UUID | None = None) -> bool:
@@ -273,7 +286,7 @@ class ProductService:
     async def _require_free_slug(self, slug: str, exclude: UUID | None = None) -> str:
         if await self._slug_taken(slug, exclude):
             raise ConflictError(
-                f"The product URL '{slug}' is already used", error_code="SLUG_TAKEN"
+                f"The product URL '{slug}' is already used", error_code=CommonErrorCode.SLUG_TAKEN
             )
         return slug
 
@@ -291,7 +304,7 @@ class ProductService:
             select(Product.id).where(Product.tenant_id == self.tenant_id, Product.slug == slug)
         )
         if product_id is None:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
         return await self.get_public(product_id)
 
     async def get_public(self, product_id: UUID) -> Product:
@@ -299,11 +312,11 @@ class ProductService:
         product = await self.get(product_id)
 
         if product.status != CatalogueStatus.ACTIVE.value:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
 
         category = await self.categories.get(product.category_id)
         if category is None or category.status != CatalogueStatus.ACTIVE.value:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
 
         return product
 
@@ -328,7 +341,10 @@ class ProductService:
         if category_id is not None:
             category = await self.categories.get(category_id)
             if category is None:
-                raise NotFoundError(CATEGORY_NOT_FOUND)
+                raise NotFoundError(
+                    CATEGORY_NOT_FOUND,
+                    error_code=ProductErrorCode.CATEGORY_NOT_FOUND,
+                )
 
         stmt = self.products.list_select(
             category_id=category_id,
@@ -402,7 +418,10 @@ class ProductService:
             raise ValidationError("A product cannot be related to itself")
         for related_id in related_ids:
             if await self.products.get(related_id) is None:
-                raise NotFoundError(f"Related product {related_id} not found")
+                raise NotFoundError(
+                    f"Related product {related_id} not found",
+                    error_code=ProductErrorCode.PRODUCT_NOT_FOUND,
+                )
 
         await self.relations.replace(product_id, related_ids)
         await self.session.commit()
@@ -438,7 +457,7 @@ class ProductService:
     ) -> dict[str, list[tuple[str, int]]]:
         """Every fabric/occasion/sleeve/neckline value in use, with how many products have it."""
         if category_id is not None and await self.categories.get(category_id) is None:
-            raise NotFoundError(CATEGORY_NOT_FOUND)
+            raise NotFoundError(CATEGORY_NOT_FOUND, error_code=ProductErrorCode.CATEGORY_NOT_FOUND)
 
         return {
             name: await self.products.attribute_values(
@@ -457,7 +476,7 @@ class ProductService:
         product = await self.get(product_id)
 
         if product.status == CatalogueStatus.ARCHIVED.value:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
 
         product.status = CatalogueStatus.ARCHIVED.value
 
@@ -488,7 +507,7 @@ class VariantService:
     async def _require_product(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
         if product is None:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
         return product
 
     async def _sync_options(
@@ -528,11 +547,17 @@ class VariantService:
         product = await self._require_product(product_id)
 
         if product.status == CatalogueStatus.ARCHIVED.value:
-            raise ConflictError("Cannot add a variant to an archived product")
+            raise ConflictError(
+                "Cannot add a variant to an archived product",
+                error_code=ProductErrorCode.PRODUCT_ARCHIVED,
+            )
 
         sku = data.sku.strip().upper()
         if await self.variants.get_by_sku(sku) is not None:
-            raise ConflictError("A variant with this SKU already exists")
+            raise ConflictError(
+                "A variant with this SKU already exists",
+                error_code=ProductErrorCode.SKU_TAKEN,
+            )
 
         _check_sale(data.price, data.sale_price, data.sale_starts_at, data.sale_ends_at)
 
@@ -572,14 +597,17 @@ class VariantService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A variant with this SKU already exists") from exc
+            raise ConflictError(
+                "A variant with this SKU already exists",
+                error_code=ProductErrorCode.SKU_TAKEN,
+            ) from exc
 
         return await self.get(variant.id)
 
     async def get(self, variant_id: UUID) -> ProductVariant:
         variant = await self.variants.get(variant_id)
         if variant is None:
-            raise NotFoundError(VARIANT_NOT_FOUND)
+            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
         return variant
 
     async def list_for_product(
@@ -599,7 +627,10 @@ class VariantService:
             sku = changes["sku"].strip().upper()
             existing = await self.variants.get_by_sku(sku)
             if existing is not None and existing.id != variant.id:
-                raise ConflictError("A variant with this SKU already exists")
+                raise ConflictError(
+                    "A variant with this SKU already exists",
+                    error_code=ProductErrorCode.SKU_TAKEN,
+                )
             changes["sku"] = sku
 
         if changes.get("status") is not None:
@@ -631,7 +662,10 @@ class VariantService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("A variant with this SKU already exists") from exc
+            raise ConflictError(
+                "A variant with this SKU already exists",
+                error_code=ProductErrorCode.SKU_TAKEN,
+            ) from exc
 
         return await self.get(variant.id)
 
@@ -640,7 +674,7 @@ class VariantService:
         variant = await self.get(variant_id)
 
         if variant.status == CatalogueStatus.ARCHIVED.value:
-            raise NotFoundError(VARIANT_NOT_FOUND)
+            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
 
         variant.status = CatalogueStatus.ARCHIVED.value
         await self.session.commit()
@@ -657,7 +691,7 @@ class ProductImageService:
     async def _require_product(self, product_id: UUID) -> Product:
         product = await self.products.get(product_id)
         if product is None:
-            raise NotFoundError(PRODUCT_NOT_FOUND)
+            raise NotFoundError(PRODUCT_NOT_FOUND, error_code=ProductErrorCode.PRODUCT_NOT_FOUND)
         return product
 
     async def _require_image(self, image_id: UUID) -> ProductImage:
@@ -710,7 +744,10 @@ class ProductImageService:
         product = await self._require_product(product_id)
 
         if product.status == CatalogueStatus.ARCHIVED.value:
-            raise ConflictError("Cannot add an image to an archived product")
+            raise ConflictError(
+                "Cannot add an image to an archived product",
+                error_code=ProductErrorCode.PRODUCT_ARCHIVED,
+            )
 
         try:
             if is_primary:
@@ -818,11 +855,14 @@ class InventoryService:
 
     async def _require_item(self, variant_id: UUID) -> InventoryItem:
         if await self.variants.get(variant_id) is None:
-            raise NotFoundError(VARIANT_NOT_FOUND)
+            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
 
         item = await self.inventory.get_for_variant(variant_id)
         if item is None:
-            raise NotFoundError("Inventory record not found")
+            raise NotFoundError(
+                "Inventory record not found",
+                error_code=InventoryErrorCode.INVENTORY_NOT_FOUND,
+            )
         return item
 
     def _record(
@@ -862,7 +902,8 @@ class InventoryService:
 
         if not await self.inventory.set_available(variant_id, quantity):
             raise ConflictError(
-                "Stock cannot be set below the quantity already reserved"
+                "Stock cannot be set below the quantity already reserved",
+                error_code=InventoryErrorCode.STOCK_BELOW_RESERVED,
             )
 
         self._record(variant_id, delta, InventoryReason.ADJUSTMENT, note=note)
@@ -882,7 +923,8 @@ class InventoryService:
 
         if not await self.inventory.adjust_available(variant_id, delta):
             raise ConflictError(
-                "Stock cannot go negative or below the quantity already reserved"
+                "Stock cannot go negative or below the quantity already reserved",
+                error_code=InventoryErrorCode.STOCK_BELOW_RESERVED,
             )
 
         self._record(variant_id, delta, reason, reference, note)
@@ -909,7 +951,7 @@ class InventoryService:
 
         if not await self.inventory.reserve(variant_id, quantity):
             raise ConflictError(
-                "Insufficient stock", error_code="INSUFFICIENT_STOCK"
+                "Insufficient stock", error_code=InventoryErrorCode.INSUFFICIENT_STOCK
             )
 
         self._record(variant_id, 0, InventoryReason.RESERVATION, reference)
@@ -947,7 +989,10 @@ class InventoryService:
         await self._require_item(variant_id)
 
         if not await self.inventory.release(variant_id, quantity):
-            raise ConflictError("Cannot release more stock than is reserved")
+            raise ConflictError(
+                "Cannot release more stock than is reserved",
+                error_code=InventoryErrorCode.STOCK_BELOW_RESERVED,
+            )
 
         self._record(variant_id, 0, InventoryReason.RELEASE, reference)
         await self._save(commit)
@@ -965,7 +1010,10 @@ class InventoryService:
         await self._require_item(variant_id)
 
         if not await self.inventory.fulfil(variant_id, quantity):
-            raise ConflictError("Cannot fulfil more stock than is reserved")
+            raise ConflictError(
+                "Cannot fulfil more stock than is reserved",
+                error_code=InventoryErrorCode.STOCK_BELOW_RESERVED,
+            )
 
         self._record(variant_id, -quantity, InventoryReason.FULFILLMENT, reference)
         await self._save(commit)

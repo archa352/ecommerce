@@ -6,6 +6,7 @@ import httpx
 
 from app.auth.phone import normalize_phone
 from app.core.config import get_settings
+from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError, ServiceUnavailableError
 from app.core.logging import get_logger
 
@@ -26,7 +27,10 @@ async def verify_access_token(access_token: str) -> str:
 
     if not settings.msg91_auth_key:
         logger.error("widget.verification_not_configured")
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(
+            UNAVAILABLE,
+            error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
+        )
 
     try:
         async with httpx.AsyncClient(timeout=settings.msg91_timeout_seconds) as client:
@@ -40,7 +44,10 @@ async def verify_access_token(access_token: str) -> str:
             )
     except httpx.HTTPError as exc:
         logger.error("widget.verify_transport_error error=%s", type(exc).__name__)
-        raise ServiceUnavailableError(UNAVAILABLE) from exc
+        raise ServiceUnavailableError(
+            UNAVAILABLE,
+            error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
+        ) from exc
 
     return _identity_from(response)
 
@@ -59,7 +66,10 @@ def _identity_from(response: httpx.Response) -> str:
         response.status_code == httpx.codes.TOO_MANY_REQUESTS
     ):
         logger.error("widget.provider_error status=%s", response.status_code)
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(
+            UNAVAILABLE,
+            error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
+        )
 
     code = str(payload.get("code", "")) if isinstance(payload, dict) else ""
     if code in _OUR_FAULT_CODES:
@@ -70,7 +80,10 @@ def _identity_from(response: httpx.Response) -> str:
             code,
             payload.get("message") if isinstance(payload, dict) else "-",
         )
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(
+            UNAVAILABLE,
+            error_code=AuthErrorCode.OTP_PROVIDER_UNAVAILABLE,
+        )
 
     if response.status_code != httpx.codes.OK or outcome != "success":
         logger.info(
@@ -78,13 +91,13 @@ def _identity_from(response: httpx.Response) -> str:
             response.status_code,
             outcome or "-",
         )
-        raise AuthenticationError(UNVERIFIED)
+        raise AuthenticationError(UNVERIFIED, error_code=AuthErrorCode.INVALID_OTP)
 
     phone = _phone_from(payload)
 
     if phone is None:
         logger.error("widget.identifier_missing keys=%s", sorted(payload))
-        raise AuthenticationError(UNVERIFIED)
+        raise AuthenticationError(UNVERIFIED, error_code=AuthErrorCode.INVALID_OTP)
 
     return phone
 

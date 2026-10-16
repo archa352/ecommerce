@@ -24,6 +24,7 @@ from app.auth.repository import RefreshTokenRepository
 from app.auth.schemas import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, NormalizedPhone
 from app.auth.security import hash_password
 from app.core.database import get_db
+from app.core.error_codes import UserErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
@@ -111,7 +112,7 @@ def staff_read(user: User) -> StaffRead:
 async def _get_staff(session: AsyncSession, tenant_id: UUID, user_id: UUID) -> User:
     user = await UserRepository(session).get_by_id(tenant_id=tenant_id, user_id=user_id)
     if user is None or user.role not in STAFF_ROLES:
-        raise NotFoundError("Staff member not found")
+        raise NotFoundError("Staff member not found", error_code=UserErrorCode.NOT_FOUND)
     return user
 
 
@@ -168,9 +169,11 @@ async def create_staff(
     users = UserRepository(session)
     email = str(data.email).lower()
     if await users.get_by_email(tenant_id=user.tenant_id, email=email):
-        raise ConflictError("That email is already in use", error_code="EMAIL_TAKEN")
+        raise ConflictError("That email is already in use", error_code=UserErrorCode.EMAIL_TAKEN)
     if await users.get_by_phone(tenant_id=user.tenant_id, phone=data.phone):
-        raise ConflictError("That phone number is already in use", error_code="PHONE_TAKEN")
+        raise ConflictError(
+            "That phone number is already in use", error_code=UserErrorCode.PHONE_TAKEN
+        )
 
     try:
         member = await users.create(
@@ -229,7 +232,10 @@ async def update_staff(
         changes.get("status") == UserStatus.INACTIVE.value
         or changes.get("role") == UserRole.STAFF.value
     ):
-        raise ValidationError("You cannot deactivate or demote your own account")
+        raise ValidationError(
+            "You cannot deactivate or demote your own account",
+            error_code=UserErrorCode.CANNOT_CHANGE_SELF,
+        )
 
     before = staff_read(member).model_dump(include={"name", "role", "permissions", "status"})
     for field, value in changes.items():

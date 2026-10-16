@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.repository import CategoryRepository, category_subtree
 from app.core.config import get_settings
+from app.core.error_codes import CouponErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.money import ZERO, money
 from app.core.pagination import PageParams
@@ -133,7 +134,10 @@ class CouponService:
         code_upper = data.code.upper()
         existing = await self.coupons.get_by_code(code_upper)
         if existing is not None:
-            raise ConflictError("A coupon with this code already exists")
+            raise ConflictError(
+                "A coupon with this code already exists",
+                error_code=CouponErrorCode.CODE_TAKEN,
+            )
 
         
         try:
@@ -256,20 +260,32 @@ class CouponService:
     ) -> CouponResult:
         """Validate a coupon against this basket and work out what it saves."""
         if coupon is None or not coupon.is_active:
-            raise NotFoundError("Invalid or inactive coupon code")
+            raise NotFoundError(
+                "Invalid or inactive coupon code",
+                error_code=CouponErrorCode.INVALID,
+            )
 
         now = datetime.now(timezone.utc)
         if coupon.starts_at and now < coupon.starts_at:
-            raise ValidationError("This coupon is not active yet")
+            raise ValidationError(
+                "This coupon is not active yet",
+                error_code=CouponErrorCode.NOT_STARTED,
+            )
         if coupon.expires_at and now > coupon.expires_at:
-            raise ValidationError("This coupon has expired")
+            raise ValidationError("This coupon has expired", error_code=CouponErrorCode.EXPIRED)
         if not valid_today(coupon, now):
             days = ", ".join(WEEKDAY_NAMES[d] for d in coupon.valid_weekdays)
-            raise ValidationError(f"This coupon is only valid on {days}")
+            raise ValidationError(
+                f"This coupon is only valid on {days}",
+                error_code=CouponErrorCode.NOT_APPLICABLE,
+            )
 
         # NULL means unlimited; 0 is a real "block everything" setting.
         if coupon.usage_limit is not None and coupon.times_used >= coupon.usage_limit:
-            raise ValidationError(USAGE_LIMIT_REACHED)
+            raise ValidationError(
+                USAGE_LIMIT_REACHED,
+                error_code=CouponErrorCode.USAGE_LIMIT_REACHED,
+            )
 
         if coupon.per_customer_usage_limit is not None and customer_id is not None:
             customer_uses = await self.usages.count_for_customer(
@@ -278,22 +294,24 @@ class CouponService:
             )
             if customer_uses >= coupon.per_customer_usage_limit:
                 raise ValidationError(
-                    "You have already reached the usage limit for this coupon"
+                    "You have already reached the usage limit for this coupon",
+                    error_code=CouponErrorCode.USAGE_LIMIT_REACHED,
                 )
 
         if coupon.first_order_only and (
             customer_id is None or await self._has_earlier_order(customer_id)
         ):
-            raise ValidationError(FIRST_ORDER_ONLY)
+            raise ValidationError(FIRST_ORDER_ONLY, error_code=CouponErrorCode.NOT_APPLICABLE)
 
         if coupon.min_order_amount is not None and subtotal < coupon.min_order_amount:
             raise ValidationError(
-                f"Minimum order amount of {coupon.min_order_amount} required for this coupon"
+                f"Minimum order amount of {coupon.min_order_amount} required for this coupon",
+                error_code=CouponErrorCode.MIN_ORDER_NOT_MET,
             )
 
         covered = await self._eligible_category_ids(coupon)
         if self._needs_lines(coupon, covered is not None) and lines is None:
-            raise ValidationError(NEEDS_CART)
+            raise ValidationError(NEEDS_CART, error_code=CouponErrorCode.NOT_APPLICABLE)
 
         if lines is None:
             eligible_total = subtotal
@@ -304,13 +322,17 @@ class CouponService:
             ]
             eligible_total = sum((line.unit_price * line.quantity for line in eligible), ZERO)
             if covered is not None and not eligible:
-                raise ValidationError("This coupon does not apply to anything in your bag")
+                raise ValidationError(
+                    "This coupon does not apply to anything in your bag",
+                    error_code=CouponErrorCode.NOT_APPLICABLE,
+                )
 
         if coupon.min_quantity is not None:
             units = sum(line.quantity for line in eligible)
             if units < coupon.min_quantity:
                 raise ValidationError(
-                    f"Add at least {coupon.min_quantity} eligible items to use this offer"
+                    f"Add at least {coupon.min_quantity} eligible items to use this offer",
+                    error_code=CouponErrorCode.NOT_APPLICABLE,
                 )
 
         kind = DiscountType(coupon.discount_type)
@@ -325,7 +347,8 @@ class CouponService:
             if raw_discount == ZERO:
                 raise ValidationError(
                     f"Buy {coupon.buy_quantity} and get {coupon.get_quantity} -- "
-                    "add more eligible items to use this offer"
+                    "add more eligible items to use this offer",
+                    error_code=CouponErrorCode.NOT_APPLICABLE,
                 )
         else:
             raw_discount = coupon.discount_value
@@ -387,7 +410,7 @@ class CouponService:
         cart = await CartService(self.session, self.tenant_id, customer_id).active_cart()
         lines = await cart_lines(self.session, self.tenant_id, cart.id) if cart else []
         if not lines:
-            raise ValidationError(NEEDS_CART)
+            raise ValidationError(NEEDS_CART, error_code=CouponErrorCode.NOT_APPLICABLE)
         cart_subtotal = sum((line.unit_price * line.quantity for line in lines), ZERO)
         return await self.evaluate(coupon, cart_subtotal, customer_id, lines=lines)
 

@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.error_codes import OrderErrorCode, PaymentErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import PageParams
 from app.orders.constants import OrderStatus
@@ -31,7 +32,7 @@ class PaymentService:
         """Admin lookup: any payment in this tenant."""
         payment = await self.payments.get(payment_id)
         if payment is None:
-            raise NotFoundError(PAYMENT_NOT_FOUND)
+            raise NotFoundError(PAYMENT_NOT_FOUND, error_code=PaymentErrorCode.NOT_FOUND)
         return payment
 
     async def get_for_customer(self, customer_id: UUID, payment_id: UUID) -> Payment:
@@ -40,7 +41,7 @@ class PaymentService:
 
         order = await self.orders.get_for_customer(customer_id, payment.order_id)
         if order is None:
-            raise NotFoundError(PAYMENT_NOT_FOUND)
+            raise NotFoundError(PAYMENT_NOT_FOUND, error_code=PaymentErrorCode.NOT_FOUND)
 
         return payment
 
@@ -62,17 +63,23 @@ class PaymentService:
         try:
             order = await self.orders.get_for_customer_for_update(customer_id, order_id)
             if order is None:
-                raise NotFoundError("Order not found")
+                raise NotFoundError("Order not found", error_code=OrderErrorCode.NOT_FOUND)
             payment = await self.payments.get_razorpay_payment_for_update(order.id)
             if payment is None:
                 raise ConflictError("Online payment record not found")
             if order.status not in {OrderStatus.PENDING.value, OrderStatus.CONFIRMED.value}:
-                raise ConflictError("This order can no longer accept payment")
+                raise ConflictError(
+                    "This order can no longer accept payment",
+                    error_code=PaymentErrorCode.NOT_PAYABLE,
+                )
             if (
                 payment.status != PaymentStatus.PENDING.value
                 or order.payment_status != OrderPaymentStatus.PENDING.value
             ):
-                raise ConflictError("This payment is no longer pending")
+                raise ConflictError(
+                    "This payment is no longer pending",
+                    error_code=PaymentErrorCode.NOT_PAYABLE,
+                )
             if payment.razorpay_order_id is not None:
                 await self.session.commit()
                 return payment
@@ -112,60 +119,85 @@ class PaymentService:
         if not razorpay.signature_is_valid(
             razorpay_order_id, razorpay_payment_id, razorpay_signature
         ):
-            raise ValidationError("Invalid Razorpay payment signature")
+            raise ValidationError(
+                "Invalid Razorpay payment signature",
+                error_code=PaymentErrorCode.INVALID_SIGNATURE,
+            )
 
         payment = await self.payments.get_by_razorpay_order_id(razorpay_order_id)
         if payment is None:
-            raise NotFoundError(PAYMENT_NOT_FOUND)
+            raise NotFoundError(PAYMENT_NOT_FOUND, error_code=PaymentErrorCode.NOT_FOUND)
 
         try:
             order = await self.orders.get_for_customer_for_update(
                 customer_id, payment.order_id
             )
             if order is None:
-                raise NotFoundError(PAYMENT_NOT_FOUND)
+                raise NotFoundError(PAYMENT_NOT_FOUND, error_code=PaymentErrorCode.NOT_FOUND)
             payment = await self.payments.get_razorpay_payment_for_update(
                 order.id, razorpay_order_id
             )
             if payment is None:
-                raise NotFoundError(PAYMENT_NOT_FOUND)
+                raise NotFoundError(PAYMENT_NOT_FOUND, error_code=PaymentErrorCode.NOT_FOUND)
 
             if payment.status == PaymentStatus.PAID.value:
                 if payment.razorpay_payment_id == razorpay_payment_id:
                     await self.session.commit()
                     return payment
                 raise ConflictError(
-                    "A different payment has already completed this order"
+                    "A different payment has already completed this order",
+                    error_code=PaymentErrorCode.ALREADY_RECORDED,
                 )
             if (
                 payment.status != PaymentStatus.PENDING.value
                 or order.payment_status != OrderPaymentStatus.PENDING.value
                 or order.status == OrderStatus.CANCELLED.value
             ):
-                raise ConflictError("This order is not awaiting payment")
+                raise ConflictError(
+                    "This order is not awaiting payment",
+                    error_code=PaymentErrorCode.NOT_PAYABLE,
+                )
 
             details = await razorpay.fetch_payment(razorpay_payment_id)
             expected_amount = razorpay.to_subunits(payment.amount)
             if details.get("id") != razorpay_payment_id:
-                raise ValidationError("Razorpay payment ID does not match")
+                raise ValidationError(
+                    "Razorpay payment ID does not match",
+                    error_code=PaymentErrorCode.VERIFICATION_FAILED,
+                )
             if details.get("order_id") != razorpay_order_id:
-                raise ValidationError("Razorpay order ID does not match")
+                raise ValidationError(
+                    "Razorpay order ID does not match",
+                    error_code=PaymentErrorCode.VERIFICATION_FAILED,
+                )
             gateway_amount = details.get("amount")
             if (
                 isinstance(gateway_amount, bool)
                 or not isinstance(gateway_amount, int)
                 or gateway_amount != expected_amount
             ):
-                raise ValidationError("Razorpay payment amount does not match")
+                raise ValidationError(
+                    "Razorpay payment amount does not match",
+                    error_code=PaymentErrorCode.VERIFICATION_FAILED,
+                )
             if details.get("currency") != currency:
-                raise ValidationError("Razorpay payment currency does not match")
+                raise ValidationError(
+                    "Razorpay payment currency does not match",
+                    error_code=PaymentErrorCode.VERIFICATION_FAILED,
+                )
             if (
                 details.get("status") != "captured"
                 or details.get("captured") is not True
             ):
-                raise ValidationError("Razorpay payment has not been captured")
+                raise ValidationError(
+                    "Razorpay payment has not been captured",
+                    error_code=PaymentErrorCode.VERIFICATION_FAILED,
+                )
             if await self.payments.razorpay_payment_id_exists(razorpay_payment_id):
-                raise ConflictError("Razorpay payment ID has already been used")
+                raise ConflictError(
+                    "Razorpay payment ID has already been used",
+                    error_code=PaymentErrorCode.ALREADY_RECORDED,
+                )
 
             payment.razorpay_payment_id = razorpay_payment_id
             payment.status = PaymentStatus.PAID.value
@@ -174,7 +206,10 @@ class PaymentService:
             return payment
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("Razorpay payment has already been recorded") from exc
+            raise ConflictError(
+                "Razorpay payment has already been recorded",
+                error_code=PaymentErrorCode.ALREADY_RECORDED,
+            ) from exc
         except Exception:
             await self.session.rollback()
             raise

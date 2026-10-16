@@ -31,6 +31,7 @@ from app.auth.security import (
 )
 from app.auth.widget import verify_access_token
 from app.core.config import get_settings
+from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError
 from app.core.logging import get_logger
 from app.tenants.models import Tenant
@@ -76,7 +77,10 @@ class AuthService:
             # Staff and admins hold passwords and sign in through their own
             # routes; letting them in here would sidestep that.
             logger.info("auth.login_rejected user_id=%s tenant_id=%s", user.id, self.tenant.id)
-            raise AuthenticationError(INVALID_CREDENTIALS)
+            raise AuthenticationError(
+                INVALID_CREDENTIALS,
+                error_code=AuthErrorCode.INVALID_CREDENTIALS,
+            )
 
         # MSG91 confirmed possession of the number, which is the whole of what
         # verification means for a customer.
@@ -134,13 +138,13 @@ class AuthService:
             tenant_id=self.tenant.id, challenge_id=verification_id
         )
         if challenge is None:
-            raise AuthenticationError(INVALID_OTP)
+            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
 
         record = await self.otps.get_by_id(
             tenant_id=self.tenant.id, otp_id=challenge.otp_request_id
         )
         if record is None or record.purpose != OtpPurpose.ADMIN_LOGIN.value:
-            raise AuthenticationError(INVALID_OTP)
+            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
 
         await self._consume_otp(record, otp)
 
@@ -149,7 +153,10 @@ class AuthService:
         )
         if user is None or not user.is_active or user.role != UserRole.STAFF.value:
             await self.session.commit()
-            raise AuthenticationError(INVALID_CREDENTIALS)
+            raise AuthenticationError(
+                INVALID_CREDENTIALS,
+                error_code=AuthErrorCode.INVALID_CREDENTIALS,
+            )
 
         await self.challenges.consume(challenge)
         user.is_verified = True
@@ -164,14 +171,14 @@ class AuthService:
     async def refresh_tokens(self, refresh_token: str) -> TokenPair:
         payload = decode_token(refresh_token, expected_type="refresh")
         if payload.tenant_id != str(self.tenant.id):
-            raise AuthenticationError(INVALID_TOKEN)
+            raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         stored = await self.tokens.get_by_hash(
             tenant_id=self.tenant.id,
             token_hash=hash_refresh_token(refresh_token),
         )
         if stored is None or str(stored.user_id) != payload.user_id:
-            raise AuthenticationError(INVALID_TOKEN)
+            raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         if stored.revoked_at is not None:
             revoked = await self.tokens.revoke_all_for_user(stored.user_id)
@@ -182,10 +189,10 @@ class AuthService:
                 self.tenant.id,
                 revoked,
             )
-            raise AuthenticationError(INVALID_TOKEN)
+            raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         if stored.expires_at <= datetime.now(timezone.utc):
-            raise AuthenticationError(INVALID_TOKEN)
+            raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         user = await self.users.get_by_id(tenant_id=self.tenant.id, user_id=stored.user_id)
         if user is None or not user.is_active:
@@ -194,7 +201,7 @@ class AuthService:
                 stored.user_id,
                 self.tenant.id,
             )
-            raise AuthenticationError(INVALID_TOKEN)
+            raise AuthenticationError(INVALID_TOKEN, error_code=AuthErrorCode.INVALID_TOKEN)
 
         await self.tokens.revoke(stored)
         tokens = await self._issue_tokens(user)
@@ -253,11 +260,17 @@ class AuthService:
 
         if user is None or user.password_hash is None or not user.is_active:
             await spend_dummy_verification()
-            raise AuthenticationError(INVALID_CREDENTIALS)
+            raise AuthenticationError(
+                INVALID_CREDENTIALS,
+                error_code=AuthErrorCode.INVALID_CREDENTIALS,
+            )
 
         if not await verify_password(password, user.password_hash):
             logger.info("auth.login_failed user_id=%s tenant_id=%s", user.id, self.tenant.id)
-            raise AuthenticationError(INVALID_CREDENTIALS)
+            raise AuthenticationError(
+                INVALID_CREDENTIALS,
+                error_code=AuthErrorCode.INVALID_CREDENTIALS,
+            )
 
         return user
 
@@ -285,7 +298,10 @@ class AuthService:
             )
         except IntegrityError as exc:
             await self.session.rollback()
-            raise AuthenticationError(INVALID_CREDENTIALS) from exc
+            raise AuthenticationError(
+                INVALID_CREDENTIALS,
+                error_code=AuthErrorCode.INVALID_CREDENTIALS,
+            ) from exc
 
     async def _consume_otp(self, record: OtpRequest | None, otp: str) -> None:
         now = datetime.now(timezone.utc)
@@ -296,7 +312,7 @@ class AuthService:
             or record.expires_at <= now
             or record.attempts >= OTP_MAX_ATTEMPTS
         ):
-            raise AuthenticationError(INVALID_OTP)
+            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
 
         record.attempts += 1
 
@@ -308,7 +324,7 @@ class AuthService:
                 record.id,
                 record.attempts,
             )
-            raise AuthenticationError(INVALID_OTP)
+            raise AuthenticationError(INVALID_OTP, error_code=AuthErrorCode.INVALID_OTP)
 
         record.verified_at = now
         await self.session.flush()

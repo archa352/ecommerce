@@ -10,6 +10,7 @@ from decimal import Decimal
 import httpx
 
 from app.core.config import get_settings
+from app.core.error_codes import PaymentErrorCode
 from app.core.exceptions import ServiceUnavailableError
 
 UNAVAILABLE = "Online payment is not available right now"
@@ -26,7 +27,7 @@ class Credentials:
 def credentials() -> Credentials:
     settings = get_settings()
     if not settings.razorpay_key_id or not settings.razorpay_key_secret:
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(UNAVAILABLE, error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE)
     return Credentials(
         key_id=settings.razorpay_key_id,
         key_secret=settings.razorpay_key_secret,
@@ -58,7 +59,10 @@ async def create_order(amount: Decimal, currency: str, receipt: str) -> str:
             )
             payload = response.json()
     except (httpx.HTTPError, ValueError) as exc:
-        raise ServiceUnavailableError(UNAVAILABLE) from exc
+        raise ServiceUnavailableError(
+            UNAVAILABLE,
+            error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE,
+        ) from exc
 
     order_id = payload.get("id") if isinstance(payload, dict) else None
     if (
@@ -68,14 +72,14 @@ async def create_order(amount: Decimal, currency: str, receipt: str) -> str:
         or payload.get("amount") != expected_amount
         or payload.get("currency") != currency
     ):
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(UNAVAILABLE, error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE)
     return order_id
 
 
 async def fetch_payment(payment_id: str) -> dict:
     creds = credentials()
     if not payment_id.startswith("pay_"):
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(UNAVAILABLE, error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE)
     try:
         async with httpx.AsyncClient(timeout=creds.timeout_seconds) as client:
             response = await client.get(
@@ -84,10 +88,13 @@ async def fetch_payment(payment_id: str) -> dict:
             )
             payload = response.json()
     except (httpx.HTTPError, ValueError) as exc:
-        raise ServiceUnavailableError(UNAVAILABLE) from exc
+        raise ServiceUnavailableError(
+            UNAVAILABLE,
+            error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE,
+        ) from exc
 
     if response.status_code != httpx.codes.OK or not isinstance(payload, dict):
-        raise ServiceUnavailableError(UNAVAILABLE)
+        raise ServiceUnavailableError(UNAVAILABLE, error_code=PaymentErrorCode.GATEWAY_UNAVAILABLE)
     return payload
 
 

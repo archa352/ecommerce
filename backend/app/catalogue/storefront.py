@@ -30,6 +30,7 @@ from app.catalogue.serializers import (
 )
 from app.catalogue.service import CategoryService, ProductService, VariantService
 from app.core.database import get_db
+from app.core.error_codes import ProductErrorCode
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PageParams
 from app.core.responses import ApiResponse, ok, paginated
@@ -220,7 +221,7 @@ async def get_variant(
     variant = await VariantService(session, tenant.id).get(variant_id)
 
     if variant.status != CatalogueStatus.ACTIVE.value:
-        raise NotFoundError("Variant not found")
+        raise NotFoundError("Variant not found", error_code=ProductErrorCode.VARIANT_NOT_FOUND)
 
     await ProductService(session, tenant.id).get_public(variant.product_id)
 

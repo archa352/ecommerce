@@ -25,7 +25,14 @@ class ApiResponse(BaseModel, Generic[T]):
 
 
 class ErrorPayload(BaseModel):
-    code: str = Field(examples=["NOT_FOUND"])
+    """The machine-readable part of a failure. Branch on `code`, show `message`.
+
+    `code` is one of the values in app.core.error_codes. `details` is always a
+    list (empty when there is nothing field-level to report).
+    """
+
+    code: str = Field(examples=["ORDER_NOT_FOUND"])
+    message: str = Field(examples=["Order not found"])
     details: list[dict[str, Any]] = Field(default_factory=list)
     request_id: str | None = None
 

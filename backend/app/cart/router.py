@@ -13,6 +13,7 @@ from app.cart.service import CartService
 from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
 from app.core.request_context import client_ip
 from app.core.responses import ApiResponse, ok
@@ -52,7 +53,7 @@ async def cart_owner(
     if cart_token:
         return CartOwner(tenant_id=tenant.id, customer_id=None, guest_token=cart_token)
 
-    raise AuthenticationError("Not authenticated")
+    raise AuthenticationError("Not authenticated", error_code=AuthErrorCode.NOT_AUTHENTICATED)
 
 
 def _service(session: AsyncSession, owner: CartOwner) -> CartService:

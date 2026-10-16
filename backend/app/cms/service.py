@@ -25,6 +25,7 @@ from app.cms.models import (
     SiteSettings,
 )
 from app.cms.schemas import _link, slugify
+from app.core.error_codes import CommonErrorCode, ContentErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
@@ -133,7 +134,9 @@ class CmsService:
             )
         )
         if taken is not None:
-            raise ConflictError(f"The slug '{slug}' is already used", error_code="SLUG_TAKEN")
+            raise ConflictError(
+                f"The slug '{slug}' is already used", error_code=CommonErrorCode.SLUG_TAKEN
+            )
 
     # --------------------------------------------------------------- media
 
@@ -203,7 +206,7 @@ class CmsService:
         if await self.media_in_use(media.url):
             raise ConflictError(
                 "This image is used by a homepage section, page, article or the site logo",
-                error_code="MEDIA_IN_USE",
+                error_code=ContentErrorCode.MEDIA_IN_USE,
             )
         await self.session.delete(media)
         await self.session.commit()
@@ -228,7 +231,10 @@ class CmsService:
                 )
             )
             if exists is None:
-                raise NotFoundError("Category not found")
+                raise NotFoundError(
+                    "Category not found",
+                    error_code=ProductErrorCode.CATEGORY_NOT_FOUND,
+                )
 
     @staticmethod
     def _check_items(section_type: str, items: list | None) -> None:
@@ -240,7 +246,9 @@ class CmsService:
             raise ValidationError("A hero banner needs at least one slide with an image")
         for number, slide in enumerate(slides, start=1):
             if not (slide or {}).get("image_url"):
-                raise ValidationError(f"Slide {number} needs an image", error_code="IMAGE_REQUIRED")
+                raise ValidationError(
+                    f"Slide {number} needs an image", error_code=ContentErrorCode.IMAGE_REQUIRED
+                )
 
     async def list_sections(self) -> list[HomeSection]:
         rows = await self.session.scalars(

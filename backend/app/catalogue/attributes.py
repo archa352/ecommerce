@@ -22,6 +22,7 @@ from app.auth.permissions import Permission
 from app.catalogue.constants import MAX_PRODUCT_ATTRIBUTE_LENGTH, ProductAttribute
 from app.catalogue.models import Product, ProductAttributeValue
 from app.core.database import get_db
+from app.core.error_codes import ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.responses import ApiResponse, ok
 from app.core.schemas import PartialUpdate, StrictModel, not_blank
@@ -143,7 +144,7 @@ class AttributeService:
                 raise ConflictError(
                     f"{in_use} product(s) use '{item.value}'. Add a new value and "
                     "switch this one off instead of renaming it.",
-                    error_code="VALUE_IN_USE",
+                    error_code=ProductErrorCode.VALUE_IN_USE,
                 )
         for field, value in changes.items():
             setattr(item, field, value)

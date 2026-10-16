@@ -9,6 +9,7 @@ from app.auth.constants import UserRole
 from app.auth.phone import normalize_phone
 from app.auth.schemas import ProfileUpdate
 from app.auth.security import hash_password
+from app.core.error_codes import UserErrorCode
 from app.core.exceptions import ConflictError
 from app.users.models import User
 from app.users.repository import UserRepository
@@ -66,7 +67,7 @@ class UserService:
             owner = await self.users.get_by_email(tenant_id=user.tenant_id, email=email)
             if owner is not None and owner.id != user.id:
                 raise ConflictError(
-                    "That email is already in use", error_code="EMAIL_TAKEN"
+                    "That email is already in use", error_code=UserErrorCode.EMAIL_TAKEN
                 )
             changes["email"] = email
 
@@ -77,6 +78,8 @@ class UserService:
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError("That email is already in use", error_code="EMAIL_TAKEN") from exc
+            raise ConflictError(
+                "That email is already in use", error_code=UserErrorCode.EMAIL_TAKEN
+            ) from exc
 
         return user

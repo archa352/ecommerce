@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.constants import UserRole
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.error_codes import CommonErrorCode, TenantErrorCode
 from app.core.exceptions import NotFoundError, PermissionDeniedError
 from app.core.logging import get_logger
 from app.core.responses import ApiResponse, ok
@@ -29,7 +30,7 @@ def require_dev_environment() -> None:
     if settings.is_production:
         raise PermissionDeniedError(
             "User provisioning endpoints are disabled outside development",
-            error_code="DEV_ONLY_ENDPOINT",
+            error_code=CommonErrorCode.DEV_ONLY_ENDPOINT,
         )
 
 
@@ -45,7 +46,7 @@ async def _resolve_target_tenant(
     if tenant_id is not None:
         found = await TenantRepository(session).get_active_by_id(tenant_id)
         if found is None:
-            raise NotFoundError("Tenant not found", error_code="UNKNOWN_TENANT")
+            raise NotFoundError("Tenant not found", error_code=TenantErrorCode.UNKNOWN_TENANT)
         return found
 
     candidates = (
@@ -55,11 +56,11 @@ async def _resolve_target_tenant(
     ).all()
 
     if not candidates:
-        raise NotFoundError("No active tenant exists", error_code="UNKNOWN_TENANT")
+        raise NotFoundError("No active tenant exists", error_code=TenantErrorCode.UNKNOWN_TENANT)
     if len(candidates) > 1:
         raise NotFoundError(
             "Several active tenants exist -- pass ?tenant_id= to choose one",
-            error_code="AMBIGUOUS_TENANT",
+            error_code=TenantErrorCode.AMBIGUOUS_TENANT,
         )
 
     return candidates[0]

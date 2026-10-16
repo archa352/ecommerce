@@ -12,6 +12,7 @@ from app.auth.constants import UserRole
 from app.auth.permissions import Permission
 from app.auth.security import decode_token
 from app.core.database import get_db
+from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
 from app.tenants.models import Tenant
 from app.tenants.resolver import CurrentTenant
@@ -27,16 +28,25 @@ async def _authenticated_user(
     payload = decode_token(token, expected_type="access")
 
     if payload.tenant_id != str(tenant.id):
-        raise AuthenticationError("Invalid authentication credentials")
+        raise AuthenticationError(
+            "Invalid authentication credentials",
+            error_code=AuthErrorCode.INVALID_TOKEN,
+        )
 
     try:
         user_id = UUID(payload.user_id)
     except ValueError as exc:
-        raise AuthenticationError("Invalid authentication credentials") from exc
+        raise AuthenticationError(
+            "Invalid authentication credentials",
+            error_code=AuthErrorCode.INVALID_TOKEN,
+        ) from exc
 
     user = await UserRepository(session).get_by_id(tenant_id=tenant.id, user_id=user_id)
     if user is None or not user.is_active:
-        raise AuthenticationError("Invalid authentication credentials")
+        raise AuthenticationError(
+            "Invalid authentication credentials",
+            error_code=AuthErrorCode.INVALID_TOKEN,
+        )
 
     return user
 
@@ -47,7 +57,7 @@ async def get_current_user(
     session: AsyncSession = Depends(get_db),
 ) -> User:
     if credentials is None or not credentials.credentials:
-        raise AuthenticationError("Not authenticated")
+        raise AuthenticationError("Not authenticated", error_code=AuthErrorCode.NOT_AUTHENTICATED)
 
     return await _authenticated_user(tenant, credentials.credentials, session)
 

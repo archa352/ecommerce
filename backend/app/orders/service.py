@@ -24,6 +24,7 @@ from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from app.cod.schemas import CodAvailability
 from app.cod.service import CodService
+from app.core.error_codes import CartErrorCode, InventoryErrorCode, OrderErrorCode, UserErrorCode
 from app.core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -84,7 +85,7 @@ def _require_may_order(customer: User | None) -> None:
     if customer is not None and customer.order_blocked_at is not None:
         raise PermissionDeniedError(
             "This account cannot place orders. Please contact the store.",
-            error_code="CUSTOMER_BLOCKED",
+            error_code=UserErrorCode.CUSTOMER_BLOCKED,
         )
 
 
@@ -287,7 +288,7 @@ class CheckoutService:
         if payment_method is not PaymentMethod.CASH_ON_DELIVERY:
             raise ValidationError(
                 "Online payment is not available for guest checkout",
-                error_code="GUEST_ONLINE_PAYMENT_UNAVAILABLE",
+                error_code=OrderErrorCode.GUEST_ONLINE_PAYMENT_UNAVAILABLE,
             )
 
         customer = await self._guest_customer(contact)
@@ -322,11 +323,12 @@ class CheckoutService:
             if user.role != UserRole.CUSTOMER.value:
                 raise ConflictError(
                     "This phone number cannot be used for guest checkout",
-                    error_code="PHONE_NOT_ALLOWED",
+                    error_code=UserErrorCode.PHONE_NOT_ALLOWED,
                 )
             if user.status != UserStatus.ACTIVE.value:
                 raise ConflictError(
-                    "This phone number cannot place orders", error_code="ACCOUNT_INACTIVE"
+                    "This phone number cannot place orders",
+                    error_code=UserErrorCode.ACCOUNT_INACTIVE,
                 )
             _require_may_order(user)
             return user
@@ -521,12 +523,12 @@ class CheckoutService:
         if quote.delivery is not None and not quote.delivery.serviceable:
             raise ConflictError(
                 f"Sorry, we do not deliver to pincode {destination.postal_code} yet",
-                error_code="PINCODE_NOT_SERVICEABLE",
+                error_code=OrderErrorCode.PINCODE_NOT_SERVICEABLE,
             )
         if quote.cod is not None and not quote.cod.available:
             raise ConflictError(
                 quote.cod.message or "Cash on delivery is not available for this order",
-                error_code="COD_UNAVAILABLE",
+                error_code=OrderErrorCode.COD_UNAVAILABLE,
             )
 
     # --------------------------------------------------------------- pricing
@@ -721,7 +723,7 @@ class CheckoutService:
         """Validate every cart line and price it from the catalogue (sale prices included)."""
         rows = await self.cart_items.list_with_catalogue(cart.id)
         if not rows:
-            raise ConflictError(CART_EMPTY)
+            raise ConflictError(CART_EMPTY, error_code=CartErrorCode.CART_EMPTY)
 
         categories: dict[UUID, Category | None] = {}
         lines: list[PricedLine] = []
@@ -731,7 +733,10 @@ class CheckoutService:
                 product.status != CatalogueStatus.ACTIVE.value
                 or variant.status != CatalogueStatus.ACTIVE.value
             ):
-                raise ConflictError(f"{product.name} is no longer available")
+                raise ConflictError(
+                    f"{product.name} is no longer available",
+                    error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
+                )
 
             available = sellable_quantity(await self.inventory.get(variant.id))
             if cart_item.quantity > available:
@@ -739,7 +744,7 @@ class CheckoutService:
                     f"Only {available} left of {product.name}"
                     if available
                     else f"{product.name} is out of stock",
-                    error_code="INSUFFICIENT_STOCK",
+                    error_code=InventoryErrorCode.INSUFFICIENT_STOCK,
                 )
 
             if product.category_id not in categories:
@@ -798,7 +803,8 @@ class CheckoutService:
 
         if existing.payment_method != payment_method.value:
             raise ConflictError(
-                "This checkout key was already used for another payment method"
+                "This checkout key was already used for another payment method",
+                error_code=OrderErrorCode.IDEMPOTENCY_KEY_REUSED,
             )
 
         return await OrderService(self.session, self.tenant_id).get(existing.id)
@@ -807,7 +813,7 @@ class CheckoutService:
     async def _require_cart(carts: CartService) -> Cart:
         cart = await carts.active_cart()
         if cart is None:
-            raise ConflictError(CART_EMPTY)
+            raise ConflictError(CART_EMPTY, error_code=CartErrorCode.CART_EMPTY)
         return cart
 
     async def _require_address(self, address_id: UUID) -> Address:
@@ -836,27 +842,27 @@ class OrderService:
         """Admin lookup: any order in this tenant."""
         order = await self.orders.get(order_id)
         if order is None:
-            raise NotFoundError(ORDER_NOT_FOUND)
+            raise NotFoundError(ORDER_NOT_FOUND, error_code=OrderErrorCode.NOT_FOUND)
         return order
 
     async def get_for_customer(self, customer_id: UUID, order_id: UUID) -> Order:
         """Fetch one of the customer's own orders; anything else reads as not found."""
         order = await self.orders.get_for_customer(customer_id, order_id)
         if order is None:
-            raise NotFoundError(ORDER_NOT_FOUND)
+            raise NotFoundError(ORDER_NOT_FOUND, error_code=OrderErrorCode.NOT_FOUND)
         return order
 
     async def get_for_tracking(self, order_number: str, phone: str) -> Order:
         """Public lookup: the order number plus the delivery or account phone."""
         order = await self.orders.get_by_number(order_number.strip().upper())
         if order is None:
-            raise NotFoundError(ORDER_NOT_FOUND)
+            raise NotFoundError(ORDER_NOT_FOUND, error_code=OrderErrorCode.NOT_FOUND)
 
         customer = await UserRepository(self.session).get_by_id(
             tenant_id=self.tenant_id, user_id=order.customer_id
         )
         if phone not in {order.delivery_phone, customer.phone if customer else None}:
-            raise NotFoundError(ORDER_NOT_FOUND)
+            raise NotFoundError(ORDER_NOT_FOUND, error_code=OrderErrorCode.NOT_FOUND)
         return order
 
     async def list(
@@ -906,7 +912,7 @@ class OrderService:
             else await self.orders.lock(order_id)
         )
         if order is None:
-            raise NotFoundError(ORDER_NOT_FOUND)
+            raise NotFoundError(ORDER_NOT_FOUND, error_code=OrderErrorCode.NOT_FOUND)
         current = OrderStatus(order.status)
 
         # Match verification's lock order (order, then payment). Decisions use
@@ -932,7 +938,8 @@ class OrderService:
 
         if new_status not in ALLOWED_TRANSITIONS[current]:
             raise ConflictError(
-                f"An order that is {current.value} cannot become {new_status.value}"
+                f"An order that is {current.value} cannot become {new_status.value}",
+                error_code=OrderErrorCode.INVALID_STATUS,
             )
 
         if (
@@ -950,14 +957,15 @@ class OrderService:
         ):
             raise ConflictError(
                 "Online payment must be captured before dispatch",
-                error_code="ONLINE_PAYMENT_PENDING",
+                error_code=OrderErrorCode.ONLINE_PAYMENT_PENDING,
             )
 
         if new_status in NEEDS_ADVANCE_PAID and order.advance_amount > ZERO:
             advance = order.advance_payment
             if advance is None or advance.status != CashStatus.PAID.value:
                 raise ConflictError(
-                    "The COD advance has not been paid yet", error_code="ADVANCE_PENDING"
+                    "The COD advance has not been paid yet",
+                    error_code=OrderErrorCode.ADVANCE_PENDING,
                 )
 
         if new_status is OrderStatus.CANCELLED:
@@ -965,7 +973,10 @@ class OrderService:
                 order.payment_status == PaymentStatus.PAID.value
                 or any(payment.status == CashStatus.PAID.value for payment in order.payments)
             ):
-                raise ConflictError("A paid order cannot be cancelled without a refund")
+                raise ConflictError(
+                    "A paid order cannot be cancelled without a refund",
+                    error_code=OrderErrorCode.REFUND_REQUIRED,
+                )
             if order.payment_method != PaymentMethod.CASH_ON_DELIVERY.value:
                 raise ConflictError(
                     "A Razorpay order cannot be cancelled automatically because its "
@@ -976,7 +987,8 @@ class OrderService:
             payment.status == CashStatus.PAID.value for payment in order.payments
         ):
             raise ConflictError(
-                "A paid order cannot be returned without a supported refund workflow"
+                "A paid order cannot be returned without a supported refund workflow",
+                error_code=OrderErrorCode.REFUND_REQUIRED,
             )
 
         try:
@@ -1040,7 +1052,7 @@ class OrderService:
             raise ConflictError(
                 "No label for orders that are pending, delivered, cancelled or returned: "
                 + ", ".join(refused[:10]),
-                error_code="LABEL_NOT_ALLOWED",
+                error_code=OrderErrorCode.LABEL_NOT_ALLOWED,
             )
         return orders
 
@@ -1054,7 +1066,8 @@ class OrderService:
         order = await self.get(order_id)
         if OrderStatus(order.status) not in ADDRESS_EDITABLE_STATUSES:
             raise ConflictError(
-                f"The address of a {order.status} order can no longer be changed"
+                f"The address of a {order.status} order can no longer be changed",
+                error_code=OrderErrorCode.ADDRESS_LOCKED,
             )
 
         gst = await GstService(self.session, self.tenant_id).get_settings()
@@ -1063,7 +1076,7 @@ class OrderService:
             raise ConflictError(
                 "This address changes how GST applies to the order "
                 "(intra-state vs inter-state). Cancel and place a new order instead.",
-                error_code="GST_TYPE_CHANGE",
+                error_code=OrderErrorCode.GST_TYPE_CHANGE,
             )
 
         destination = Destination.of(data)
@@ -1074,7 +1087,7 @@ class OrderService:
             if not quote.serviceable:
                 raise ConflictError(
                     f"Sorry, we do not deliver to pincode {data.postal_code} yet",
-                    error_code="PINCODE_NOT_SERVICEABLE",
+                    error_code=OrderErrorCode.PINCODE_NOT_SERVICEABLE,
                 )
 
         before = {
@@ -1133,7 +1146,10 @@ class OrderService:
         """Record a courier scan or note without changing the status."""
         order = await self.get(order_id)
         if OrderStatus(order.status) in {OrderStatus.CANCELLED}:
-            raise ConflictError("A cancelled order has no shipment to track")
+            raise ConflictError(
+                "A cancelled order has no shipment to track",
+                error_code=OrderErrorCode.INVALID_STATUS,
+            )
 
         self.session.add(
             OrderTrackingEvent(

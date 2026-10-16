@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalogue.constants import CatalogueStatus
 from app.catalogue.repository import ProductRepository, VariantRepository
+from app.core.error_codes import InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.wishlist.models import Wishlist
@@ -125,14 +126,20 @@ class WishListService:
     async def check_available(self, variant_id: UUID) -> None:
         variant = await self.variants.get(variant_id)
         if variant is None:
-            raise NotFoundError(VARIANT_NOT_FOUND)
+            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
 
         if variant.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(VARIANT_UNAVAILABLE)
+            raise ConflictError(
+                VARIANT_UNAVAILABLE,
+                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
+            )
 
         product = await self.products.get(variant.product_id)
         if product is None or product.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(PRODUCT_UNAVAILABLE)
+            raise ConflictError(
+                PRODUCT_UNAVAILABLE,
+                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
+            )
 
 
 def _image_of(image) -> WishlistItemImage | None:

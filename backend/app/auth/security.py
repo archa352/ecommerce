@@ -15,6 +15,7 @@ from pwdlib.exceptions import PwdlibError
 
 from app.auth.constants import OTP_LENGTH
 from app.core.config import get_settings
+from app.core.error_codes import AuthErrorCode
 from app.core.exceptions import AuthenticationError
 
 TokenType = Literal["access", "refresh"]
@@ -126,14 +127,22 @@ def decode_token(token: str, *, expected_type: TokenType) -> TokenPayload:
     try:
         claims = jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
     except jwt.ExpiredSignatureError as exc:
-        raise AuthenticationError("Token has expired", error_code="TOKEN_EXPIRED") from exc
+        raise AuthenticationError(
+            "Token has expired", error_code=AuthErrorCode.TOKEN_EXPIRED
+        ) from exc
     except jwt.PyJWTError as exc:
-        raise AuthenticationError("Invalid authentication token") from exc
+        raise AuthenticationError(
+            "Invalid authentication token",
+            error_code=AuthErrorCode.INVALID_TOKEN,
+        ) from exc
 
     user_id = claims.get("sub")
     tenant_id = claims.get("tenant_id")
     if claims.get("type") != expected_type or not user_id or not tenant_id:
-        raise AuthenticationError("Invalid authentication token")
+        raise AuthenticationError(
+            "Invalid authentication token",
+            error_code=AuthErrorCode.INVALID_TOKEN,
+        )
 
     return TokenPayload(
         user_id=str(user_id),

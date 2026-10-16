@@ -18,6 +18,7 @@ from app.catalogue.repository import ProductRepository, VariantRepository
 from app.catalogue.serializers import sellable_quantity
 from app.catalogue.service import InventoryService
 from app.core.config import get_settings
+from app.core.error_codes import CartErrorCode, InventoryErrorCode, ProductErrorCode
 from app.core.exceptions import ConflictError, NotFoundError
 
 VARIANT_NOT_FOUND = "Product variant not found"
@@ -113,11 +114,11 @@ class CartService:
 
     async def _guest_cart(self) -> Cart:
         if not self.guest_token:
-            raise NotFoundError(GUEST_CART_NOT_FOUND)
+            raise NotFoundError(GUEST_CART_NOT_FOUND, error_code=CartErrorCode.CART_NOT_FOUND)
 
         cart = await self.carts.get_active_guest(hash_guest_token(self.guest_token))
         if cart is None or await self._expire_if_stale(cart):
-            raise NotFoundError(GUEST_CART_NOT_FOUND, error_code="CART_NOT_FOUND")
+            raise NotFoundError(GUEST_CART_NOT_FOUND, error_code=CartErrorCode.CART_NOT_FOUND)
         return cart
 
     async def _expire_if_stale(self, cart: Cart) -> bool:
@@ -174,7 +175,10 @@ class CartService:
     async def _top_up(self, cart: Cart, data: CartItemCreate) -> CartRead:
         existing = await self.items.get_by_variant(cart.id, data.variant_id)
         if existing is None:
-            raise ConflictError("Could not update the cart, please try again")
+            raise ConflictError(
+                "Could not update the cart, please try again",
+                error_code=CartErrorCode.CONCURRENT_UPDATE,
+            )
 
         wanted = existing.quantity + data.quantity
         await self._check_available(data.variant_id, wanted)
@@ -189,7 +193,7 @@ class CartService:
 
         item = await self.items.get_item(cart.id, item_id)
         if item is None:
-            raise NotFoundError(ITEM_NOT_FOUND)
+            raise NotFoundError(ITEM_NOT_FOUND, error_code=CartErrorCode.CART_ITEM_NOT_FOUND)
 
         await self._check_available(item.variant_id, data.quantity)
 
@@ -204,7 +208,7 @@ class CartService:
 
         item = await self.items.get_item(cart.id, item_id)
         if item is None:
-            raise NotFoundError(ITEM_NOT_FOUND)
+            raise NotFoundError(ITEM_NOT_FOUND, error_code=CartErrorCode.CART_ITEM_NOT_FOUND)
 
         await self.items.delete(item)
         self._touch(cart)
@@ -255,24 +259,30 @@ class CartService:
         """Check stock for this quantity; nothing is reserved here."""
         variant = await self.variants.get(variant_id)
         if variant is None:
-            raise NotFoundError(VARIANT_NOT_FOUND)
+            raise NotFoundError(VARIANT_NOT_FOUND, error_code=ProductErrorCode.VARIANT_NOT_FOUND)
 
         if variant.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(VARIANT_UNAVAILABLE)
+            raise ConflictError(
+                VARIANT_UNAVAILABLE,
+                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
+            )
 
         product = await self.products.get(variant.product_id)
         if product is None or product.status != CatalogueStatus.ACTIVE.value:
-            raise ConflictError(PRODUCT_UNAVAILABLE)
+            raise ConflictError(
+                PRODUCT_UNAVAILABLE,
+                error_code=InventoryErrorCode.PRODUCT_UNAVAILABLE,
+            )
 
         available = sellable_quantity(await self.inventory.get(variant_id))
         if quantity > available:
             if available == 0:
                 raise ConflictError(
-                    "This item is out of stock", error_code="INSUFFICIENT_STOCK"
+                    "This item is out of stock", error_code=InventoryErrorCode.INSUFFICIENT_STOCK
                 )
             raise ConflictError(
                 f"Only {available} items are available",
-                error_code="INSUFFICIENT_STOCK",
+                error_code=InventoryErrorCode.INSUFFICIENT_STOCK,
             )
 
     async def _render(self, cart: Cart) -> CartRead:

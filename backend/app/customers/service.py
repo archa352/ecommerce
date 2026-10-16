@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.addresses.models import Address
 from app.auth.constants import UserRole
+from app.core.error_codes import UserErrorCode
 from app.core.exceptions import NotFoundError
 from app.core.money import money
 from app.customers.models import CustomerNote
@@ -95,7 +96,7 @@ class CustomerService:
         stmt, _stats = self._select()
         row = (await self.session.execute(stmt.where(User.id == customer_id))).first()
         if row is None:
-            raise NotFoundError(CUSTOMER_NOT_FOUND)
+            raise NotFoundError(CUSTOMER_NOT_FOUND, error_code=UserErrorCode.NOT_FOUND)
         detail = self._row(row)
         detail["first_order_at"] = row.first_order_at
         detail["cancelled_orders"] = row.cancelled_orders or 0
@@ -144,7 +145,7 @@ class CustomerService:
             )
         )
         if user is None:
-            raise NotFoundError(CUSTOMER_NOT_FOUND)
+            raise NotFoundError(CUSTOMER_NOT_FOUND, error_code=UserErrorCode.NOT_FOUND)
         return user
 
     async def set_tags(self, customer_id: UUID, tags: list[str]) -> User:
