@@ -24,7 +24,8 @@ from app.ratings.models import Review, ReviewRequest, ReviewRequestStatus
 from app.search_filter.models import SearchHistory
 from app.users.models import User
 from app.users.repository import UserRepository
-from app.users.schemas import StaffCreate, StaffPasswordReset, StaffQuery, StaffRead, StaffUpdate
+from app.users.schemas import StaffCreate, StaffPasswordReset, StaffQuery, StaffUpdate
+from app.users.serializers import staff_read
 from app.wishlist.models import Wishlist, WishlistItem
 
 
@@ -179,7 +180,7 @@ class StaffService:
                 error_code=UserErrorCode.CANNOT_CHANGE_SELF,
             )
 
-        before = StaffRead.of(member).model_dump(include={"name", "role", "permissions", "status"})
+        before = staff_read(member).model_dump(include={"name", "role", "permissions", "status"})
         for field, value in changes.items():
             setattr(member, field, value.strip() if field == "name" and value else value)
         if member.role == UserRole.ADMIN.value:

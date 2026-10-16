@@ -6,12 +6,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.auth.constants import UserRole
-from app.auth.permissions import ALL_PERMISSIONS, effective_permissions
+from app.auth.permissions import ALL_PERMISSIONS
 from app.auth.schemas import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, NormalizedPhone
 from app.core.pagination import PageParams
 from app.core.schemas import PartialUpdate, StrictModel
-from app.users.models import User
 
 StaffRole = Literal["ADMIN", "STAFF"]
 StaffStatus = Literal["ACTIVE", "INACTIVE"]
@@ -92,19 +90,6 @@ class StaffRead(BaseModel):
     effective_permissions: list[str]
     created_at: datetime
 
-    @classmethod
-    def of(cls, user: User) -> StaffRead:
-        return cls(
-            id=user.id,
-            name=user.name,
-            email=user.email,
-            phone=user.phone,
-            role=user.role,
-            status=user.status,
-            permissions=None if user.role == UserRole.ADMIN.value else user.permissions,
-            effective_permissions=sorted(effective_permissions(user.role, user.permissions)),
-            created_at=user.created_at,
-        )
 
 
 class PermissionRead(BaseModel):

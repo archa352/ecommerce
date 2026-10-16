@@ -29,6 +29,7 @@ from app.users.schemas import (
     UserCreate,
     UserRead,
 )
+from app.users.serializers import staff_read
 from app.users.service import StaffService, UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -140,7 +141,7 @@ async def list_staff(
 ) -> ApiResponse[list[StaffRead]]:
     members, total = await StaffService(session, user).list(params)
     return paginated(
-        [StaffRead.of(member) for member in members],
+        [staff_read(member) for member in members],
         total_items=total,
         params=params,
         message="Staff retrieved",
@@ -160,7 +161,7 @@ async def create_staff_account(
     user: User = Depends(require_admin),
 ) -> ApiResponse[StaffRead]:
     member = await StaffService(session, user).create(data, request)
-    return ok(StaffRead.of(member), message="Staff account created")
+    return ok(staff_read(member), message="Staff account created")
 
 
 @admin_router.get(
@@ -171,7 +172,7 @@ async def get_staff(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> ApiResponse[StaffRead]:
-    return ok(StaffRead.of(await StaffService(session, user).get(staff_id)), message="Staff")
+    return ok(staff_read(await StaffService(session, user).get(staff_id)), message="Staff")
 
 
 @admin_router.patch(
@@ -187,7 +188,7 @@ async def update_staff(
     user: User = Depends(require_admin),
 ) -> ApiResponse[StaffRead]:
     member = await StaffService(session, user).update(staff_id, data, request)
-    return ok(StaffRead.of(member), message="Staff account updated")
+    return ok(staff_read(member), message="Staff account updated")
 
 
 @admin_router.post(
@@ -203,4 +204,4 @@ async def reset_staff_password(
     user: User = Depends(require_admin),
 ) -> ApiResponse[StaffRead]:
     member = await StaffService(session, user).reset_password(staff_id, data, request)
-    return ok(StaffRead.of(member), message="Password updated")
+    return ok(staff_read(member), message="Password updated")
