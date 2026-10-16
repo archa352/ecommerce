@@ -83,7 +83,8 @@ describe("admin panel access", () => {
       vi.advanceTimersByTime(IDLE_TIMEOUT_MS + 1000);
     });
 
-    await waitFor(() => expect(screen.getByText(/signed out after 60 minutes/)).toBeInTheDocument());
+    const minutes = IDLE_TIMEOUT_MS / 60_000;
+    await waitFor(() => expect(screen.getByText(new RegExp(`signed out after ${minutes} minutes`))).toBeInTheDocument());
   });
 });
 
