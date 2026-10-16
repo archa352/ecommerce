@@ -1,40 +1,16 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
+import { useMenu } from "../../hooks/useMenu";
 
 export default function SidebarProfile({ onNavigate }: { onNavigate: () => void }) {
   const { user, logout } = useAuth();
-  const [open, setOpen] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
+  const { open, setOpen, container, trigger, onBlur, onMenuKeyDown } = useMenu();
   const menuId = useId();
   const name = user?.name ?? user?.email ?? user?.phone ?? "Admin";
-  useEffect(() => {
-    if (!open) return;
-    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
-    const outside = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation(); setOpen(false); trigger.current?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
-  }, [open]);
   const navigate = () => { setOpen(false); onNavigate(); };
-  return <div className="sidebar-profile" ref={container} onBlur={(event) => {
-    if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false);
-  }}>
-    {open && <div id={menuId} className="sidebar-profile-menu" role="menu" aria-label="Account" ref={menu} onKeyDown={(event) => {
-      const items = Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-      const index = items.indexOf(document.activeElement as HTMLElement);
-      const next = event.key === "ArrowDown" ? (index + 1) % items.length : event.key === "ArrowUp" ? (index + items.length - 1) % items.length : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : -1;
-      if (next >= 0) { event.preventDefault(); items[next]?.focus(); }
-    }}>
+  return <div className="sidebar-profile" ref={container} onBlur={onBlur}>
+    {open && <div id={menuId} className="sidebar-profile-menu" role="menu" aria-label="Account" onKeyDown={onMenuKeyDown}>
       <Link role="menuitem" to="/profile" onClick={navigate}>Profile</Link>
       <Link role="menuitem" to="/settings" onClick={navigate}>Settings</Link>
       <button type="button" role="menuitem" className="sidebar-signout" onClick={() => { navigate(); logout(); }}>Sign out</button>
