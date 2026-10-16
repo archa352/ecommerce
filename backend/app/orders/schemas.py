@@ -42,6 +42,7 @@ class CheckoutItem(BaseModel):
         default=None, description="Regular price when the unit price is a sale price"
     )
     hsn_code: str | None = None
+    tax_configuration_id: UUID | None = None
     gst_rate: Decimal | None = None
     discount_amount: Decimal = Decimal("0.00")
     taxable_amount: Decimal | None = None
@@ -159,6 +160,7 @@ class OrderItemRead(BaseModel):
     unit_price: Decimal
     subtotal: Decimal
     hsn_code: str | None = None
+    tax_configuration_id: UUID | None = None
     gst_rate: Decimal | None = None
     discount_amount: Decimal | None = None
     taxable_amount: Decimal | None = None

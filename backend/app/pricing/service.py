@@ -8,18 +8,24 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.catalogue.models import Category, Product
 from app.core.database import conflict_on_integrity_error
-from app.core.exceptions import NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.money import ZERO, money
 from app.orders.constants import OrderStatus
 from app.orders.models import Order, OrderItem
 from app.pricing.constants import (
     DEFAULT_MAX_DELIVERY_DAYS,
     DEFAULT_MIN_DELIVERY_DAYS,
-    PERCENT,
 )
 from app.pricing.gst import STATE_CODES, state_code_for
-from app.pricing.models import GstSettings, PincodeRule, ShippingSettings, TaxSettings
+from app.pricing.models import (
+    GstSettings,
+    PincodeRule,
+    ShippingSettings,
+    TaxRateConfiguration,
+    TaxSettings,
+)
 from app.pricing.repository import (
     GstSettingsRepository,
     PincodeRuleRepository,
@@ -30,6 +36,7 @@ from app.pricing.schemas import (
     GstSettingsUpdate,
     PincodeRuleWrite,
     ShippingSettingsUpdate,
+    TaxRateConfigurationWrite,
     TaxSettingsUpdate,
 )
 
@@ -91,7 +98,7 @@ class ShippingService:
 
 
 class TaxService:
-    """One tax percentage per tenant, charged on the goods and the delivery."""
+    """CA-confirmed rate reserved for shipping and COD charge classifications."""
 
     def __init__(self, session: AsyncSession, tenant_id: UUID) -> None:
         self.session = session
@@ -103,31 +110,38 @@ class TaxService:
 
     async def update_settings(self, data: TaxSettingsUpdate) -> TaxSettings:
         """Write the tenant's one row, creating it the first time."""
-        settings = await self.get_settings()
+        settings = await self.session.scalar(
+            select(TaxSettings).where(TaxSettings.tenant_id == self.tenant_id).with_for_update()
+        )
 
         async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             if settings is None:
                 settings = TaxSettings(
-                    tax_percentage=data.tax_percentage, is_active=data.is_active
+                    tax_percentage=data.tax_percentage, is_active=False, confirmed_by_ca=False
                 )
                 await self.settings.add(settings)
             else:
                 settings.tax_percentage = data.tax_percentage
-                settings.is_active = data.is_active
+                settings.is_active = False
+                settings.confirmed_by_ca = False
 
             await self.session.commit()
 
         return settings
 
-    async def calculate(self, subtotal: Decimal, shipping: Decimal) -> Decimal:
-        """Tax on the goods and the delivery together."""
-        settings = await self.get_settings()
-
-        if settings is None or not settings.is_active:
-            return ZERO
-
-        taxable = subtotal + shipping
-        return money(taxable * settings.tax_percentage / PERCENT)
+    async def confirm_settings(self, *, ca_confirmed: bool) -> TaxSettings:
+        settings = await self.session.scalar(
+            select(TaxSettings).where(TaxSettings.tenant_id == self.tenant_id).with_for_update()
+        )
+        if settings is None:
+            raise NotFoundError("Save the shipping/COD tax rate before confirmation")
+        if not ca_confirmed:
+            raise ValidationError("Rate activation requires explicit CA/accountant confirmation")
+        settings.confirmed_by_ca = True
+        settings.is_active = True
+        await self.session.commit()
+        await self.session.refresh(settings)
+        return settings
 
 
 @dataclass
@@ -258,7 +272,9 @@ class GstService:
     async def get_settings(self) -> GstSettings | None:
         return await self.settings.get_for_tenant()
 
-    async def update_settings(self, data: GstSettingsUpdate) -> GstSettings:
+    async def update_settings(
+        self, data: GstSettingsUpdate, actor_id: UUID | None = None
+    ) -> GstSettings:
         state_code = None
         state_name = None
         if data.state:
@@ -272,8 +288,16 @@ class GstService:
         if data.gstin and state_code is None:
             state_code = data.gstin[:2]
             state_name = STATE_CODES.get(state_code)
+            if state_name is None:
+                raise ValidationError("The GSTIN contains an unsupported Indian state code")
+        if data.registration_status == "REGISTERED" and not data.gstin:
+            raise ValidationError("GSTIN is required when registration status is Registered")
+        if data.registration_status != "REGISTERED" and data.gstin:
+            raise ValidationError("GSTIN can be saved only when registration status is Registered")
 
-        settings = await self.get_settings()
+        settings = await self.session.scalar(
+            select(GstSettings).where(GstSettings.tenant_id == self.tenant_id).with_for_update()
+        )
         values = {
             "gstin": data.gstin,
             "legal_name": data.legal_name,
@@ -282,6 +306,13 @@ class GstService:
             "state_code": state_code,
             "invoice_prefix": data.invoice_prefix,
             "shipping_sac_code": data.shipping_sac_code,
+            "registration_status": data.registration_status,
+            "accounting_software": data.accounting_software,
+            "prices_include_gst": data.prices_include_gst,
+            "configuration_status": "PENDING_CA_CONFIRMATION",
+            "updated_by_id": actor_id,
+            "confirmed_by_id": None,
+            "confirmed_at": None,
         }
         async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             if settings is None:
@@ -292,6 +323,164 @@ class GstService:
             await self.session.commit()
 
         return settings
+
+    async def activate_settings(self, *, actor_id: UUID, ca_confirmed: bool) -> GstSettings:
+        settings = await self.session.scalar(
+            select(GstSettings).where(GstSettings.tenant_id == self.tenant_id).with_for_update()
+        )
+        if settings is None:
+            raise NotFoundError("Save business GST details before activation")
+        if not ca_confirmed:
+            raise ValidationError("Activation requires explicit CA/accountant confirmation")
+        if settings.registration_status in {"UNKNOWN", "APPLICATION_PENDING"}:
+            raise ValidationError("Confirm the GST registration status before activation")
+        if (
+            not settings.legal_name
+            or not settings.address
+            or settings.state_code not in STATE_CODES
+        ):
+            raise ValidationError("Legal name, registered address, and state are required")
+        if settings.registration_status == "REGISTERED" and not settings.gstin:
+            raise ValidationError("GSTIN is required for a registered business")
+        settings.configuration_status = "ACTIVE"
+        settings.confirmed_by_id = actor_id
+        settings.confirmed_at = datetime.now(timezone.utc)
+        settings.updated_by_id = actor_id
+        async with conflict_on_integrity_error(self.session, SAVE_FAILED):
+            await self.session.commit()
+        return settings
+
+    async def list_rate_configurations(self) -> list[dict]:
+        rows = (
+            await self.session.execute(
+                select(TaxRateConfiguration, Product.name, Category.name)
+                .outerjoin(Product, Product.id == TaxRateConfiguration.product_id)
+                .outerjoin(Category, Category.id == TaxRateConfiguration.category_id)
+                .where(TaxRateConfiguration.tenant_id == self.tenant_id)
+                .order_by(TaxRateConfiguration.created_at.desc())
+            )
+        ).all()
+        return [
+            {
+                "id": config.id,
+                "product_id": config.product_id,
+                "category_id": config.category_id,
+                "product_name": product_name,
+                "category_name": category_name,
+                "hsn_code": config.hsn_code,
+                "gst_rate": config.gst_rate,
+                "effective_from": config.effective_from,
+                "status": config.status,
+                "ca_confirmed": config.ca_confirmed,
+                "approved_at": config.approved_at,
+                "created_by_id": config.created_by_id,
+                "approved_by_id": config.approved_by_id,
+                "created_at": config.created_at,
+            }
+            for config, product_name, category_name in rows
+        ]
+
+    async def rate_targets(self) -> dict[str, list[dict[str, object]]]:
+        products = (
+            await self.session.execute(
+                select(Product.id, Product.name)
+                .where(Product.tenant_id == self.tenant_id, Product.status != "ARCHIVED")
+                .order_by(Product.name)
+            )
+        ).all()
+        categories = (
+            await self.session.execute(
+                select(Category.id, Category.name)
+                .where(Category.tenant_id == self.tenant_id, Category.status != "ARCHIVED")
+                .order_by(Category.name)
+            )
+        ).all()
+        return {
+            "products": [{"id": item_id, "name": name} for item_id, name in products],
+            "categories": [{"id": item_id, "name": name} for item_id, name in categories],
+        }
+
+    async def create_rate_configuration(
+        self, data: TaxRateConfigurationWrite, actor_id: UUID
+    ) -> TaxRateConfiguration:
+        if data.product_id:
+            target = await self.session.scalar(
+                select(Product).where(
+                    Product.tenant_id == self.tenant_id, Product.id == data.product_id
+                )
+            )
+        else:
+            target = await self.session.scalar(
+                select(Category).where(
+                    Category.tenant_id == self.tenant_id, Category.id == data.category_id
+                )
+            )
+        if target is None:
+            raise NotFoundError("The selected product or category was not found")
+        config = TaxRateConfiguration(
+            product_id=data.product_id,
+            category_id=data.category_id,
+            hsn_code=data.hsn_code,
+            gst_rate=data.gst_rate,
+            effective_from=data.effective_from,
+            status="PENDING",
+            ca_confirmed=False,
+            created_by_id=actor_id,
+        )
+        config.tenant_id = self.tenant_id
+        self.session.add(config)
+        async with conflict_on_integrity_error(
+            self.session,
+            "Tax rate configuration conflicts with an existing record",
+        ):
+            await self.session.commit()
+        await self.session.refresh(config)
+        return config
+
+    async def approve_rate_configuration(
+        self, config_id: UUID, *, actor_id: UUID, ca_confirmed: bool
+    ) -> TaxRateConfiguration:
+        # Lock tenant settings to serialize competing rate activations.
+        gst = await self.session.scalar(
+            select(GstSettings).where(GstSettings.tenant_id == self.tenant_id).with_for_update()
+        )
+        if gst is None or gst.configuration_status != "ACTIVE":
+            raise ConflictError("Activate the business GST configuration before approving rates")
+        config = await self.session.scalar(
+            select(TaxRateConfiguration)
+            .where(
+                TaxRateConfiguration.tenant_id == self.tenant_id,
+                TaxRateConfiguration.id == config_id,
+            )
+            .with_for_update()
+        )
+        if config is None:
+            raise NotFoundError("Tax rate configuration not found")
+        if not ca_confirmed:
+            raise ValidationError("Rate activation requires explicit CA/accountant confirmation")
+        same_scope = (
+            TaxRateConfiguration.product_id == config.product_id
+            if config.product_id
+            else TaxRateConfiguration.category_id == config.category_id
+        )
+        conflict = await self.session.scalar(
+            select(TaxRateConfiguration.id).where(
+                TaxRateConfiguration.tenant_id == self.tenant_id,
+                same_scope,
+                TaxRateConfiguration.effective_from == config.effective_from,
+                TaxRateConfiguration.status == "ACTIVE",
+                TaxRateConfiguration.id != config.id,
+            )
+        )
+        if conflict:
+            raise ConflictError("An active rate already exists for this target and effective date")
+        config.ca_confirmed = True
+        config.status = "ACTIVE"
+        config.approved_by_id = actor_id
+        config.approved_at = datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(config)
+        return config
 
     async def report(self, start: date, end: date) -> dict:
         """Taxable value and CGST/SGST/IGST per GST type and rate, for non-cancelled orders."""
@@ -312,13 +501,16 @@ class GstService:
                     Order.id, Order.gst_type, Order.subtotal, Order.discount_amount,
                     Order.shipping_amount, Order.cod_fee, Order.cgst_amount,
                     Order.sgst_amount, Order.igst_amount, Order.tax_amount,
+                    Order.tax_included_amount, Order.charges_gst_rate, Order.shipping_sac_code,
                 ).where(in_range)
             )
         ).all()
         by_order: dict[UUID, list[Decimal]] = {row[0]: [ZERO, ZERO, ZERO, ZERO] for row in orders}
-        buckets: dict[tuple[str | None, Decimal | None, str], list[Decimal]] = {}
+        buckets: dict[tuple[str | None, Decimal | None, str, str | None], list[Decimal]] = {}
 
-        def add(key: tuple[str | None, Decimal | None, str], amounts: list[Decimal]) -> None:
+        def add(
+            key: tuple[str | None, Decimal | None, str, str | None], amounts: list[Decimal]
+        ) -> None:
             bucket = buckets.setdefault(key, [ZERO, ZERO, ZERO, ZERO])
             for index, amount in enumerate(amounts):
                 bucket[index] += amount
@@ -326,7 +518,7 @@ class GstService:
         items = (
             await self.session.execute(
                 select(
-                    Order.id, Order.gst_type, OrderItem.gst_rate,
+                    Order.id, Order.gst_type, OrderItem.gst_rate, OrderItem.hsn_code,
                     OrderItem.subtotal, OrderItem.discount_amount,
                     OrderItem.taxable_amount, OrderItem.tax_amount,
                 )
@@ -340,24 +532,32 @@ class GstService:
                 .where(in_range)
             )
         ).all()
-        for order_id, gst_type, rate, subtotal, discount, saved_taxable, saved_tax in items:
+        for order_id, gst_type, rate, hsn, subtotal, discount, saved_taxable, saved_tax in items:
             taxable = saved_taxable if saved_taxable is not None else subtotal - (discount or ZERO)
             tax = saved_tax or ZERO
             if gst_type == "INTRA_STATE":
                 cgst = money(tax / 2)
                 amounts = [taxable, cgst, tax - cgst, ZERO]
-            else:
+            elif gst_type == "INTER_STATE":
                 amounts = [taxable, ZERO, ZERO, tax]
-            add((gst_type, rate, "ITEMS"), amounts)
+            else:
+                # Preserve legacy tax without assigning an unsupported GST split.
+                amounts = [taxable, ZERO, ZERO, ZERO]
+            add((gst_type, rate, "ITEMS", hsn), amounts)
             for index, amount in enumerate(amounts):
                 by_order[order_id][index] += amount
 
         totals = [ZERO, ZERO, ZERO, ZERO]
         for (
             order_id, gst_type, subtotal, discount, shipping, cod_fee,
-            cgst, sgst, igst, _tax,
+            cgst, sgst, igst, _tax, tax_included, charges_rate, charges_hsn,
         ) in orders:
-            order_amounts = [subtotal - discount + shipping + cod_fee, cgst, sgst, igst]
+            order_amounts = [
+                subtotal - discount + shipping + cod_fee - tax_included,
+                cgst,
+                sgst,
+                igst,
+            ]
             for index, amount in enumerate(order_amounts):
                 totals[index] += amount
             remainder = [
@@ -365,25 +565,34 @@ class GstService:
                 for amount, used in zip(order_amounts, by_order[order_id], strict=True)
             ]
             if any(amount != ZERO for amount in remainder):
-                add((gst_type, None, "CHARGES_AND_ADJUSTMENTS"), remainder)
+                add((gst_type, charges_rate, "CHARGES_AND_ADJUSTMENTS", charges_hsn), remainder)
 
         by_rate = [
             {
                 "component": component,
                 "gst_type": gst_type,
                 "gst_rate": rate,
+                "hsn_code": hsn,
                 "taxable_amount": money(amounts[0]),
                 "cgst_amount": money(amounts[1]),
                 "sgst_amount": money(amounts[2]),
                 "igst_amount": money(amounts[3]),
             }
-            for (gst_type, rate, component), amounts in sorted(
+            for (gst_type, rate, component, hsn), amounts in sorted(
                 buckets.items(),
-                key=lambda entry: (entry[0][0] or "", entry[0][2], entry[0][1] or ZERO),
+                key=lambda entry: (
+                    entry[0][0] or "",
+                    entry[0][2],
+                    entry[0][1] or ZERO,
+                    entry[0][3] or "",
+                ),
             )
         ]
         taxable, cgst, sgst, igst = totals
-        tax = cgst + sgst + igst
+        unclassified_tax = sum(
+            (row[9] for row in orders if row[1] is None), ZERO
+        )
+        tax = cgst + sgst + igst + unclassified_tax
         return {
             "start_date": start,
             "end_date": end,
@@ -392,6 +601,7 @@ class GstService:
             "cgst_amount": money(cgst),
             "sgst_amount": money(sgst),
             "igst_amount": money(igst),
+            "unclassified_tax_amount": money(unclassified_tax),
             "tax_amount": money(tax),
             "by_rate": by_rate,
         }

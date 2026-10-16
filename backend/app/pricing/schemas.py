@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -62,6 +63,7 @@ class TaxSettingsUpdate(StrictModel):
 class TaxSettingsRead(BaseModel):
     tax_percentage: Decimal
     is_active: bool
+    confirmed_by_ca: bool = False
 
 
 # ---------------------------------------------------------------- pincodes
@@ -164,6 +166,14 @@ class GstSettingsUpdate(StrictModel):
     )
     invoice_prefix: str = Field(default=DEFAULT_INVOICE_PREFIX, min_length=1, max_length=20)
     shipping_sac_code: str | None = Field(default=None, pattern=HSN_CODE_PATTERN)
+    registration_status: Literal[
+        "REGISTERED", "NOT_REGISTERED", "APPLICATION_PENDING", "UNKNOWN"
+    ] = "UNKNOWN"
+    accounting_software: Literal["TALLY", "ZOHO_BOOKS", "OTHER", "NONE", "NOT_DECIDED"] = (
+        "NOT_DECIDED"
+    )
+    configuration_status: Literal["DRAFT", "PENDING_CA_CONFIRMATION", "ACTIVE"] = "DRAFT"
+    prices_include_gst: bool = False
 
     @field_validator("gstin")
     @classmethod
@@ -179,6 +189,68 @@ class GstSettingsRead(BaseModel):
     state_code: str | None = None
     invoice_prefix: str = DEFAULT_INVOICE_PREFIX
     shipping_sac_code: str | None = None
+    registration_status: str = "UNKNOWN"
+    accounting_software: str = "NOT_DECIDED"
+    configuration_status: str = "DRAFT"
+    prices_include_gst: bool = False
+    updated_at: datetime | None = None
+    updated_by_id: UUID | None = None
+    confirmed_at: datetime | None = None
+    confirmed_by_id: UUID | None = None
+
+
+class TaxRateConfigurationWrite(StrictModel):
+    product_id: UUID | None = None
+    category_id: UUID | None = None
+    hsn_code: str = Field(pattern=HSN_CODE_PATTERN)
+    gst_rate: Decimal = Field(ge=0, le=MAX_TAX_PERCENTAGE, decimal_places=2)
+    effective_from: date
+    ca_confirmed: bool = False
+
+    @model_validator(mode="after")
+    def _one_target(self) -> TaxRateConfigurationWrite:
+        if (self.product_id is None) == (self.category_id is None):
+            raise ValueError("select exactly one product or category")
+        return self
+
+    @field_validator("hsn_code")
+    @classmethod
+    def _hsn_digits(cls, value: str) -> str:
+        value = value.strip()
+        if not value.isdigit():
+            raise ValueError("HSN code must contain only digits")
+        return value
+
+
+class TaxRateConfigurationRead(BaseModel):
+    id: UUID
+    product_id: UUID | None
+    category_id: UUID | None
+    product_name: str | None = None
+    category_name: str | None = None
+    hsn_code: str
+    gst_rate: Decimal
+    effective_from: date
+    status: str
+    ca_confirmed: bool
+    approved_at: datetime | None = None
+    created_by_id: UUID | None = None
+    approved_by_id: UUID | None = None
+    created_at: datetime
+
+
+class TaxRateTargetRead(BaseModel):
+    id: UUID
+    name: str
+
+
+class TaxRateTargetsRead(BaseModel):
+    products: list[TaxRateTargetRead]
+    categories: list[TaxRateTargetRead]
+
+
+class TaxRateApproval(StrictModel):
+    ca_confirmed: bool = Field(description="Approval can proceed only after CA confirmation")
 
 
 class GstReportQuery(StrictModel):
@@ -196,6 +268,7 @@ class GstReportRow(BaseModel):
     component: Literal["ITEMS", "CHARGES_AND_ADJUSTMENTS"] = "ITEMS"
     gst_type: GstType | None
     gst_rate: Decimal | None
+    hsn_code: str | None = None
     taxable_amount: Decimal
     cgst_amount: Decimal
     sgst_amount: Decimal
@@ -210,6 +283,7 @@ class GstReportRead(BaseModel):
     cgst_amount: Decimal
     sgst_amount: Decimal
     igst_amount: Decimal
+    unclassified_tax_amount: Decimal = Decimal("0.00")
     tax_amount: Decimal
     by_rate: list[GstReportRow]
     currency: str

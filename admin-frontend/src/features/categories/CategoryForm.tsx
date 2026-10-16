@@ -75,8 +75,8 @@ function CategoryForm({
             {category?.status === "ARCHIVED" && <option value="ARCHIVED">Archived</option>}
           </select>
         </Field>
-        <Field label="HSN code" error={fieldErrors.hsn} hint="Default for products in this category"><input value={hsn} onChange={(e) => setHsn(e.target.value)} /></Field>
-        <Field label="GST rate (%)" error={fieldErrors.gst}><input type="number" min="0" max="100" step="0.01" value={gst} onChange={(e) => setGst(e.target.value)} /></Field>
+        <Field label="Legacy HSN code" error={fieldErrors.hsn} hint="Checkout uses confirmed mappings in Tax & GST Settings."><input value={hsn} onChange={(e) => setHsn(e.target.value)} /></Field>
+        <Field label="Legacy GST rate (%)" error={fieldErrors.gst} hint="Checkout uses confirmed mappings in Tax & GST Settings."><input type="number" min="0" max="100" step="0.01" value={gst} onChange={(e) => setGst(e.target.value)} /></Field>
         <Field label="Description" wide><textarea value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
       </div>
       {attempted && Object.keys(fieldErrors).length > 0 && <div className="status status-error" role="alert">Please complete all required fields before continuing.</div>}

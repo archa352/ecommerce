@@ -1,15 +1,23 @@
 """Per-tenant shipping, delivery-area, tax and GST-invoice settings."""
 
+import uuid
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     String,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.catalogue.constants import PRICE_PRECISION, PRICE_SCALE
@@ -117,7 +125,27 @@ class GstSettings(IdMixin, TenantMixin, TimestampMixin, Base):
 
     __tablename__ = "gst_settings"
 
-    __table_args__ = (UniqueConstraint("tenant_id", name="uq_gst_settings_tenant_id"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_gst_settings_tenant_id"),
+        CheckConstraint(
+            "registration_status IN ('REGISTERED', 'NOT_REGISTERED', 'APPLICATION_PENDING', "
+            "'UNKNOWN')",
+            name="gst_registration_status_valid",
+        ),
+        CheckConstraint(
+            "accounting_software IN ('TALLY', 'ZOHO_BOOKS', 'OTHER', 'NONE', 'NOT_DECIDED')",
+            name="gst_accounting_software_valid",
+        ),
+        CheckConstraint(
+            "configuration_status IN ('DRAFT', 'PENDING_CA_CONFIRMATION', 'ACTIVE')",
+            name="gst_configuration_status_valid",
+        ),
+        CheckConstraint(
+            "configuration_status != 'ACTIVE' OR (confirmed_by_id IS NOT NULL AND confirmed_at IS "
+            "NOT NULL)",
+            name="gst_active_requires_confirmation",
+        ),
+    )
 
     gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)
     legal_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -133,6 +161,31 @@ class GstSettings(IdMixin, TenantMixin, TimestampMixin, Base):
 
     shipping_sac_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
+    # Business choices are persisted independently from runtime secrets.
+    registration_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="UNKNOWN", server_default="UNKNOWN"
+    )
+    accounting_software: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="NOT_DECIDED", server_default="NOT_DECIDED"
+    )
+    configuration_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="DRAFT", server_default="DRAFT"
+    )
+    prices_include_gst: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_gst_settings_updated_by_users", ondelete="SET NULL"),
+        nullable=True,
+    )
+    confirmed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_gst_settings_confirmed_by_users", ondelete="SET NULL"),
+        nullable=True,
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
 
 class TaxSettings(IdMixin, TenantMixin, TimestampMixin, Base):
     """One tenant's tax rate, as a percentage: 18.00 means 18%."""
@@ -145,10 +198,83 @@ class TaxSettings(IdMixin, TenantMixin, TimestampMixin, Base):
             f"tax_percentage >= 0 AND tax_percentage <= {MAX_TAX_PERCENTAGE}",
             name="tax_percentage_in_range",
         ),
+        CheckConstraint(
+            "NOT is_active OR confirmed_by_ca", name="tax_active_requires_confirmation"
+        ),
     )
 
     tax_percentage: Mapped[Decimal] = mapped_column(
         Numeric(TAX_PRECISION, TAX_SCALE), nullable=False
     )
 
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    confirmed_by_ca: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+
+class TaxRateConfiguration(IdMixin, TenantMixin, TimestampMixin, Base):
+    """Versioned, CA-confirmed rate mapping for a product or its category."""
+
+    __tablename__ = "tax_rate_configurations"
+
+    __table_args__ = (
+        CheckConstraint(
+            "(product_id IS NOT NULL AND category_id IS NULL) OR "
+            "(product_id IS NULL AND category_id IS NOT NULL)",
+            name="tax_rate_one_target",
+        ),
+        CheckConstraint("gst_rate >= 0 AND gst_rate <= 100", name="tax_rate_in_range"),
+        CheckConstraint("status IN ('PENDING', 'ACTIVE', 'RETIRED')", name="tax_rate_status_valid"),
+        CheckConstraint(
+            "status != 'ACTIVE' OR (ca_confirmed AND approved_by_id IS NOT NULL AND approved_at "
+            "IS NOT NULL)",
+            name="tax_rate_active_requires_confirmation",
+        ),
+        CheckConstraint("hsn_code ~ '^[0-9]{4}([0-9]{2}){0,2}$'", name="tax_rate_hsn_valid"),
+        ForeignKeyConstraint(
+            ["tenant_id", "product_id"],
+            ["products.tenant_id", "products.id"],
+            name="fk_tax_rate_product_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "category_id"],
+            ["categories.tenant_id", "categories.id"],
+            name="fk_tax_rate_category_tenant",
+            ondelete="RESTRICT",
+        ),
+        Index("ix_tax_rate_tenant_product_effective", "tenant_id", "product_id", "effective_from"),
+        Index(
+            "ix_tax_rate_tenant_category_effective", "tenant_id", "category_id", "effective_from"
+        ),
+    )
+
+    product_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    category_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    hsn_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    gst_rate: Mapped[Decimal] = mapped_column(Numeric(TAX_PRECISION, TAX_SCALE), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(12), nullable=False, default="PENDING", server_default="PENDING"
+    )
+    ca_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "users.id", name="fk_tax_rate_configurations_created_by_id_users", ondelete="SET NULL"
+        ),
+        nullable=True,
+    )
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "users.id", name="fk_tax_rate_configurations_approved_by_id_users", ondelete="SET NULL"
+        ),
+        nullable=True,
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

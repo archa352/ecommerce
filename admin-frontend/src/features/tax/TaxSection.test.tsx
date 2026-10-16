@@ -25,6 +25,8 @@ const base = (permissions: string[], role = "STAFF") => [
   route("GET", "/auth/me", () => ok(profile({ role, permissions }))),
   route("GET", "/admin/gst", () => ok(gst)),
   route("GET", "/admin/tax", () => ok(tax)),
+  route("GET", "/admin/gst/rates", () => ok([])),
+  route("GET", "/admin/gst/targets", () => ok({ products: [], categories: [] })),
   route("GET", "/admin/gst/report", () => report([])),
   route("GET", "/admin/orders", () => ok([order], { page: 1, page_size: 20, total_items: 1, total_pages: 1 })),
 ];
@@ -62,7 +64,7 @@ describe("GST & invoicing page", () => {
     renderPage();
 
     expect(await screen.findByText("Not set")).toBeInTheDocument();
-    expect(screen.getByText("Seller GST details")).toBeInTheDocument();
+    expect(screen.getByText("Business tax & GST settings")).toBeInTheDocument();
   });
 
   it("uses the selected date range for both GST totals and rows without showing stale data", async () => {
@@ -123,7 +125,7 @@ describe("GST & invoicing page", () => {
     mockFetch(...base(["settings.view"]));
     renderPage();
 
-    expect(await screen.findByText("Seller GST details")).toBeInTheDocument();
+    expect(await screen.findByText("Business tax & GST settings")).toBeInTheDocument();
     expect(screen.queryByText("Invoices")).not.toBeInTheDocument();
     expect(screen.queryByText("GST report")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
@@ -138,5 +140,23 @@ describe("GST & invoicing page", () => {
 
     expect(await screen.findByText(/SAC code must be 4, 6 or 8 digits/)).toBeInTheDocument();
     expect(calls.some((c) => c.init.method === "PUT")).toBe(false);
+  });
+
+  it("requires an explicit accountant confirmation before activating a pending rate", async () => {
+    const pending = { id: "rate-1", product_id: null, category_id: "c1", category_name: "Kurtas", hsn_code: "6204", gst_rate: "5.00", effective_from: "2026-10-01", status: "PENDING", ca_confirmed: false, approved_at: null, created_at: "2026-10-01T00:00:00Z" };
+    const { calls } = mockFetch(
+      route("GET", "/admin/gst/rates", () => ok([pending])),
+      route("POST", "/admin/gst/rates/rate-1/approve", () => ok({ ...pending, status: "ACTIVE", ca_confirmed: true })),
+      ...base(ALL, "ADMIN"),
+    );
+    renderPage();
+
+    const approve = await screen.findByRole("button", { name: "Approve rate" });
+    expect(approve).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("Accountant confirmed"));
+    await userEvent.click(approve);
+    await waitFor(() => expect(calls.some((call) => call.url.pathname.endsWith("/admin/gst/rates/rate-1/approve"))).toBe(true));
+    const call = calls.find((item) => item.url.pathname.endsWith("/admin/gst/rates/rate-1/approve"));
+    expect(JSON.parse(call!.init.body as string)).toEqual({ ca_confirmed: true });
   });
 });

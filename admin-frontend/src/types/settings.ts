@@ -10,6 +10,7 @@ export interface ShippingSettings {
 export interface TaxSettings {
   tax_percentage: string;
   is_active: boolean;
+  confirmed_by_ca: boolean;
 }
 
 export interface PincodeRule {
@@ -31,6 +32,36 @@ export interface GstSettings {
   state_code: string | null;
   invoice_prefix: string;
   shipping_sac_code: string | null;
+  registration_status: "REGISTERED" | "NOT_REGISTERED" | "APPLICATION_PENDING" | "UNKNOWN";
+  accounting_software: "TALLY" | "ZOHO_BOOKS" | "OTHER" | "NONE" | "NOT_DECIDED";
+  configuration_status: "DRAFT" | "PENDING_CA_CONFIRMATION" | "ACTIVE";
+  prices_include_gst: boolean;
+  updated_at: string | null;
+  updated_by_id: string | null;
+  confirmed_at: string | null;
+  confirmed_by_id: string | null;
+}
+
+export interface TaxRateConfiguration {
+  id: string;
+  product_id: string | null;
+  category_id: string | null;
+  product_name?: string | null;
+  category_name?: string | null;
+  hsn_code: string;
+  gst_rate: string;
+  effective_from: string;
+  status: "PENDING" | "ACTIVE" | "RETIRED";
+  ca_confirmed: boolean;
+  approved_at: string | null;
+  created_by_id?: string | null;
+  approved_by_id?: string | null;
+  created_at: string;
+}
+
+export interface TaxRateTargets {
+  products: { id: string; name: string }[];
+  categories: { id: string; name: string }[];
 }
 
 export interface CodSettings {
@@ -71,8 +102,9 @@ export interface GstReport {
   cgst_amount: string;
   sgst_amount: string;
   igst_amount: string;
+  unclassified_tax_amount?: string;
   tax_amount: string;
   // gst_type/gst_rate are null for orders placed before the seller's GST state was set.
-  by_rate: { component?: "ITEMS" | "CHARGES_AND_ADJUSTMENTS"; gst_type: "INTRA_STATE" | "INTER_STATE" | null; gst_rate: string | null; taxable_amount: string; cgst_amount: string; sgst_amount: string; igst_amount: string }[];
+  by_rate: { component?: "ITEMS" | "CHARGES_AND_ADJUSTMENTS"; gst_type: "INTRA_STATE" | "INTER_STATE" | null; gst_rate: string | null; hsn_code?: string | null; taxable_amount: string; cgst_amount: string; sgst_amount: string; igst_amount: string }[];
   currency: string;
 }

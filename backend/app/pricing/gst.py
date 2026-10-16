@@ -85,6 +85,7 @@ class TaxableLine:
     amount: Decimal  # line subtotal before any discount
     rate: Decimal
     hsn_code: str | None = None
+    prices_include_tax: bool = False
 
 
 @dataclass
@@ -110,6 +111,7 @@ class TaxResult:
     charges_taxable: Decimal = ZERO
     charges_tax: Decimal = ZERO
     charges_rate: Decimal = ZERO
+    included_tax: Decimal = ZERO
 
 
 def _spread(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
@@ -125,6 +127,8 @@ def _spread(total: Decimal, weights: list[Decimal]) -> list[Decimal]:
 
 def split_tax(tax: Decimal, gst_type: GstType | str | None) -> tuple[Decimal, Decimal, Decimal]:
     """(CGST, SGST, IGST) for a tax amount: halves within a state, all IGST otherwise."""
+    if gst_type is None:
+        return ZERO, ZERO, ZERO
     if gst_type == GstType.INTRA_STATE:
         cgst = money(tax / 2)
         return cgst, tax - cgst, ZERO
@@ -156,7 +160,11 @@ def compute_tax(
 ) -> TaxResult:
     """Tax for a basket: goods at their own rates, delivery/COD charges at the default rate."""
     discounts = _spread(discount, [line.amount for line in lines])
-    taxables = [line.amount - share for line, share in zip(lines, discounts, strict=True)]
+    discounted = [line.amount - share for line, share in zip(lines, discounts, strict=True)]
+    taxables = [
+        money(amount * 100 / (100 + line.rate)) if line.prices_include_tax and line.rate else amount
+        for line, amount in zip(lines, discounted, strict=True)
+    ]
 
     if not active:
         result = TaxResult(gst_type=gst_type, charges_taxable=charges)
@@ -177,6 +185,7 @@ def compute_tax(
     line_tax: dict[object, Decimal] = {}
     for rate, members in groups.items():
         group_taxable = sum((amount for _key, amount in members), ZERO)
+        # Inclusive lines are extracted individually so mixed-rate/discount rounding is stable.
         group_tax = money(group_taxable * rate / PERCENT)
         for (key, _amount), share in zip(
             members, _spread(group_tax, [amount for _key, amount in members]), strict=True
@@ -185,7 +194,13 @@ def compute_tax(
 
     by_key = {line.key: line for line in lines}
     for line, share, taxable in zip(lines, discounts, taxables, strict=True):
-        tax = line_tax[line.key]
+        tax = (
+            money((line.amount - share) - taxable)
+            if line.prices_include_tax
+            else line_tax[line.key]
+        )
+        if line.prices_include_tax:
+            result.included_tax += tax
         cgst, sgst, igst = split_tax(tax, gst_type)
         result.lines[line.key] = LineTax(
             share, taxable, by_key[line.key].rate, tax, cgst, sgst, igst, line.hsn_code
@@ -199,5 +214,7 @@ def compute_tax(
     result.cgst += cgst
     result.sgst += sgst
     result.igst += igst
-    result.tax_amount = result.cgst + result.sgst + result.igst
+    result.tax_amount = (
+        sum((line_tax.get(line.key, ZERO) for line in lines), ZERO) + result.charges_tax
+    )
     return result

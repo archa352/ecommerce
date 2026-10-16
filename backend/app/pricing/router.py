@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,10 @@ from app.pricing.schemas import (
     PincodeRuleWrite,
     ShippingSettingsRead,
     ShippingSettingsUpdate,
+    TaxRateApproval,
+    TaxRateConfigurationRead,
+    TaxRateConfigurationWrite,
+    TaxRateTargetsRead,
     TaxSettingsRead,
     TaxSettingsUpdate,
 )
@@ -96,6 +101,18 @@ async def update_tax_settings(
 ) -> ApiResponse[TaxSettingsRead]:
     settings = await TaxService(session, user.tenant_id).update_settings(data)
     return ok(tax_read(settings), message="Tax settings updated")
+
+
+@tax_router.post("/confirm", response_model=ApiResponse[TaxSettingsRead])
+async def confirm_tax_settings(
+    data: TaxRateApproval,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.SETTINGS_MANAGE)),
+) -> ApiResponse[TaxSettingsRead]:
+    settings = await TaxService(session, user.tenant_id).confirm_settings(
+        ca_confirmed=data.ca_confirmed
+    )
+    return ok(tax_read(settings), message="Shipping/COD tax rate confirmed and activated")
 
 
 pincode_router = APIRouter(prefix="/admin/pincodes", tags=["Admin-Delivery"], dependencies=AUDITED)
@@ -243,8 +260,80 @@ async def update_gst_settings(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission(Permission.SETTINGS_MANAGE)),
 ) -> ApiResponse[GstSettingsRead]:
-    settings = await GstService(session, user.tenant_id).update_settings(data)
+    settings = await GstService(session, user.tenant_id).update_settings(data, actor_id=user.id)
     return ok(gst_read(settings), message="GST settings updated")
+
+
+@gst_router.post("/activate", response_model=ApiResponse[GstSettingsRead])
+async def activate_gst_settings(
+    data: TaxRateApproval,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.SETTINGS_MANAGE)),
+) -> ApiResponse[GstSettingsRead]:
+    settings = await GstService(session, user.tenant_id).activate_settings(
+        actor_id=user.id, ca_confirmed=data.ca_confirmed
+    )
+    return ok(gst_read(settings), message="Business tax settings activated")
+
+
+@gst_router.get("/rates", response_model=ApiResponse[list[TaxRateConfigurationRead]])
+async def list_tax_rate_configurations(
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.SETTINGS_VIEW, legacy_staff=True)),
+) -> ApiResponse[list[TaxRateConfigurationRead]]:
+    rows = await GstService(session, user.tenant_id).list_rate_configurations()
+    return ok(
+        [TaxRateConfigurationRead(**row) for row in rows],
+        message="Tax rate configurations retrieved",
+    )
+
+
+@gst_router.get("/targets", response_model=ApiResponse[TaxRateTargetsRead])
+async def list_tax_rate_targets(
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.SETTINGS_VIEW, legacy_staff=True)),
+) -> ApiResponse[TaxRateTargetsRead]:
+    targets = await GstService(session, user.tenant_id).rate_targets()
+    return ok(TaxRateTargetsRead(**targets), message="Tax configuration targets retrieved")
+
+
+@gst_router.post(
+    "/rates",
+    response_model=ApiResponse[TaxRateConfigurationRead],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_tax_rate_configuration(
+    data: TaxRateConfigurationWrite,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.SETTINGS_MANAGE)),
+) -> ApiResponse[TaxRateConfigurationRead]:
+    config = await GstService(session, user.tenant_id).create_rate_configuration(data, user.id)
+    return ok(TaxRateConfigurationRead(
+        id=config.id, product_id=config.product_id, category_id=config.category_id,
+        hsn_code=config.hsn_code, gst_rate=config.gst_rate, effective_from=config.effective_from,
+        status=config.status, ca_confirmed=config.ca_confirmed, approved_at=config.approved_at,
+        created_by_id=config.created_by_id, approved_by_id=config.approved_by_id,
+        created_at=config.created_at,
+    ), message="Tax rate saved pending CA confirmation")
+
+
+@gst_router.post("/rates/{config_id}/approve", response_model=ApiResponse[TaxRateConfigurationRead])
+async def approve_tax_rate_configuration(
+    config_id: UUID,
+    data: TaxRateApproval,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission(Permission.SETTINGS_MANAGE)),
+) -> ApiResponse[TaxRateConfigurationRead]:
+    config = await GstService(session, user.tenant_id).approve_rate_configuration(
+        config_id, actor_id=user.id, ca_confirmed=data.ca_confirmed
+    )
+    return ok(TaxRateConfigurationRead(
+        id=config.id, product_id=config.product_id, category_id=config.category_id,
+        hsn_code=config.hsn_code, gst_rate=config.gst_rate, effective_from=config.effective_from,
+        status=config.status, ca_confirmed=config.ca_confirmed, approved_at=config.approved_at,
+        created_by_id=config.created_by_id, approved_by_id=config.approved_by_id,
+        created_at=config.created_at,
+    ), message="Tax rate activated")
 
 
 @gst_router.get(

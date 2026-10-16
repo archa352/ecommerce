@@ -93,6 +93,10 @@ class Order(IdMixin, TenantMixin, TimestampMixin, Base):
         CheckConstraint("subtotal >= 0", name="subtotal_not_negative"),
         CheckConstraint("shipping_amount >= 0", name="shipping_not_negative"),
         CheckConstraint("tax_amount >= 0", name="tax_not_negative"),
+        CheckConstraint(
+            "tax_included_amount >= 0 AND tax_included_amount <= tax_amount",
+            name="tax_included_valid",
+        ),
         CheckConstraint("discount_amount >= 0", name="discount_not_negative"),
         CheckConstraint("discount_amount <= subtotal", name="discount_not_more_than_subtotal"),
         CheckConstraint("cod_fee >= 0", name="cod_fee_not_negative"),
@@ -101,7 +105,8 @@ class Order(IdMixin, TenantMixin, TimestampMixin, Base):
             name="advance_within_total",
         ),
         CheckConstraint(
-            "total_amount = subtotal - discount_amount + shipping_amount + cod_fee + tax_amount",
+            "total_amount = subtotal - discount_amount + shipping_amount + cod_fee + tax_amount - "
+            "tax_included_amount",
             name="total_matches_components",
         ),
         CheckConstraint(
@@ -174,6 +179,9 @@ class Order(IdMixin, TenantMixin, TimestampMixin, Base):
     tax_amount: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
     )
+    tax_included_amount: Mapped[Decimal] = mapped_column(
+        Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False, default=0, server_default="0"
+    )
 
     total_amount: Mapped[Decimal] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=False
@@ -241,6 +249,17 @@ class Order(IdMixin, TenantMixin, TimestampMixin, Base):
     gst_type: Mapped[str | None] = mapped_column(String(12), nullable=True)
     place_of_supply: Mapped[str | None] = mapped_column(String(100), nullable=True)
     seller_gstin: Mapped[str | None] = mapped_column(String(15), nullable=True)
+    seller_legal_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    seller_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    seller_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    seller_state_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    invoice_prefix: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shipping_sac_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    charges_gst_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    prices_include_gst: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    gst_registration_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     estimated_delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
@@ -342,6 +361,7 @@ class OrderItem(IdMixin, TenantMixin, TimestampMixin, Base):
             "subtotal = unit_price * quantity", name="subtotal_is_price_times_quantity"
         ),
         Index("ix_order_items_tenant_id_order_id", "tenant_id", "order_id"),
+        Index("ix_order_items_tax_configuration_id", "tax_configuration_id"),
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -372,6 +392,15 @@ class OrderItem(IdMixin, TenantMixin, TimestampMixin, Base):
 
     # GST frozen at purchase. NULL on orders placed before GST lines existed.
     hsn_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    tax_configuration_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "tax_rate_configurations.id",
+            name="fk_order_items_tax_configuration",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
     gst_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     discount_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(PRICE_PRECISION, PRICE_SCALE), nullable=True
