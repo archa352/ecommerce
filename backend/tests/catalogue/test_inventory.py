@@ -57,7 +57,7 @@ async def test_stock_cannot_be_driven_negative(client, admin_headers, variant):
     )
 
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "CONFLICT"
+    assert response.json()["error"]["code"] == "STOCK_BELOW_RESERVED"
 
 
 async def test_a_refused_adjustment_leaves_stock_untouched(

@@ -131,7 +131,7 @@ async def test_an_unknown_category_is_a_404(client, admin_headers, tenant):
     response = await client.get(f"{CATEGORIES}/{UNKNOWN_ID}", headers=admin_headers)
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "NOT_FOUND"
+    assert response.json()["error"]["code"] == "CATEGORY_NOT_FOUND"
 
 
 @pytest.mark.parametrize("payload", [{"name": ""}, {"name": "   "}])
