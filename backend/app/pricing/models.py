@@ -231,7 +231,7 @@ class TaxRateConfiguration(IdMixin, TenantMixin, TimestampMixin, Base):
         CheckConstraint(
             "status != 'ACTIVE' OR (ca_confirmed AND approved_by_id IS NOT NULL AND approved_at "
             "IS NOT NULL)",
-            name="tax_rate_active_requires_confirmation",
+            name="tax_rate_active_needs_confirmation",
         ),
         CheckConstraint("hsn_code ~ '^[0-9]{4}([0-9]{2}){0,2}$'", name="tax_rate_hsn_valid"),
         ForeignKeyConstraint(

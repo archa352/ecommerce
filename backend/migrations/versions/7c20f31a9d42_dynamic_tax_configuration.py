@@ -26,15 +26,15 @@ def upgrade() -> None:
     op.add_column("gst_settings", sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True))
     op.create_foreign_key("fk_gst_settings_updated_by_users", "gst_settings", "users", ["updated_by_id"], ["id"], ondelete="SET NULL")
     op.create_foreign_key("fk_gst_settings_confirmed_by_users", "gst_settings", "users", ["confirmed_by_id"], ["id"], ondelete="SET NULL")
-    op.create_check_constraint("ck_gst_settings_gst_registration_status_valid", "gst_settings", "registration_status IN ('REGISTERED', 'NOT_REGISTERED', 'APPLICATION_PENDING', 'UNKNOWN')")
-    op.create_check_constraint("ck_gst_settings_gst_accounting_software_valid", "gst_settings", "accounting_software IN ('TALLY', 'ZOHO_BOOKS', 'OTHER', 'NONE', 'NOT_DECIDED')")
-    op.create_check_constraint("ck_gst_settings_gst_configuration_status_valid", "gst_settings", "configuration_status IN ('DRAFT', 'PENDING_CA_CONFIRMATION', 'ACTIVE')")
-    op.create_check_constraint("ck_gst_settings_gst_active_requires_confirmation", "gst_settings", "configuration_status != 'ACTIVE' OR (confirmed_by_id IS NOT NULL AND confirmed_at IS NOT NULL)")
+    op.create_check_constraint(op.f("ck_gst_settings_gst_registration_status_valid"), "gst_settings", "registration_status IN ('REGISTERED', 'NOT_REGISTERED', 'APPLICATION_PENDING', 'UNKNOWN')")
+    op.create_check_constraint(op.f("ck_gst_settings_gst_accounting_software_valid"), "gst_settings", "accounting_software IN ('TALLY', 'ZOHO_BOOKS', 'OTHER', 'NONE', 'NOT_DECIDED')")
+    op.create_check_constraint(op.f("ck_gst_settings_gst_configuration_status_valid"), "gst_settings", "configuration_status IN ('DRAFT', 'PENDING_CA_CONFIRMATION', 'ACTIVE')")
+    op.create_check_constraint(op.f("ck_gst_settings_gst_active_requires_confirmation"), "gst_settings", "configuration_status != 'ACTIVE' OR (confirmed_by_id IS NOT NULL AND confirmed_at IS NOT NULL)")
 
     op.add_column("tax_settings", sa.Column("confirmed_by_ca", sa.Boolean(), nullable=False, server_default=sa.false()))
     op.execute("UPDATE tax_settings SET is_active = false WHERE is_active")
     op.alter_column("tax_settings", "is_active", existing_type=sa.Boolean(), server_default=sa.false())
-    op.create_check_constraint("ck_tax_settings_tax_active_requires_confirmation", "tax_settings", "NOT is_active OR confirmed_by_ca")
+    op.create_check_constraint(op.f("ck_tax_settings_tax_active_requires_confirmation"), "tax_settings", "NOT is_active OR confirmed_by_ca")
 
     op.create_table(
         "tax_rate_configurations",
@@ -60,7 +60,7 @@ def upgrade() -> None:
         sa.CheckConstraint("(product_id IS NOT NULL AND category_id IS NULL) OR (product_id IS NULL AND category_id IS NOT NULL)", name="tax_rate_one_target"),
         sa.CheckConstraint("gst_rate >= 0 AND gst_rate <= 100", name="tax_rate_in_range"),
         sa.CheckConstraint("status IN ('PENDING', 'ACTIVE', 'RETIRED')", name="tax_rate_status_valid"),
-        sa.CheckConstraint("status != 'ACTIVE' OR (ca_confirmed AND approved_by_id IS NOT NULL AND approved_at IS NOT NULL)", name="tax_rate_active_requires_confirmation"),
+        sa.CheckConstraint("status != 'ACTIVE' OR (ca_confirmed AND approved_by_id IS NOT NULL AND approved_at IS NOT NULL)", name="tax_rate_active_needs_confirmation"),
         sa.CheckConstraint("hsn_code ~ '^[0-9]{4}([0-9]{2}){0,2}$'", name="tax_rate_hsn_valid"),
     )
     op.create_index("ix_tax_rate_tenant_product_effective", "tax_rate_configurations", ["tenant_id", "product_id", "effective_from"])
@@ -100,9 +100,9 @@ def upgrade() -> None:
     op.add_column("orders", sa.Column("charges_gst_rate", sa.Numeric(5, 2), nullable=True))
     op.add_column("orders", sa.Column("prices_include_gst", sa.Boolean(), nullable=False, server_default=sa.false()))
     op.add_column("orders", sa.Column("gst_registration_status", sa.String(30), nullable=True))
-    op.drop_constraint("ck_orders_total_matches_components", "orders", type_="check")
-    op.create_check_constraint("ck_orders_total_matches_components", "orders", "total_amount = subtotal - discount_amount + shipping_amount + cod_fee + tax_amount - tax_included_amount")
-    op.create_check_constraint("ck_orders_tax_included_valid", "orders", "tax_included_amount >= 0 AND tax_included_amount <= tax_amount")
+    op.drop_constraint(op.f("ck_orders_total_matches_components"), "orders", type_="check")
+    op.create_check_constraint(op.f("ck_orders_total_matches_components"), "orders", "total_amount = subtotal - discount_amount + shipping_amount + cod_fee + tax_amount - tax_included_amount")
+    op.create_check_constraint(op.f("ck_orders_tax_included_valid"), "orders", "tax_included_amount >= 0 AND tax_included_amount <= tax_amount")
 
     op.add_column("order_items", sa.Column("tax_configuration_id", postgresql.UUID(as_uuid=True), nullable=True))
     op.create_foreign_key("fk_order_items_tax_configuration", "order_items", "tax_rate_configurations", ["tax_configuration_id"], ["id"], ondelete="RESTRICT")
