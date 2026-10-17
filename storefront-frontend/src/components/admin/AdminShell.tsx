@@ -102,11 +102,11 @@ export default function AdminShell({
                 </Link>
                 <div className="d-flex align-items-center gap-2">
                   <span className="w-40-px h-40-px bg-primary-600 text-white rounded-circle d-flex justify-content-center align-items-center fw-semibold">
-                    {(user.name ?? user.email ?? user.phone).charAt(0).toUpperCase()}
+                    {(user.name ?? user.email ?? user.phone ?? "A").charAt(0).toUpperCase()}
                   </span>
                   <span className="d-none d-lg-block">
                     <span className="text-sm fw-semibold d-block line-height-1">
-                      {user.name ?? user.email ?? user.phone}
+                      {user.name ?? user.email ?? user.phone ?? "Admin"}
                     </span>
                     <span className="text-xs text-secondary-light">{user.role}</span>
                   </span>

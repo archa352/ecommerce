@@ -13,7 +13,7 @@ export interface TokenPair {
 export interface UserProfile {
   id: string;
   tenant_id: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   name: string | null;
   role: UserRole;

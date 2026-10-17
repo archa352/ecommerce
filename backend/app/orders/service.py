@@ -353,7 +353,7 @@ class CheckoutService:
             return user
 
         email = str(contact.email).lower() if contact.email else None
-        if email and await users.get_by_email(tenant_id=self.tenant_id, email=email):
+        if email and await users.email_exists(tenant_id=self.tenant_id, email=email):
             email = None  # stays on the order as contact_email, not on the account
 
         user = await users.create(
@@ -921,7 +921,7 @@ class CheckoutService:
             user = await UserRepository(self.session).get_by_id(
                 tenant_id=self.tenant_id, user_id=self.customer_id
             )
-            if user is not None:
+            if user is not None and user.phone is not None:
                 phones.add(user.phone)
         return sorted(phones)
 
@@ -1161,7 +1161,10 @@ class OrderService:
                     tenant_id=self.tenant_id, user_id=order.customer_id
                 )
                 await CodService(self.session, self.tenant_id).auto_blacklist_after_return(
-                    order, extra_phones=[customer.phone] if customer else []
+                    order,
+                    extra_phones=[customer.phone]
+                    if customer is not None and customer.phone is not None
+                    else [],
                 )
             if new_status is OrderStatus.DELIVERED:
                 await ReviewRequestService(self.session, self.tenant_id).schedule_for(order)

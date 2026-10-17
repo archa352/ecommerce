@@ -157,7 +157,7 @@ class TopCustomerRow(BaseModel):
     customer_id: UUID
     name: str | None
     email: str | None
-    phone: str
+    phone: str | None
     orders: int
     total_spent: Decimal
     last_order_at: datetime | None

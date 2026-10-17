@@ -28,7 +28,7 @@ class CustomerSummary(BaseModel):
     id: UUID
     name: str | None
     email: str | None
-    phone: str
+    phone: str | None
     status: str
     is_verified: bool
     tags: list[str]

@@ -8,7 +8,7 @@ export interface TokenPair {
 export interface UserProfile {
   id: string;
   tenant_id: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   name: string | null;
   role: "ADMIN" | "STAFF" | "CUSTOMER";
@@ -52,7 +52,7 @@ export interface CustomerSummary {
   id: string;
   name: string | null;
   email: string | null;
-  phone: string;
+  phone: string | null;
   status: string;
   is_verified: boolean;
   tags: string[];

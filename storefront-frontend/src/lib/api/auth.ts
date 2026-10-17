@@ -2,21 +2,19 @@ import { apiRequest } from '@/lib/api/client';
 import type { Tenant, TokenPair, UserProfile } from '@/types/auth';
 
 export const authApi = {
-  /**
-   * Exchange an MSG91 widget token for a session.
-   *
-   * The storefront's only customer sign-in, and registration too: a verified
-   * number with no account gets one created here.
-   *
-   * No phone is sent. MSG91 owns the code -- sending, resending, expiry and
-   * attempt limits all sit with the widget -- and the server reads the
-   * number from its confirmation of this token, so the browser cannot assert
-   * an identity of its choosing.
-   */
+  /** Exchange the MSG91 widget's verified token for a ZEEN session. */
   widgetLogin(accessToken: string): Promise<TokenPair> {
     return apiRequest<TokenPair>('/auth/widget/login', {
       method: 'POST',
       body: { access_token: accessToken },
+      cache: 'no-store',
+    });
+  },
+
+  googleLogin(credential: string): Promise<TokenPair> {
+    return apiRequest<TokenPair>('/auth/google/login', {
+      method: 'POST',
+      body: { credential },
       cache: 'no-store',
     });
   },

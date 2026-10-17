@@ -7,12 +7,12 @@ from decimal import Decimal
 from sqlalchemy import func, select
 
 from app.addresses.models import Address
-from app.auth.constants import UserStatus
+from app.auth.constants import AuthProvider, UserStatus
 from app.cart.models import Cart, CartItem
 from app.orders.models import Order
 from app.ratings.models import Review
 from app.search_filter.models import SearchHistory
-from app.users.models import User
+from app.users.models import User, UserIdentity
 from app.wishlist.models import Wishlist, WishlistItem
 from tests.account.conftest import CHECKOUT, ME
 
@@ -36,7 +36,39 @@ async def test_erasing_an_account_anonymises_the_user(
     assert stored.email is None
     assert stored.name is None
     assert stored.is_verified is False
-    assert stored.phone.startswith("+999")
+    assert stored.phone is None
+
+
+async def test_erasing_an_account_removes_authentication_identities(
+    client, session, tenant, shopper, shopper_auth
+):
+    session.add_all(
+        [
+            UserIdentity(
+                tenant_id=tenant.id,
+                user_id=shopper.id,
+                provider=AuthProvider.GOOGLE.value,
+                subject="erasure-google-sub",
+            ),
+            UserIdentity(
+                tenant_id=tenant.id,
+                user_id=shopper.id,
+                provider=AuthProvider.EMAIL.value,
+                subject="erase@zeen.com",
+            ),
+        ]
+    )
+    await session.commit()
+
+    response = await client.delete(ME, headers=shopper_auth)
+
+    assert response.status_code == 204
+    assert await session.scalar(
+        select(UserIdentity.id).where(
+            UserIdentity.tenant_id == tenant.id,
+            UserIdentity.user_id == shopper.id,
+        )
+    ) is None
 
 
 async def test_the_erased_token_stops_working(client, shopper_auth):

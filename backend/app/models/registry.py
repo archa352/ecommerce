@@ -41,7 +41,7 @@ from app.ratings.models import Review, ReviewImage, ReviewRequest
 from app.returns.models import ReturnReason
 from app.search_filter.models import SearchHistory
 from app.tenants.models import Tenant, TenantDomain
-from app.users.models import User
+from app.users.models import User, UserIdentity
 from app.wishlist.models import Wishlist, WishlistItem
 
 __all__ = [
@@ -94,6 +94,7 @@ __all__ = [
     "Tenant",
     "TenantDomain",
     "User",
+    "UserIdentity",
     "Wishlist",
     "WishlistItem"
 ]

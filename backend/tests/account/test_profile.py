@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
+from app.users.models import User, UserIdentity
 from tests.account.conftest import ME
 
 
@@ -18,12 +21,31 @@ async def test_a_customer_changes_name_and_email(client, shopper_auth):
     assert again.json()["data"]["name"] == "New Name"
 
 
-async def test_an_email_in_use_by_someone_else_is_refused(client, shopper_auth, make_user, tenant):
-    await make_user(tenant=tenant, phone="+919812340088", email="taken@zeen.com")
+async def test_customer_profile_email_can_match_without_linking_accounts(
+    client, session, shopper, shopper_auth, make_user, tenant
+):
+    other = await make_user(
+        tenant=tenant, phone="+919812340088", email="taken@zeen.com"
+    )
 
     response = await client.patch(ME, json={"email": "taken@zeen.com"}, headers=shopper_auth)
 
-    assert response.status_code == 409
+    assert response.status_code == 200
+    users = (
+        await session.scalars(
+            select(User).where(
+                User.tenant_id == tenant.id,
+                User.email == "taken@zeen.com",
+            )
+        )
+    ).all()
+    assert {row.id for row in users} == {shopper.id, other.id}
+    assert await session.scalar(
+        select(UserIdentity.id).where(
+            UserIdentity.tenant_id == tenant.id,
+            UserIdentity.user_id.in_([shopper.id, other.id]),
+        )
+    ) is None
 
 
 async def test_keeping_your_own_email_is_fine(client, shopper_auth):

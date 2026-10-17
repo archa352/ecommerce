@@ -5,7 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
-import { signInWithWidgetToken } from '@/lib/auth/actions';
+import {
+  signInWithGoogleCredential,
+  signInWithWidgetToken,
+} from '@/lib/auth/actions';
 
 import styles from './Auth.module.css';
 
@@ -16,12 +19,11 @@ const COUNTRY_CODE = '91';
 const WIDGET_ID = process.env.NEXT_PUBLIC_MSG91_WIDGET_ID;
 const TOKEN_AUTH = process.env.NEXT_PUBLIC_MSG91_TOKEN_AUTH;
 
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
 /**
- * MSG91's widget, driven from our own markup.
- *
- * `exposeMethods` tells it not to render any UI of its own and to hang these
- * three helpers off `window` instead, which is what lets the code below keep
- * the storefront's styling while MSG91 owns the SMS.
+ * MSG91's widget is driven from our own markup; Google Identity Services
+ * renders its sign-in button into the same customer sign-in page.
  */
 declare global {
   interface Window {
@@ -42,6 +44,20 @@ declare global {
       success: (data: unknown) => void,
       failure: (error: unknown) => void,
     ) => void;
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+          }) => void;
+          renderButton: (
+            element: HTMLElement,
+            options: { theme: string; size: string; text: string; width: number },
+          ) => void;
+        };
+      };
+    };
   }
 }
 
@@ -65,14 +81,8 @@ function readError(error: unknown, fallback: string): string {
 }
 
 /**
- * The storefront's single customer entry point.
- *
- * Sign-in and registration are one flow: the backend creates an account for
- * any verified number that does not have one, so asking someone whether they
- * are new would be a question with no consequence.
- *
- * Both steps live on this page because the widget's state is client-side --
- * navigating to a separate verify route would throw away the pending code.
+ * Keep phone OTP's two steps on this page because the MSG91 widget state is
+ * client-side. Google sign-in uses the same page and session flow.
  */
 export default function SignIn() {
   const searchParams = useSearchParams();
@@ -89,8 +99,10 @@ export default function SignIn() {
   const [, startTransition] = useTransition();
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   const configured = Boolean(WIDGET_ID && TOKEN_AUTH);
+  const googleConfigured = Boolean(GOOGLE_CLIENT_ID);
   const code = otp.join('');
 
   useEffect(() => {
@@ -102,6 +114,36 @@ export default function SignIn() {
   useEffect(() => {
     if (step === 'code') inputsRef.current[0]?.focus();
   }, [step]);
+
+  const initializeGoogle = () => {
+    const button = googleButtonRef.current;
+    if (!GOOGLE_CLIENT_ID || !window.google || !button || button.dataset.initialized) return;
+
+    button.dataset.initialized = 'true';
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: response => {
+        if (!response.credential) {
+          setError('Google sign-in did not return a credential. Try again.');
+          return;
+        }
+
+        setError('');
+        setBusy(true);
+        startTransition(async () => {
+          const result = await signInWithGoogleCredential(response.credential, next);
+          setBusy(false);
+          if (result?.error) setError(result.error);
+        });
+      },
+    });
+    window.google.accounts.id.renderButton(button, {
+      theme: 'outline',
+      size: 'large',
+      text: 'continue_with',
+      width: 380,
+    });
+  };
 
   const startWidget = () => {
     if (!window.initSendOTP || !configured || window.sendOtp) return;
@@ -271,6 +313,13 @@ export default function SignIn() {
           onReady={startWidget}
         />
       )}
+      {googleConfigured && (
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="afterInteractive"
+          onReady={initializeGoogle}
+        />
+      )}
 
       <div className={styles.card}>
         <div className={styles.imagePanel}>
@@ -289,7 +338,7 @@ export default function SignIn() {
               ZEEN
             </Link>
 
-            {!configured ? (
+            {!configured && !googleConfigured ? (
               <>
                 <span className={styles.eyebrow}>Account</span>
                 <h1 className={styles.title}>Sign-in is not configured</h1>
@@ -302,13 +351,17 @@ export default function SignIn() {
             ) : step === 'phone' ? (
               <>
                 <span className={styles.eyebrow}>Account</span>
-                <h1 className={styles.title}>Continue with your mobile number</h1>
+                <h1 className={styles.title}>
+                  {configured ? 'Continue with your mobile number' : 'Sign in to your account'}
+                </h1>
                 <p className={styles.subtitle}>
-                  We&rsquo;ll text you a code. New here? Your account is created the moment
-                  it&rsquo;s verified — there is nothing else to fill in.
+                  {configured
+                    ? 'We’ll text you a code. New here? Your account is created once it’s verified.'
+                    : 'Continue securely with your Google account.'}
                 </p>
 
-                <form className={styles.form} onSubmit={sendCode} noValidate>
+                {configured && (
+                  <form className={styles.form} onSubmit={sendCode} noValidate>
                   <div>
                     <label className={styles.label} htmlFor="phone">
                       Mobile number
@@ -337,12 +390,27 @@ export default function SignIn() {
                   <button type="submit" className={styles.submit} disabled={busy}>
                     {busy ? 'Sending code…' : 'Send code'}
                   </button>
-                </form>
 
-                <p className={styles.hint}>
-                  By continuing you agree to our <Link href="/faqs-1">Terms</Link> and{' '}
-                  <Link href="/faqs-1">Privacy Policy</Link>.
-                </p>
+                  </form>
+                )}
+
+                {googleConfigured && (
+                  <div className={styles.form}>
+                    <div ref={googleButtonRef} />
+                    {!configured && error && (
+                      <p className={styles.error} role="alert">
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {configured && (
+                  <p className={styles.hint}>
+                    By continuing you agree to our <Link href="/faqs-1">Terms</Link> and{' '}
+                    <Link href="/faqs-1">Privacy Policy</Link>.
+                  </p>
+                )}
               </>
             ) : (
               <>

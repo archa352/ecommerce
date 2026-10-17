@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import secrets
 from uuid import UUID
 
 from fastapi import Request
@@ -22,7 +21,7 @@ from app.customers.models import CustomerNote
 from app.orders.models import Order
 from app.ratings.models import Review, ReviewRequest, ReviewRequestStatus
 from app.search_filter.models import SearchHistory
-from app.users.models import User
+from app.users.models import User, UserIdentity
 from app.users.repository import UserRepository
 from app.users.schemas import StaffCreate, StaffPasswordReset, StaffQuery, StaffUpdate
 from app.users.serializers import staff_read
@@ -40,21 +39,29 @@ class UserService:
         role: UserRole,
         tenant_id: UUID,
         email: str,
-        phone: str,
+        phone: str | None = None,
         password: str,
         name: str | None = None,
     ) -> tuple[User, bool]:
         """Create the tenant's user if absent; returns the user and whether it was created."""
         email = email.strip().lower()
-        phone = normalize_phone(phone)
+        if phone is None and role in STAFF_ROLES:
+            raise ValidationError("A phone number is required for staff and admin accounts")
+        phone = normalize_phone(phone) if phone else None
 
-        existing = await self.users.get_by_email(tenant_id=tenant_id, email=email)
-        if existing is not None:
-            return existing, False
+        if role in STAFF_ROLES:
+            existing = await self.users.get_by_email(
+                tenant_id=tenant_id,
+                email=email,
+                roles=STAFF_ROLES,
+            )
+            if existing is not None:
+                return existing, False
 
-        existing = await self.users.get_by_phone(tenant_id=tenant_id, phone=phone)
-        if existing is not None:
-            return existing, False
+        if phone is not None:
+            existing = await self.users.get_by_phone(tenant_id=tenant_id, phone=phone)
+            if existing is not None:
+                return existing, False
 
         password_hash = (
             None if role is UserRole.CUSTOMER else await hash_password(password)
@@ -78,7 +85,13 @@ class UserService:
 
         if "email" in changes and changes["email"] is not None:
             email = str(changes["email"]).strip().lower()
-            owner = await self.users.get_by_email(tenant_id=user.tenant_id, email=email)
+            owner = None
+            if user.role in STAFF_ROLES:
+                owner = await self.users.get_by_email(
+                    tenant_id=user.tenant_id,
+                    email=email,
+                    roles=STAFF_ROLES,
+                )
             if owner is not None and owner.id != user.id:
                 raise ConflictError(
                     "That email is already in use", error_code=UserErrorCode.EMAIL_TAKEN
@@ -131,7 +144,11 @@ class StaffService:
 
     async def create(self, data: StaffCreate, request: Request) -> User:
         email = str(data.email).lower()
-        if await self.users.get_by_email(tenant_id=self.actor.tenant_id, email=email):
+        if await self.users.get_by_email(
+            tenant_id=self.actor.tenant_id,
+            email=email,
+            roles=STAFF_ROLES,
+        ):
             raise ConflictError(
                 "That email is already in use", error_code=UserErrorCode.EMAIL_TAKEN
             )
@@ -223,15 +240,7 @@ class StaffService:
         return member
 
 
-# +999 is reserved for trials, so a scrubbed number can never route anywhere,
-# and it still satisfies the E.164 check constraint on the column.
 # Erase a customer's personal data on request, per DPDP and GDPR.
-
-ERASED_PHONE_PREFIX = "+999"
-
-
-def _erased_phone() -> str:
-    return f"{ERASED_PHONE_PREFIX}{secrets.randbelow(10**11):011d}"
 
 
 class AccountErasureService:
@@ -338,7 +347,13 @@ class AccountErasureService:
 
     async def _anonymise(self, user: User) -> None:
         """Orders keep their delivery details -- tax law requires the record."""
-        user.phone = _erased_phone()
+        await self.session.execute(
+            delete(UserIdentity).where(
+                UserIdentity.tenant_id == self.tenant_id,
+                UserIdentity.user_id == user.id,
+            )
+        )
+        user.phone = None
         user.email = None
         user.name = None
         user.tags = None

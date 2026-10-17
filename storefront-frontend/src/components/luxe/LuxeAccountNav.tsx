@@ -22,7 +22,7 @@ function shortName(user: UserProfile): string {
 
 /** The single character shown in the avatar circle. */
 function initial(user: UserProfile): string {
-  const source = user.name?.trim() || user.email?.trim() || user.phone;
+  const source = user.name?.trim() || user.email?.trim() || user.phone || 'Account';
   return source.match(/[a-z0-9]/i)?.[0].toUpperCase() ?? 'A';
 }
 
@@ -81,7 +81,7 @@ export default function LuxeAccountNav() {
         <div className={styles.profileDropdown} role="menu">
           <div className={styles.profileHead}>
             <p className={styles.profileHeadName}>{user.name?.trim() || 'Welcome back'}</p>
-            <p className={styles.profileHeadContact}>{user.email ?? user.phone}</p>
+            <p className={styles.profileHeadContact}>{user.email ?? user.phone ?? ''}</p>
           </div>
 
           {ACCOUNT_LINKS.map(link => (

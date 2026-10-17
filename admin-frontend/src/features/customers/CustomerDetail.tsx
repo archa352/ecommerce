@@ -42,7 +42,7 @@ function CustomerDetail() {
 
   return (
     <div className="admin-detail-page customer-detail-page">
-      <PageHeader title={c.name ?? c.phone} subtitle={`Customer since ${formatDate(c.created_at)}`} actions={<Link className="btn" to="/customers">Back to customers</Link>} />
+      <PageHeader title={c.name ?? c.email ?? c.phone ?? "Customer"} subtitle={`Customer since ${formatDate(c.created_at)}`} actions={<Link className="btn" to="/customers">Back to customers</Link>} />
       <StatusMessage status={action.status} />
       {c.order_blocked && (
         <div className="status status-error" role="status">
@@ -98,7 +98,7 @@ function CustomerDetail() {
         <div className="panel customer-detail-contact">
           <h3>Contact</h3>
           <dl className="kv">
-            <dt>Phone</dt><dd>{c.phone}</dd>
+            <dt>Phone</dt><dd>{c.phone ?? "—"}</dd>
             <dt>Email</dt><dd>{c.email ?? "-"}</dd>
             <dt>Status</dt><dd><Badge value={c.status} /> {c.is_verified ? "verified" : "not verified"}</dd>
           </dl>

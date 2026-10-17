@@ -69,6 +69,23 @@ export async function signInWithWidgetToken(
   redirect(safeRedirect(next));
 }
 
+export async function signInWithGoogleCredential(
+  credential: string,
+  next: string,
+): Promise<AuthFormState> {
+  if (!credential) return { error: 'Google sign-in failed. Try again.' };
+
+  try {
+    const tokens = await authApi.googleLogin(credential);
+    await setSession(tokens);
+    await mergeGuestCart(tokens.access_token);
+  } catch (error) {
+    return toFormState(error);
+  }
+
+  redirect(safeRedirect(next));
+}
+
 /** Sign in an admin or staff member with a password. */
 export async function passwordLogin(
   _previous: AuthFormState,

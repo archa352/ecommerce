@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import CurrentUser
 from app.auth.permissions import effective_permissions
 from app.auth.schemas import (
+    GoogleLoginPayload,
     LogoutPayload,
     PasswordLoginPayload,
     ProfileUpdate,
@@ -98,6 +99,29 @@ async def widget_login(
     await rate_limit.reset(key)
     return ok(tokens, message="Login successful")
 
+@router.post(
+    "/google/login",
+    response_model=ApiResponse[TokenPair],
+    summary="Sign a customer in with Google",
+)
+async def google_login(
+    request: Request,
+    data: GoogleLoginPayload,
+    tenant: CurrentTenant,
+    session: AsyncSession = Depends(get_db),
+) -> ApiResponse[TokenPair]:
+    settings = get_settings()
+    key = await _throttle(
+        request,
+        tenant,
+        "google-login",
+        hash_refresh_token(data.credential),
+        limit=settings.login_rate_limit_attempts,
+        window_seconds=settings.login_rate_limit_window_seconds,
+    )
+    tokens = await AuthService(session, tenant).login_with_google(data.credential)
+    await rate_limit.reset(key)
+    return ok(tokens, message="Login successful")
 
 @admin_router.post(
     "/login",

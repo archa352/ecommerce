@@ -1,7 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,11 +30,21 @@ class User(IdMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "id", name="uq_users_tenant_id_id"),
         UniqueConstraint("tenant_id", "phone", name="uq_users_tenant_phone"),
-        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+        Index(
+            "uq_users_tenant_staff_email",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("role IN ('ADMIN', 'STAFF')"),
+        ),
         CheckConstraint(f"role IN ({_ROLE_VALUES})", name="role_valid"),
         CheckConstraint(f"status IN ({_STATUS_VALUES})", name="status_valid"),
         CheckConstraint("email IS NULL OR email = lower(email)", name="email_is_lowercase"),
-        CheckConstraint(_E164_SQL, name="phone_is_e164"),
+        CheckConstraint(
+            f"(phone IS NOT NULL AND {_E164_SQL}) "
+            "OR (role = 'CUSTOMER' AND phone IS NULL)",
+            name="phone_is_e164",
+        ),
         CheckConstraint(
             "(role = 'CUSTOMER') = (password_hash IS NULL)",
             name="password_matches_role",
@@ -38,7 +58,7 @@ class User(IdMixin, TimestampMixin, Base):
         index=True,
     )
 
-    phone: Mapped[str] = mapped_column(String(16), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -77,3 +97,37 @@ class User(IdMixin, TimestampMixin, Base):
     @property
     def is_active(self) -> bool:
         return self.status == UserStatus.ACTIVE.value
+
+class UserIdentity(IdMixin, TimestampMixin, Base):
+    __tablename__ = "user_identities"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "user_id"],
+            ["users.tenant_id", "users.id"],
+            ondelete="CASCADE",
+            name="fk_user_identities_tenant_user",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "provider",
+            "subject",
+            name="uq_user_identities_tenant_provider_subject",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "provider",
+            name="uq_user_identities_tenant_user_provider",
+        ),
+        Index("ix_user_identities_tenant_user", "tenant_id", "user_id"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject: Mapped[str] = mapped_column(String(320), nullable=False)

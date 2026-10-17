@@ -7,7 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.service import record_login
-from app.auth.constants import UserRole
+from app.auth.constants import AuthProvider, UserRole
+from app.auth.google import verify_google_credential
 from app.auth.phone import normalize_phone
 from app.auth.repository import RefreshTokenRepository
 from app.auth.schemas import TokenPair
@@ -69,8 +70,103 @@ class AuthService:
         user.is_verified = True
         tokens = await self._issue_tokens(user)
         await self.session.commit()
-
         return tokens
+
+    async def login_with_google(self, credential: str) -> TokenPair:
+        claims = await verify_google_credential(credential)
+
+        subject = claims["sub"]
+        email = claims["email"].strip().lower()
+        name = (claims.get("name") or "").strip() or email
+
+        try:
+            google_user = await self.users.get_by_identity(
+                tenant_id=self.tenant.id,
+                provider=AuthProvider.GOOGLE.value,
+                subject=subject,
+            )
+            user = google_user
+
+            if user is None:
+                # Only a verified email identity links Google and future email OTP.
+                # An ordinary profile email on a phone account does not link it.
+                user = await self.users.get_by_email_identity(
+                    tenant_id=self.tenant.id,
+                    email=email,
+                )
+                if user is None:
+                    user = await self.users.create(
+                        tenant_id=self.tenant.id,
+                        phone=None,
+                        role=UserRole.CUSTOMER.value,
+                        name=name,
+                        email=email,
+                        is_verified=True,
+                    )
+                await self.users.add_identity(
+                    tenant_id=self.tenant.id,
+                    user_id=user.id,
+                    provider=AuthProvider.GOOGLE.value,
+                    subject=subject,
+                )
+
+            if not user.is_active or user.role != UserRole.CUSTOMER.value:
+                raise AuthenticationError(
+                    INVALID_CREDENTIALS,
+                    error_code=AuthErrorCode.INVALID_CREDENTIALS,
+                )
+
+            email_user = await self.users.get_by_email_identity(
+                tenant_id=self.tenant.id,
+                email=email,
+            )
+            if email_user is None:
+                # This preserves future email OTP continuity. A changed email
+                # never transfers or overwrites an existing identity.
+                await self.users.add_identity(
+                    tenant_id=self.tenant.id,
+                    user_id=user.id,
+                    provider=AuthProvider.EMAIL.value,
+                    subject=email,
+                )
+
+            tokens = await self._issue_tokens(user)
+            await self.session.commit()
+            return tokens
+        except IntegrityError as exc:
+            # A simultaneous first sign-in may win the unique identity insert.
+            await self.session.rollback()
+            user = await self.users.get_by_identity(
+                tenant_id=self.tenant.id,
+                provider=AuthProvider.GOOGLE.value,
+                subject=subject,
+            )
+            if user is None:
+                user = await self.users.get_by_email_identity(
+                    tenant_id=self.tenant.id,
+                    email=email,
+                )
+                if user is not None:
+                    if not user.is_active or user.role != UserRole.CUSTOMER.value:
+                        raise AuthenticationError(
+                            INVALID_CREDENTIALS,
+                            error_code=AuthErrorCode.INVALID_CREDENTIALS,
+                        ) from exc
+                    await self.users.add_identity(
+                        tenant_id=self.tenant.id,
+                        user_id=user.id,
+                        provider=AuthProvider.GOOGLE.value,
+                        subject=subject,
+                    )
+                    await self.session.commit()
+            if user is None or not user.is_active or user.role != UserRole.CUSTOMER.value:
+                raise AuthenticationError(
+                    INVALID_CREDENTIALS,
+                    error_code=AuthErrorCode.INVALID_CREDENTIALS,
+                ) from exc
+            tokens = await self._issue_tokens(user)
+            await self.session.commit()
+            return tokens
 
     async def admin_login(
         self, identifier: str, password: str, *, request: Request | None = None
@@ -197,7 +293,9 @@ class AuthService:
         value = identifier.strip()
 
         if "@" in value:
-            user = await self.users.get_by_email(tenant_id=self.tenant.id, email=value.lower())
+            user = await self.users.get_by_email(
+                tenant_id=self.tenant.id, email=value.lower(), roles=roles
+            )
         else:
             try:
                 phone = normalize_phone(value)

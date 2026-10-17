@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     msg91_widget_verify_url: str = "https://control.msg91.com/api/v5/widget/verifyAccessToken"
     msg91_timeout_seconds: float = 10.0
 
+    google_client_id: str | None = None
+
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     docs_enabled: bool | None = None

@@ -79,7 +79,11 @@ async def bootstrap_tenant(session: AsyncSession, settings: Settings) -> Tenant:
     else:
         print(f"Domain already registered: {domain}")
 
-    if await users.get_by_email(tenant_id=tenant.id, email=email) is None:
+    if await users.get_by_email(
+        tenant_id=tenant.id,
+        email=email,
+        roles=frozenset({UserRole.ADMIN.value}),
+    ) is None:
         await users.create(
             tenant_id=tenant.id,
             phone=phone,

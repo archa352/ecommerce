@@ -27,6 +27,8 @@ class WidgetLoginPayload(StrictModel):
 
     access_token: str = Field(min_length=1, max_length=4096)
 
+class GoogleLoginPayload(StrictModel):
+    credential: str = Field(min_length=1, max_length=8192)
 
 class PasswordLoginPayload(StrictModel):
     identifier: str = Field(min_length=3, max_length=255)
@@ -53,7 +55,7 @@ class UserProfile(BaseModel):
 
     id: UUID
     tenant_id: UUID
-    phone: str
+    phone: str | None
     email: EmailStr | None
     name: str | None
     role: str

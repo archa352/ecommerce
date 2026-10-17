@@ -22,6 +22,9 @@ class OtpPurpose(str, Enum):
     CUSTOMER_LOGIN = "CUSTOMER_LOGIN"
     ADMIN_LOGIN = "ADMIN_LOGIN"
 
+class AuthProvider(str, Enum):
+    GOOGLE = "GOOGLE"
+    EMAIL = "EMAIL"
 
 OTP_LENGTH = 6
 OTP_EXPIRE_MINUTES = 5
