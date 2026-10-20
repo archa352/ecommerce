@@ -29,7 +29,13 @@ REQUIRE_ENV_KEYS = @missing=$$(awk -F= 'FNR==NR{if(/^[A-Za-z_][A-Za-z0-9_]*=/) w
 # with two heads, and `alembic upgrade head` refuses to guess between them.
 # Heads are computed from the files -- no container, no DB, so it fails before
 # the image rebuild rather than after it.
-REQUIRE_ONE_HEAD = @heads=$$(awk '/^revision/{n=split($$0,a,/[\047\042]/); if(n>=3) rev[a[2]]=1} /^down_revision/{n=split($$0,a,/[\047\042]/); for(i=2;i<n;i+=2) down[a[i]]=1} END{for(r in rev) if(!(r in down)) print r}' $(VERSIONS)/*.py | sort); \
+REQUIRE_ONE_HEAD = @heads=$$(awk ' \
+	function parents(line, n, a, i) { n=split(line,a,/[\047\042]/); for(i=2;i<n;i+=2) down[a[i]]=1 } \
+	/^revision/ { n=split($$0,a,/[\047\042]/); if(n>=3) rev[a[2]]=1 } \
+	/^down_revision/ { parents($$0); in_down=($$0 ~ /= *[(]/ && $$0 !~ /[)]/); next } \
+	in_down { parents($$0); if($$0 ~ /[)]/) in_down=0 } \
+	END { for(r in rev) if(!(r in down)) print r } \
+' $(VERSIONS)/*.py | sort); \
 	test $$(echo "$$heads" | wc -l) -eq 1 \
 	|| { echo "error: migrations have multiple heads -- alembic upgrade head will fail:"; \
 	     echo "$$heads" | sed 's/^/  /'; \
