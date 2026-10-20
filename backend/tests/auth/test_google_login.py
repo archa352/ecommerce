@@ -105,6 +105,37 @@ async def test_google_does_not_merge_a_phone_account_by_profile_email(
     assert google_user.phone is None
 
 
+async def test_google_login_rejects_email_identity_owned_by_another_customer(
+    client, session, tenant, make_user, monkeypatch
+):
+    google_user = await make_user(tenant=tenant, phone=None, email="google@example.com")
+    email_owner = await make_user(tenant=tenant, phone=None, email="other@example.com")
+    session.add_all(
+        [
+            UserIdentity(
+                tenant_id=tenant.id,
+                user_id=google_user.id,
+                provider=AuthProvider.GOOGLE.value,
+                subject="known-google-sub",
+            ),
+            UserIdentity(
+                tenant_id=tenant.id,
+                user_id=email_owner.id,
+                provider=AuthProvider.EMAIL.value,
+                subject="shared@example.com",
+            ),
+        ]
+    )
+    await session.commit()
+    _install_google_verifier(
+        monkeypatch, subject="known-google-sub", email="shared@example.com"
+    )
+
+    response = await _google_login(client)
+
+    assert response.status_code == 401
+
+
 async def test_google_identity_is_scoped_to_tenant(
     client, other_client, session, tenant, other_tenant, monkeypatch
 ):

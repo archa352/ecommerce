@@ -116,9 +116,9 @@ class AuthService:
                     error_code=AuthErrorCode.INVALID_CREDENTIALS,
                 )
 
+            await self._check_google_email_identity(user, email)
             email_user = await self.users.get_by_email_identity(
-                tenant_id=self.tenant.id,
-                email=email,
+                tenant_id=self.tenant.id, email=email
             )
             if email_user is None:
                 # This preserves future email OTP continuity. A changed email
@@ -164,9 +164,20 @@ class AuthService:
                     INVALID_CREDENTIALS,
                     error_code=AuthErrorCode.INVALID_CREDENTIALS,
                 ) from exc
+            await self._check_google_email_identity(user, email)
             tokens = await self._issue_tokens(user)
             await self.session.commit()
             return tokens
+
+    async def _check_google_email_identity(self, user: User, email: str) -> None:
+        email_user = await self.users.get_by_email_identity(
+            tenant_id=self.tenant.id, email=email
+        )
+        if email_user is not None and email_user.id != user.id:
+            raise AuthenticationError(
+                INVALID_CREDENTIALS,
+                error_code=AuthErrorCode.INVALID_CREDENTIALS,
+            )
 
     async def admin_login(
         self, identifier: str, password: str, *, request: Request | None = None
