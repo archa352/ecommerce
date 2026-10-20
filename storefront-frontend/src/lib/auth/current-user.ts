@@ -26,9 +26,3 @@ export const getCurrentUser = cache(async (): Promise<UserProfile | null> => {
     throw error;
   }
 });
-
-/** True when the visitor holds a staff or admin role. */
-export async function isStaff(): Promise<boolean> {
-  const user = await getCurrentUser();
-  return user?.role === 'ADMIN' || user?.role === 'STAFF';
-}

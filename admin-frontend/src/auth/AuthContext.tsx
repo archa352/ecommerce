@@ -12,6 +12,10 @@ const idleMinutes = Number.isFinite(configuredIdleMinutes) && configuredIdleMinu
 export const IDLE_TIMEOUT_MS = idleMinutes * 60 * 1000;
 const ACTIVITY_EVENTS = ["mousedown", "keydown", "scroll", "touchstart"] as const;
 
+// Only these roles may hold a session here; anything else is signed straight out.
+const PANEL_ROLES = new Set(["ADMIN", "STAFF"]);
+const NOT_A_PANEL_ACCOUNT = "This account cannot use the admin panel.";
+
 interface AuthState {
   user: UserProfile | null;
   checking: boolean;
@@ -42,10 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!getToken()) return;
     getMe()
-      .then((response) => setUser(response.data))
+      .then((response) => {
+        if (PANEL_ROLES.has(response.data.role)) setUser(response.data);
+        else logout(NOT_A_PANEL_ACCOUNT);
+      })
       .catch(() => undefined)
       .finally(() => setChecking(false));
-  }, []);
+  }, [logout]);
 
   useEffect(() => {
     setUnauthorizedHandler(() => logout("Your session has expired. Please sign in again."));
@@ -74,13 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokens = await loginRequest(role, identifier, password);
     saveTokens(tokens.data.access_token, tokens.data.refresh_token);
     const me = await getMe();
-    if (me.data.role === "CUSTOMER") {
-      clearToken();
-      throw new Error("This account cannot use the admin panel.");
+    if (!PANEL_ROLES.has(me.data.role)) {
+      logout();
+      throw new Error(NOT_A_PANEL_ACCOUNT);
     }
     setNotice(null);
     setUser(me.data);
-  }, []);
+  }, [logout]);
 
   const value = useMemo<AuthState>(
     () => ({

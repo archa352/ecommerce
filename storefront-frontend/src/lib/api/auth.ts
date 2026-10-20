@@ -19,23 +19,6 @@ export const authApi = {
     });
   },
 
-  /** Admins and staff authenticate with a password, not a code. */
-  adminLogin(identifier: string, password: string): Promise<TokenPair> {
-    return apiRequest<TokenPair>('/admin/auth/login', {
-      method: 'POST',
-      body: { identifier, password },
-      cache: 'no-store',
-    });
-  },
-
-  staffLogin(identifier: string, password: string): Promise<TokenPair> {
-    return apiRequest<TokenPair>('/staff/auth/login', {
-      method: 'POST',
-      body: { identifier, password },
-      cache: 'no-store',
-    });
-  },
-
   /** Rotate a refresh token. Reusing a revoked one revokes every session. */
   refresh(refreshToken: string): Promise<TokenPair> {
     return apiRequest<TokenPair>('/auth/refresh', {

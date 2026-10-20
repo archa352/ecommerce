@@ -8,5 +8,3 @@ export interface AuthFormState {
   error: string | null;
   fieldErrors?: Record<string, string>;
 }
-
-export const initialAuthState: AuthFormState = { error: null };

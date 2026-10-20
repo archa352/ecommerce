@@ -3,6 +3,7 @@ import type { Page, PageParams } from '@/types/api';
 import type {
   CheckoutPreview,
   CouponApplyResult,
+  Offer,
   Order,
   OrderSummary,
   Payment,
@@ -89,6 +90,11 @@ export const orderApi = {
 };
 
 export const couponApi = {
+  /** Only live automatic offers; eligibility is checked again at checkout. */
+  listOffers(): Promise<Offer[]> {
+    return apiRequest<Offer[]>('/coupons/offers', { cache: 'no-store' });
+  },
+
   /** Validate a code against the live cart and return what it takes off. */
   apply(token: string, code: string): Promise<CouponApplyResult> {
     return apiRequest<CouponApplyResult>('/coupons/apply', {

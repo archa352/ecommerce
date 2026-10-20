@@ -1,0 +1,329 @@
+/* The photo is portrait, so it is shown whole at the right and its studio is
+   carried across the rest of the banner: the red wall, and the pale floor
+   that starts 83% of the way down the picture. The colours are sampled from
+   the photo's right edge so the seam disappears. */
+.campaign {
+  --wall: #92212a;
+  --wall-deep: #5e151c;
+  --floor: #cbc7d0;
+  --floor-line: 83.3%;
+  --ink: #fff8ef;
+  --ink-soft: #f1d9d3;
+
+  width: 100%;
+  overflow: hidden;
+  background: var(--wall-deep);
+  color: var(--ink);
+}
+
+.stage {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  height: clamp(560px, 48vw, 780px);
+  background:
+    linear-gradient(to bottom, transparent var(--floor-line), var(--floor) var(--floor-line)),
+    radial-gradient(110% 100% at 72% 35%, var(--wall) 0 50%, var(--wall-deep) 100%);
+}
+
+.imageWrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  aspect-ratio: 1121 / 1403;
+  /* The left of the shot is in shadow; fading it lets the wall take over. */
+  mask-image: linear-gradient(to right, transparent 0, #000 62%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 62%);
+}
+
+.artworkImage {
+  display: block;
+  object-fit: cover;
+  object-position: center bottom;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(66%, 900px);
+  height: var(--floor-line);
+  justify-content: center;
+  gap: clamp(20px, 2.4vw, 36px);
+  padding: 32px clamp(24px, 4vw, 64px);
+  text-align: center;
+}
+
+/* ---- Title with its ring of text, as in the campaign artwork ---- */
+
+.titleMark {
+  position: relative;
+  padding-inline: 70px;
+}
+
+.title {
+  margin: 0;
+  color: inherit;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(46px, 5vw, 84px);
+  font-weight: 500;
+  line-height: .9;
+  letter-spacing: -.02em;
+}
+
+.ring {
+  position: absolute;
+  top: -56px;
+  right: -64px;
+  width: clamp(96px, 9vw, 132px);
+  height: auto;
+  overflow: visible;
+  fill: var(--ink);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  animation: campaignSpin 40s linear infinite;
+}
+
+.intro {
+  max-width: 380px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* ---- The three offers ---- */
+
+.offers {
+  display: grid;
+  grid-template-columns: repeat(var(--count, 3), minmax(0, 1fr));
+  gap: clamp(12px, 2.2vw, 36px);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.offer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.offerLabel {
+  margin-bottom: 4px;
+  font-size: clamp(11px, 1vw, 15px);
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.figure {
+  display: inline-flex;
+  align-items: center;
+  gap: .06em;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.figureValue {
+  font-size: clamp(48px, 6.4vw, 108px);
+  letter-spacing: -.04em;
+}
+
+.figureSide {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: clamp(14px, 1.5vw, 26px);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.offerButton {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  background: var(--ink);
+  color: var(--wall);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background-color 180ms ease;
+}
+
+.offerButton:hover {
+  background: #ecd4bd;
+  color: var(--wall-deep);
+}
+
+.offerButton:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.terms {
+  max-width: 560px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ---- Ticker ---- */
+
+/* Laid over the bottom of the photo, covering the floor strip exactly, and
+   see-through so the studio still shows behind it. */
+.ticker {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  height: calc(100% - var(--floor-line));
+  overflow: hidden;
+  border-top: 1px solid rgb(255 248 239 / 22%);
+  background: rgb(146 33 42 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.tickerTrack {
+  display: flex;
+  flex: none;
+  width: max-content;
+  animation: campaignTicker 36s linear infinite;
+}
+
+.tickerGroup {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-around;
+  min-width: 100vw;
+  gap: 56px;
+  padding-inline-end: 56px;
+  white-space: nowrap;
+}
+
+.tickerOffer {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tickerLabel {
+  font-size: clamp(12px, 1.1vw, 16px);
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.figureSmall .figureValue { font-size: clamp(34px, 3.4vw, 52px); }
+.figureSmall .figureSide { font-size: clamp(10px, .9vw, 14px); }
+
+.tickerBrand {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(28px, 2.8vw, 44px);
+}
+
+.tickerControl {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #c98e87;
+  border-radius: 50%;
+  background: rgb(94 21 28 / 60%);
+  color: var(--ink);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.tickerControl:hover { background: var(--wall); }
+.tickerControl:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.ticker:hover .tickerTrack,
+.ticker:focus-within .tickerTrack,
+.tickerTrack.paused { animation-play-state: paused; }
+
+@keyframes campaignTicker {
+  to { transform: translateX(-50%); }
+}
+
+@keyframes campaignSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Mid widths: the photo keeps its height, so give the copy a little more room. */
+@media (min-width: 721px) and (max-width: 1100px) {
+  .content { width: 62%; padding-inline: 24px; }
+  .offerButton { padding-inline: 8px; letter-spacing: .08em; }
+}
+
+/* Phones: copy on the wall above, the whole photo beneath it. */
+@media (max-width: 720px) {
+  .stage {
+    flex-direction: column;
+    height: auto;
+    background: radial-gradient(140% 70% at 70% 20%, var(--wall) 0 40%, var(--wall-deep) 100%);
+  }
+
+  .content {
+    order: -1;
+    width: 100%;
+    height: auto;
+    padding: 56px 16px 8px;
+    gap: 22px;
+  }
+
+  .imageWrap {
+    position: relative;
+    width: 100%;
+    margin-top: -12%;
+    mask-image: linear-gradient(to bottom, transparent 0, #000 22%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%);
+  }
+
+  .titleMark { padding-inline: 56px; }
+  .ring { top: -48px; right: -36px; width: 88px; }
+  .title { font-size: clamp(44px, 13vw, 60px); }
+
+  .offers { gap: 10px; }
+  .offerLabel { font-size: 10px; letter-spacing: .08em; }
+  .figureValue { font-size: clamp(34px, 11vw, 52px); }
+  .figureSide { font-size: 11px; }
+  .offerButton { padding: 10px 4px; font-size: 10px; letter-spacing: .06em; }
+
+  .ticker { height: 20.8vw; min-height: 64px; }
+  .figureSmall .figureValue { font-size: 28px; }
+  .tickerBrand { font-size: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tickerTrack,
+  .ring { animation: none; }
+  .tickerControl { display: none; }
+  .offerButton { transition: none; }
+}

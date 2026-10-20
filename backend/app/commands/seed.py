@@ -18,6 +18,7 @@ from app.catalogue.schemas import (
 )
 from app.catalogue.service import CategoryService, ProductService, VariantService
 from app.commands.bootstrap import bootstrap_tenant
+from app.commands.seed_offers import seed_demo_offers
 from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal, dispose_engine
 from app.tenants.models import Tenant
@@ -160,7 +161,7 @@ async def _count(session, model) -> int:
 
 
 async def seed_demo(session: AsyncSession, tenant: Tenant) -> None:
-    """Fill a non-production tenant with a demo catalogue and demo users."""
+    """Fill a non-production tenant with a demo catalogue, users and offers."""
     if get_settings().is_production:
         raise RuntimeError(PRODUCTION_REFUSAL)
 
@@ -276,6 +277,8 @@ async def seed_demo(session: AsyncSession, tenant: Tenant) -> None:
         )
         created_users += int(created)
     print(f"Users: +{created_users} demo users (plus the tenant admin)")
+
+    await seed_demo_offers(session, tenant)
 
     print()
     print(f"  categories       {await _count(session, Category):>3}")

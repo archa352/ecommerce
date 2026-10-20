@@ -7,13 +7,6 @@ import type { Cart, CartItem } from '@/types/cart';
 
 const EMPTY_CART: Cart = { id: 'guest', items: [], subtotal: '0.00', item_count: 0 };
 
-/**
- * The cart as the page should show it, whoever is looking.
- *
- * A signed-in shopper's cart is the backend's. A guest's is assembled from
- * the cookie by reading each variant, which keeps prices and stock coming
- * from the API rather than being remembered from when the item was added.
- */
 export async function getCart(): Promise<Cart> {
   const token = await getAccessToken();
 
@@ -33,13 +26,9 @@ export async function getCart(): Promise<Cart> {
     lines.map(async (line) => {
       try {
         const variant = await catalogueApi.getVariant(line.variant_id);
-        // The variant alone has no product name or image -- both live on
-        // the product, fetched separately here so a guest's cart row shows
-        // the same real name/photo a signed-in shopper's does.
         const product = await catalogueApi.getProduct(variant.product_id).catch(() => null);
         return { line, variant, product };
       } catch {
-        // A variant that has gone away simply drops out of the cart.
         return null;
       }
     }),
@@ -80,7 +69,6 @@ export async function getCart(): Promise<Cart> {
   };
 }
 
-/** Just the badge number, for the header. */
 export async function getCartCount(): Promise<number> {
   try {
     const cart = await getCart();

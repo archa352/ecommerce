@@ -56,6 +56,6 @@ describe("Sidebar account controls", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     await user.click(profileButton);
     await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
-    expect(await screen.findByRole("heading", { name: "Zeen Admin" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
   });
 });
