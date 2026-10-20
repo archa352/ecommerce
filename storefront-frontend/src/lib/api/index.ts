@@ -8,4 +8,3 @@ export { cartApi, wishlistApi } from '@/lib/api/cart';
 export { addressApi } from '@/lib/api/addresses';
 export { checkoutApi, couponApi, orderApi, paymentApi } from '@/lib/api/orders';
 export { reviewApi } from '@/lib/api/reviews';
-export { adminApi } from '@/lib/api/admin';

@@ -157,3 +157,18 @@ export interface CouponApplyResult {
   discount_amount: string;
   currency: string;
 }
+
+/** An active automatic discount advertised by the storefront. */
+export interface Offer {
+  code: string;
+  discount_type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING' | 'BOGO';
+  discount_value: string;
+  min_order_amount: string | null;
+  min_quantity: number | null;
+  buy_quantity: number | null;
+  get_quantity: number | null;
+  first_order_only: boolean;
+  category_ids: string[];
+  expires_at: string | null;
+  currency: string;
+}

@@ -27,13 +27,6 @@ function refreshCartViews(): void {
   revalidatePath('/', 'layout');
 }
 
-/**
- * Add a variant to the cart.
- *
- * A signed-in shopper's line goes straight to the backend, which is
- * authoritative for stock. A guest's is held in a cookie and replayed after
- * sign-in, since the backend has no guest cart to write to.
- */
 export async function addToCart(
   _previous: CartActionState,
   formData: FormData,
@@ -111,13 +104,6 @@ export async function removeCartItem(
   return { status: 'success', message: 'Removed from your cart' };
 }
 
-/**
- * Move a guest cart into the backend after sign-in.
- *
- * Lines are replayed one at a time so a single rejection -- stock gone, a
- * variant withdrawn -- does not cost the shopper the rest of the cart.
- * Whatever happens the cookie is cleared, so nothing is added twice.
- */
 export async function mergeGuestCart(token: string): Promise<{ merged: number; rejected: number }> {
   const lines = await readGuestCart();
   if (lines.length === 0) return { merged: 0, rejected: 0 };
@@ -165,13 +151,6 @@ export async function toggleWishlist(
   }
 }
 
-/**
- * Mutations the client cart provider calls directly.
- *
- * They answer with the whole cart rather than a status, so the provider can
- * render the backend's own totals instead of recomputing them locally. The
- * form-shaped actions above stay for anything driven by a <form>.
- */
 async function mutate(apply: (token: string | null) => Promise<void>): Promise<CartMutation> {
   const token = await getActionAccessToken();
 

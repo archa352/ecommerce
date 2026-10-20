@@ -1,9 +1,6 @@
 /**
  * Money arrives as a decimal string and is formatted, never recomputed.
- *
- * The backend is authoritative for every price, discount, tax and total, so
- * these helpers only ever display what it sent. Currency comes from the
- * tenant and rides on orders, so it is always passed in rather than assumed.
+
  */
 export function formatMoney(amount: string | null | undefined, currency: string, locale = 'en-IN'): string {
   if (amount === null || amount === undefined) return '';
@@ -18,7 +15,6 @@ export function formatMoney(amount: string | null | undefined, currency: string,
   }).format(value);
 }
 
-/** A product's price, shown as a range when its variants differ. */
 export function formatPriceRange(
   from: string | null,
   to: string | null,

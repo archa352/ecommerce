@@ -10,14 +10,6 @@ export interface GuestCartLine {
   quantity: number;
 }
 
-/**
- * A cart for signed-out shoppers.
- *
- * Every /cart route on the backend requires a customer, and there is no
- * merge endpoint, so a guest cart has to live here and be replayed into the
- * API after sign-in. It is kept in a cookie rather than localStorage so the
- * server can read it while rendering.
- */
 export async function readGuestCart(): Promise<GuestCartLine[]> {
   const store = await cookies();
   const raw = store.get(GUEST_CART_COOKIE)?.value;
@@ -64,7 +56,6 @@ export async function clearGuestCart(): Promise<void> {
   store.delete(GUEST_CART_COOKIE);
 }
 
-/** Add or top up a line, capped at the quantity the backend will accept. */
 export function addLine(lines: GuestCartLine[], variantId: string, quantity: number): GuestCartLine[] {
   const existing = lines.find((line) => line.variant_id === variantId);
 

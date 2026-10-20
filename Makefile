@@ -14,9 +14,6 @@ REQUIRE_VENV = @test -x $(BACKEND)/$(VENV_BIN)/pytest \
 	     echo "  $(BACKEND)/$(VENV_BIN)/pip install -r $(BACKEND)/requirements-dev.txt"; \
 	     exit 1; }
 
-# A key added to .env.example after someone last copied it stays absent from
-# their .env, and a setting with no default in config.py then fails startup
-# deep in a pydantic traceback. Name the missing keys up front instead.
 REQUIRE_ENV_KEYS = @missing=$$(awk -F= 'FNR==NR{if(/^[A-Za-z_][A-Za-z0-9_]*=/) want[$$1]=1; next} /^[A-Za-z_][A-Za-z0-9_]*=/{have[$$1]=1} END{for(k in want) if(!(k in have)) print k}' .env.example .env | sort); \
 	test -z "$$missing" \
 	|| { echo "error: .env is missing keys that .env.example defines:"; \

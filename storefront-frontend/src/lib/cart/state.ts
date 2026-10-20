@@ -7,7 +7,6 @@ export interface CartActionState {
 
 export const initialCartState: CartActionState = { status: 'idle', message: null };
 
-/** What a cart mutation hands back to the client provider. */
 export interface CartMutation {
   cart: Cart;
   error: string | null;

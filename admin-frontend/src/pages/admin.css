@@ -157,8 +157,6 @@ dl.kv dd { margin: 0; }
 .timeline li { display: flex; gap: 12px; }
 pre.code { background: #0f1424; color: #e5e7eb; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; max-height: 320px; }
 
-.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.login-card { width: min(380px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 24px; }
 button.danger-solid { background: var(--bad); border-color: var(--bad); color: #fff; }
 .empty-state { text-align: center; padding: 32px 16px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
 .empty-state h4 { color: var(--text); margin-bottom: 6px; }
@@ -536,4 +534,27 @@ input, select, textarea { max-width: 100%; }
 }
 @media (max-width: 380px) {
   .record-secondary-filters[data-open="true"] { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Sign-in: the white form card sits inside one red brand panel. */
+.login-page { min-height: 100vh; min-height: 100dvh; display: flex; padding: 18px; background: var(--bg); line-height: 1.5; }
+.login-brand { flex: 1; min-width: 0; background: var(--accent); border-radius: 26px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 32px 16px; }
+.login-brand::before { content: ""; position: absolute; width: 360px; height: 360px; left: -120px; top: -120px; border-radius: 50%; border: 1px solid #ffffff1f; box-shadow: 0 0 0 50px #ffffff08, 0 0 0 100px #ffffff06; pointer-events: none; }
+.login-brand::after { content: ""; position: absolute; width: 460px; height: 460px; right: -170px; bottom: -170px; border-radius: 50%; border: 1px solid #ffffff26; box-shadow: 0 0 0 60px #ffffff0a, 0 0 0 120px #ffffff08; pointer-events: none; }
+
+.login-card { position: relative; z-index: 1; width: min(400px, 100%); min-width: 0; gap: 16px; background: var(--panel); border-radius: 24px; padding: 32px; box-shadow: 0 24px 60px #26242233; }
+.login-heading h2 { font-size: clamp(24px, 2.4vw, 32px); font-weight: 500; letter-spacing: -.045em; line-height: 1.2; }
+.login-heading p { margin: 0; font-size: 13px; }
+.login-tabs { width: 100%; margin-bottom: 4px; }
+.login-tabs button { flex: 1; }
+.login-card input { padding: 12px 14px; }
+.login-card input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.login-submit { width: 100%; padding: 12px 16px; font-weight: 600; margin-top: 4px; box-shadow: 0 4px 10px #ae332f18; }
+.login-footnote { margin: 4px 0 0; text-align: center; font-size: 12px; }
+.login-wordmark { display: flex; flex-direction: column; color: var(--accent); margin-bottom: 8px; }
+
+@media (max-width: 860px) {
+  .login-page { padding: 12px; }
+  .login-brand { padding: 24px 12px; border-radius: 22px; }
+  .login-card { padding: 24px 20px; }
 }

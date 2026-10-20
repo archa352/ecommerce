@@ -29,11 +29,17 @@ docker compose exec api python -m app.commands.bootstrap
 ```
 
 In development, the seed runs the same bootstrap and then adds a demo
-catalogue and demo users. It refuses to run in production:
+catalogue, demo users and three automatic offers. It refuses to run in production:
 
 ```bash
 docker compose exec api python -m app.commands.seed
 ```
+
+To add only the demo offers to an existing development tenant, run
+`python -m app.commands.seed_offers` from `backend` with its virtual environment
+active (or use `docker compose exec api python -m app.commands.seed_offers`
+after rebuilding the API image). Existing offers and admin edits are preserved.
+The homepage banner reads active offers from `/api/v1/coupons/offers`.
 
 ## Development commands
 

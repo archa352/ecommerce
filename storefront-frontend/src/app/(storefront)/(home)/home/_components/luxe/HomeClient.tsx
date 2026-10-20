@@ -8,8 +8,10 @@ import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { mediaUrl } from '@/lib/media';
 import { formatPriceRange } from '@/lib/format';
 import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
+import type { Offer } from '@/types/orders';
 
 import styles from './Home.module.css';
+import { CampaignBanner } from './CampaignBanner';
 import {
   ArrowRightIcon,
   BagIcon,
@@ -35,14 +37,6 @@ const CATEGORY_IMAGES = [
 ];
 
 const GRID_IMAGES = ['/home/home1.jpg', '/home/home2.jpg', '/home/home3.jpg', '/home/home4.jpg', '/home/home5.jpg'];
-
-/* One slide per outfit. The thumbnail rail, the counter and the main frame
-   all read from this, so they cannot drift apart. */
-const HERO_SLIDES = [
-  { image: '/home/home6.jpg', alt: 'Model in a green embroidered kurta with dupatta and maroon palazzo' },
-  { image: '/home/home3.jpg', alt: 'Model in a pink floral kurta and matching palazzo' },
-  { image: '/home/home5.jpg', alt: 'Model in a maroon printed kurta with cream block-print palazzo' },
-];
 
 const CAMPAIGN_IMAGES = [
   '/home/home1.jpg',
@@ -118,10 +112,12 @@ export default function HomeClient({
   products,
   categories,
   spotlightProduct,
+  offers,
 }: {
   products: ProductSummaryStorefront[];
   categories: CategoryStorefront[];
   spotlightProduct: ProductStorefront | null;
+  offers: Offer[];
 }) {
   // The catalogue drives the option lists, so they are read before the state
   // that has to be seeded from them.
@@ -141,7 +137,6 @@ export default function HomeClient({
 
   const filters = [ALL_FILTER, ...categories.slice(0, 3).map(category => category.name)];
 
-  const [heroThumb, setHeroThumb] = useState(0);
   const [activeFilter, setActiveFilter] = useState(ALL_FILTER);
   const [size, setSize] = useState(sizes[0]);
   const [color, setColor] = useState(0);
@@ -149,7 +144,6 @@ export default function HomeClient({
   const [testiIndex, setTestiIndex] = useState(0);
   const pageRef = useRef<HTMLDivElement>(null);
 
-  const heroProduct = products[0];
   const gridProducts = products.slice(0, 5);
 
   // Filtering happens over the page already fetched, so switching tabs costs
@@ -222,66 +216,7 @@ export default function HomeClient({
 
   return (
     <div className={styles.page} ref={pageRef}>
-      {/* ---------------------------------- Hero ---------------------------------- */}
-      <section className={styles.hero}>
-        <div className={styles.heroWatermark}>CHURIDARS ZEEN</div>
-        <div className={`${styles.container} ${styles.heroGrid}`}>
-          <div className={styles.heroCopy}>
-            <span className={styles.eyebrow}>New Arrival</span>
-            <h1 className={styles.heroTitle}>The Art of Everyday Luxury</h1>
-            <p className={styles.heroDesc}>
-              Discover the new churidar collection, thoughtfully cut in premium fabrics for everyday
-              ease.
-            </p>
-            <Link href={heroProduct ? `/single-product/${heroProduct.id}` : '/shop-list'} className={styles.pill}>
-              Explore Collection
-              <span className={styles.pillIcon}>
-                <ArrowRightIcon size={15} />
-              </span>
-            </Link>
-
-            <div className={styles.heroSide}>
-              <div className={styles.heroThumbRow}>
-                {HERO_SLIDES.map((slide, i) => (
-                  <button
-                    key={slide.image}
-                    type="button"
-                    className={`${styles.heroThumb} ${i === heroThumb ? styles.active : ''}`}
-                    onClick={() => setHeroThumb(i)}
-                    aria-label={`Show slide ${i + 1}`}
-                    aria-pressed={i === heroThumb}
-                  >
-                    <img src={slide.image} alt="" />
-                  </button>
-                ))}
-              </div>
-              <div className={styles.heroCounter}>
-                <button
-                  type="button"
-                  className={styles.btnCircle}
-                  onClick={() => setHeroThumb(v => Math.max(0, v - 1))}
-                  disabled={heroThumb === 0}
-                  aria-label="Previous"
-                >
-                  <ChevronLeftIcon size={16} />
-                </button>
-                <span>
-                  {String(heroThumb + 1).padStart(2, '0')}/{String(HERO_SLIDES.length).padStart(2, '0')}
-                </span>
-                <button
-                  type="button"
-                  className={styles.btnCircleDark}
-                  onClick={() => setHeroThumb(v => Math.min(HERO_SLIDES.length - 1, v + 1))}
-                  disabled={heroThumb >= HERO_SLIDES.length - 1}
-                  aria-label="Next"
-                >
-                  <ChevronRightIcon size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <CampaignBanner offers={offers} />
 
       {/* ---------------------------------- Signature pieces ---------------------------------- */}
       <section className={styles.section}>

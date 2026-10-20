@@ -86,28 +86,6 @@ export async function signInWithGoogleCredential(
   redirect(safeRedirect(next));
 }
 
-/** Sign in an admin or staff member with a password. */
-export async function passwordLogin(
-  _previous: AuthFormState,
-  formData: FormData,
-): Promise<AuthFormState> {
-  const identifier = String(formData.get('identifier') ?? '').trim();
-  const password = String(formData.get('password') ?? '');
-
-  if (!identifier || !password) {
-    return { error: 'Enter your email or phone, and your password.' };
-  }
-
-  try {
-    const tokens = await authApi.adminLogin(identifier, password);
-    await setSession(tokens);
-  } catch (error) {
-    return toFormState(error);
-  }
-
-  redirect('/admin');
-}
-
 /** End the session, revoking the refresh token server-side as well. */
 export async function logout(): Promise<void> {
   const refreshToken = await getRefreshToken();

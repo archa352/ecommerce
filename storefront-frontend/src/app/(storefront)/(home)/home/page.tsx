@@ -1,6 +1,8 @@
 import HomeClient from "./_components/luxe/HomeClient";
 import { catalogueApi } from "@/lib/api/catalogue";
+import { couponApi } from "@/lib/api/orders";
 import type { CategoryStorefront, ProductStorefront } from "@/types/catalogue";
+import type { Offer } from "@/types/orders";
 
 export const metadata = {
   title: "Zeen | Women's Ethnic & Casual Wear",
@@ -18,12 +20,13 @@ export const metadata = {
  * labels, not the whole page.
  */
 const HomePage = async () => {
-  const [productsPage, categories] = await Promise.all([
+  const [productsPage, categories, offers] = await Promise.all([
     catalogueApi.listProducts({ page_size: 24, sort: "newest" }),
     catalogueApi
       .listCategories({ page_size: 12 })
       .then(page => page.items)
       .catch((): CategoryStorefront[] => []),
+    couponApi.listOffers().catch((): Offer[] => []),
   ]);
 
   const products = productsPage.items;
@@ -35,7 +38,7 @@ const HomePage = async () => {
     ? await catalogueApi.getProduct(products[0].id).catch(() => null)
     : null;
 
-  return <HomeClient products={products} categories={categories} spotlightProduct={spotlightProduct} />;
+  return <HomeClient products={products} categories={categories} spotlightProduct={spotlightProduct} offers={offers} />;
 };
 
 export default HomePage;

@@ -60,6 +60,19 @@ describe("admin panel access", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("cannot use the admin panel");
   });
 
+  it("signs out a customer session restored from storage", async () => {
+    saveTokens("a", "r");
+    mockFetch(
+      route("GET", "/auth/me", () => ok(profile({ role: "CUSTOMER", permissions: [] }))),
+      route("POST", "/auth/logout", () => ok(null))
+    );
+    renderAt("/orders");
+
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(await screen.findByText("This account cannot use the admin panel.")).toBeInTheDocument();
+    expect(localStorage.length).toBe(0);
+  });
+
   it("blocks a screen the account has no permission for", async () => {
     saveTokens("a", "r");
     mockFetch(route("GET", "/auth/me", () => ok(profile({ permissions: ["orders.view"] }))));
