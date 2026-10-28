@@ -7,7 +7,7 @@ import type { UserProfile } from "../types/user";
 import { clearToken, getRefreshToken, getToken, saveTokens } from "../utils/storage";
 
 // Inactivity is separate from access-token expiry; active sessions renew through the API client.
-const configuredIdleMinutes = Number(import.meta.env.VITE_AUTH_IDLE_TIMEOUT_MINUTES ?? 60);
+const configuredIdleMinutes = Number(process.env.NEXT_PUBLIC_AUTH_IDLE_TIMEOUT_MINUTES ?? 60);
 const idleMinutes = Number.isFinite(configuredIdleMinutes) && configuredIdleMinutes >= 1 ? configuredIdleMinutes : 60;
 export const IDLE_TIMEOUT_MS = idleMinutes * 60 * 1000;
 const ACTIVITY_EVENTS = ["mousedown", "keydown", "scroll", "touchstart"] as const;
@@ -105,7 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthState {
   const value = useContext(AuthContext);
   if (!value) throw new Error("useAuth must be used inside <AuthProvider>");

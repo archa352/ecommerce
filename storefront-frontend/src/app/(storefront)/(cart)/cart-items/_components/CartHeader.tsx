@@ -73,12 +73,12 @@ export default function CartHeader() {
           <SearchIcon />
         </span>
 
-        <Link href="/shop-wishlist" className={styles.iconBtn} aria-label="Wishlist">
+        <Link href="/wishlist" className={styles.iconBtn} aria-label="Wishlist">
           <HeartIcon />
           {wishlist.item_count > 0 && <span className={styles.badge}>{wishlist.item_count}</span>}
         </Link>
 
-        <Link href="/cart-items" className={styles.iconBtn} aria-label="Cart">
+        <Link href="/cart" className={styles.iconBtn} aria-label="Cart">
           <BagIcon />
           {itemCount > 0 && <span className={styles.badge}>{itemCount}</span>}
         </Link>

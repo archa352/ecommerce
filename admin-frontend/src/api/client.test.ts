@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { mockFetch, ok, route } from "../test/fetchMock";
 import { clearToken, getRefreshToken, getToken, saveTokens } from "../utils/storage";
-import { ApiError, request, setUnauthorizedHandler } from "./client";
+import { API_BASE_URL, ApiError, apiUrl, request, setUnauthorizedHandler } from "./client";
 
 describe("api client", () => {
+  it("uses the admin origin for API requests so Next can proxy them without browser CORS", () => {
+    expect(API_BASE_URL).toBe("/api/v1");
+    expect(new URL(apiUrl("/admin/orders", { page: 2 })).origin).toBe(window.location.origin);
+    expect(new URL(apiUrl("/admin/orders", { page: 2 })).pathname).toBe("/api/v1/admin/orders");
+  });
+
   it("sends the bearer token and unwraps the envelope", async () => {
     saveTokens("access-1", "refresh-1");
     const { calls } = mockFetch(route("GET", "/admin/orders", () => ok([{ id: "o1" }], { page: 1 })));
@@ -59,6 +65,15 @@ describe("api client", () => {
       message: "Invalid (code: too long)",
       status: 422,
       code: "VALIDATION_ERROR",
+    });
+  });
+
+  it("explains server failures without exposing backend internals", async () => {
+    mockFetch(route("GET", "/admin/dashboard", () => ({ status: 500, body: { message: "An unexpected error occurred" } })));
+
+    await expect(request("/admin/dashboard")).rejects.toMatchObject({
+      message: "The server could not load this data (HTTP 500). Try again, and contact your system administrator if the problem continues.",
+      status: 500,
     });
   });
 

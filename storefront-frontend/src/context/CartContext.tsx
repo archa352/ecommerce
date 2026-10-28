@@ -12,10 +12,14 @@ interface CartContextType {
   itemCount: number;
   pending: boolean;
   error: string | null;
-  addToCart: (variantId: string, quantity: number) => Promise<void>;
-  updateQuantity: (itemId: string, quantity: number) => Promise<void>;
-  removeFromCart: (itemId: string) => Promise<void>;
-  clearCart: () => Promise<void>;
+  cartDrawerOpen: boolean;
+  closeCartDrawer: () => void;
+  openCartDrawer: () => void;
+  /** Each mutation resolves to the API's error message, or null when it succeeded. */
+  addToCart: (variantId: string, quantity: number) => Promise<string | null>;
+  updateQuantity: (itemId: string, quantity: number) => Promise<string | null>;
+  removeFromCart: (itemId: string) => Promise<string | null>;
+  clearCart: () => Promise<string | null>;
 }
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -32,19 +36,32 @@ export function CartProvider({ initialCart, children }: { initialCart: Cart; chi
   const router = useRouter();
   const [cart, setCart] = useState<Cart>(initialCart);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [transitionPending, startTransition] = useTransition();
+  const [mutationCount, setMutationCount] = useState(0);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   useEffect(() => {
     setCart(initialCart);
   }, [initialCart]);
 
-  async function run(mutation: Promise<{ cart: Cart; error: string | null }>) {
-    const result = await mutation;
+  async function run(mutation: Promise<{ cart: Cart; error: string | null }>, openDrawerOnSuccess = false) {
+    setMutationCount(count => count + 1);
+    try {
+      const result = await mutation;
 
-    setCart(result.cart);
-    setError(result.error);
+      setCart(result.cart);
+      setError(result.error);
+      if (openDrawerOnSuccess && !result.error) setCartDrawerOpen(true);
 
-    startTransition(() => router.refresh());
+      startTransition(() => router.refresh());
+      return result.error;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'We could not update your cart. Please try again.';
+      setError(message);
+      return message;
+    } finally {
+      setMutationCount(count => Math.max(0, count - 1));
+    }
   }
 
   return (
@@ -53,9 +70,12 @@ export function CartProvider({ initialCart, children }: { initialCart: Cart; chi
         cart,
         items: cart.items,
         itemCount: cart.item_count,
-        pending,
+        pending: transitionPending || mutationCount > 0,
         error,
-        addToCart: (variantId, quantity) => run(addCartItem(variantId, quantity)),
+        cartDrawerOpen,
+        openCartDrawer: () => setCartDrawerOpen(true),
+        closeCartDrawer: () => setCartDrawerOpen(false),
+        addToCart: (variantId, quantity) => run(addCartItem(variantId, quantity), true),
         updateQuantity: (itemId, quantity) => run(setCartItemQuantity(itemId, quantity)),
         removeFromCart: itemId => run(removeCartLine(itemId)),
         clearCart: () => run(clearCart()),

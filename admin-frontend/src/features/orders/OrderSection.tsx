@@ -200,7 +200,7 @@ function OrderResults({ query, queryKey, selected, setSelected, onPageChange }: 
   onPageChange: (page: number) => void;
 }) {
   const navigate = useNavigate();
-  const { data, meta, loading, error } = useApi(() => listOrders(query), [queryKey]);
+  const { data, meta, loading, error, reload } = useApi(() => listOrders(query), [queryKey]);
   const rows = loading ? null : data;
   const eligiblePageRows = (rows ?? []).filter(canPrintLabel);
   const pageIds = eligiblePageRows.map((order) => order.id);
@@ -259,6 +259,7 @@ function OrderResults({ query, queryKey, selected, setSelected, onPageChange }: 
           rows={rows}
           loading={loading}
           error={loading ? null : error}
+          onRetry={reload}
           empty="No orders match these filters."
           rowKey={(o) => o.id}
           onRowClick={(o) => navigate(`/orders/${o.id}`)}

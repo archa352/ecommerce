@@ -135,7 +135,7 @@ export default function WishlistCard({ item }: Props) {
         onClick={() => setBagModalOpen(true)}
       >
         <BagIcon size={14} />
-        Add to Bag
+        Add to Cart
       </button>
 
       {bagModalOpen && <AddToBagModal item={item} onClose={() => setBagModalOpen(false)} />}

@@ -1,4 +1,5 @@
 import pageStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
+import layoutStyles from '@/app/(storefront)/StorefrontLayout.module.css';
 import StorefrontShell from '@/components/StorefrontShell';
 import LuxeFooter from '@/components/luxe/LuxeFooter';
 import LuxeHeader from '@/components/luxe/LuxeHeader';
@@ -31,26 +32,17 @@ async function loadShellData(): Promise<{
   return { user, cart, wishlist };
 }
 
-export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+/** Nested inside app/layout.tsx, which owns <html>, <head> and <body>. */
+export default async function StorefrontLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { user, cart, wishlist } = await loadShellData();
 
   return (
-    <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&family=Playfair+Display:ital,wght@1,400;1,500&family=Roboto:wght@100;300;400;500;700;900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body>
-        <StorefrontShell user={user} cart={cart} wishlist={wishlist}>
-          <div className={`page-wraper ${pageStyles.page}`}>
-            <LuxeHeader />
-            {children}
-            <LuxeFooter />
-          </div>
-        </StorefrontShell>
-      </body>
-    </html>
+    <StorefrontShell user={user} cart={cart} wishlist={wishlist}>
+      <div className={`page-wraper ${pageStyles.page} ${layoutStyles.shell}`}>
+        <LuxeHeader />
+        <div className={layoutStyles.content}>{children}</div>
+        <LuxeFooter />
+      </div>
+    </StorefrontShell>
   );
 }

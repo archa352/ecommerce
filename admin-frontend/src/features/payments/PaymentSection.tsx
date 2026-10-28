@@ -105,6 +105,7 @@ function PaymentSection() {
           rows={rows}
           loading={loading}
           error={loading ? null : payments.error}
+          onRetry={payments.reload}
           empty={filtered.length === 0 && (status || method || purpose || startDate || endDate || search) ? "No payments match these filters." : "No payment records yet."}
           rowKey={(payment) => payment.id}
           columns={[

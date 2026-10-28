@@ -1,4 +1,7 @@
 import StorefrontShell from '@/components/StorefrontShell';
+import LuxeFooter from '@/components/luxe/LuxeFooter';
+import LuxeHeader from '@/components/luxe/LuxeHeader';
+import layoutStyles from '@/app/(storefront)/StorefrontLayout.module.css';
 import NotFoundPage from '@/app/(storefront)/_components/not-found/NotFoundPage';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getCart } from '@/lib/cart/read';
@@ -19,19 +22,14 @@ export default async function RootNotFound() {
     getWishlist().catch(() => EMPTY_WISHLIST),
   ]);
 
+  // Rendered inside app/layout.tsx, which owns <html>, <head> and the fonts.
   return (
-    <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Roboto:wght@100;300;400;500;700;900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body>
-        <StorefrontShell user={user} cart={cart} wishlist={wishlist}>
-          <NotFoundPage />
-        </StorefrontShell>
-      </body>
-    </html>
+    <StorefrontShell user={user} cart={cart} wishlist={wishlist}>
+      <div className={`page-wraper ${layoutStyles.shell}`}>
+        <LuxeHeader />
+        <main className={layoutStyles.content}><NotFoundPage /></main>
+        <LuxeFooter />
+      </div>
+    </StorefrontShell>
   );
 }

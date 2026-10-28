@@ -1,22 +1,15 @@
-import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 
-import SignIn from '@/components/SignIn';
-
-export const metadata = {
-  title: 'Sign in | Zeen',
-  description:
-    'Continue with your mobile number. New customers get an account the moment the code is verified.',
-};
+import { signInUrl } from '@/lib/auth/sign-in-url';
 
 /**
- * The post-sign-in destination arrives in the query string, and reading it
- * with useSearchParams opts the page out of prerendering unless the boundary
- * is here -- without it the production build fails on this route.
+ * Sign-in is a modal over the storefront now, not a page.
+ *
+ * The route is kept as a redirect so existing links -- and the template's
+ * /login, /signup and /registration redirects -- still open sign-in, with
+ * the post-sign-in destination carried across.
  */
-export default function SignInPage() {
-  return (
-    <Suspense>
-      <SignIn />
-    </Suspense>
-  );
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams;
+  redirect(signInUrl(next));
 }

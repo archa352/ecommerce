@@ -405,9 +405,16 @@
   font-size: 14px;
   color: var(--ink-soft, #55504b);
 }
-.signInPrompt a {
+.signInLink {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink, #1a1714);
+  font: inherit;
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .relatedSection {

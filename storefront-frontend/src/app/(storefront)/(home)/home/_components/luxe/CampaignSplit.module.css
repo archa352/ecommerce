@@ -1,0 +1,70 @@
+/* Pinned two-up campaign; see CampaignSplit. */
+
+.split {
+  position: relative;
+  height: 320vh;
+  height: 320svh;
+  background: var(--zeen-ivory);
+}
+
+.splitStage {
+  position: sticky;
+  top: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--inset, 1) * clamp(16px, 3vw, 44px));
+  height: 100vh;
+  height: 100svh;
+  padding: calc(var(--inset, 1) * clamp(16px, 2.6vw, 38px)) calc(var(--inset, 1) * var(--zeen-gutter));
+  overflow: hidden;
+}
+
+.splitPanel {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: var(--zeen-midnight);
+}
+
+.splitLayer {
+  position: absolute;
+  inset: 0;
+  will-change: clip-path;
+}
+
+.splitLayer + .splitLayer {
+  clip-path: inset(calc(var(--wipe, 0) * 100%) 0 0 0);
+}
+
+.splitImage {
+  object-fit: cover;
+  /* Keep the model's head in frame; the scroll zoom grows from the top too. */
+  object-position: center top;
+  transform-origin: center top;
+  transform: scale(calc(1.08 - 0.08 * (1 - var(--inset, 1))));
+}
+
+.splitCaption {
+  position: absolute;
+  z-index: 2;
+  bottom: clamp(16px, 2.2vw, 32px);
+  left: clamp(16px, 2.2vw, 32px);
+  color: var(--zeen-ivory);
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: clamp(18px, 1.8vw, 26px);
+  font-style: italic;
+  text-shadow: 0 2px 16px rgb(0 0 0 / 35%);
+  opacity: calc(1 - var(--inset, 1));
+}
+
+@media (max-width: 720px) {
+  .split {
+    height: 260vh;
+    height: 260svh;
+  }
+
+  .splitStage {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}

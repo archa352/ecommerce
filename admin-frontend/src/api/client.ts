@@ -6,13 +6,15 @@ import type { ApiErrorDetail, ApiResponse } from "../types/api";
 import { clearToken, getRefreshToken, getToken, saveTokens } from "../utils/storage";
 
 // The backend resolves the store (tenant) from this host, so it must be the
-// Zeen API's own domain in production. Configure with VITE_API_ORIGIN.
+// Zeen API's own domain in production. Configure with NEXT_PUBLIC_API_ORIGIN.
 export const BACKEND_ORIGIN: string =
-  import.meta.env.VITE_API_ORIGIN ?? "http://localhost:58000";
-export const API_BASE_URL = `${BACKEND_ORIGIN}/api/v1`;
+  process.env.NEXT_PUBLIC_API_ORIGIN ?? "http://localhost:58000";
+// Browser requests stay same-origin; Next rewrites /api/v1 to BACKEND_ORIGIN.
+// This avoids relying on the backend's CORS allowlist for the separate admin app.
+export const API_BASE_URL = "/api/v1";
 
-// The customer website, for "View on website" links. Optional (VITE_STOREFRONT_URL).
-export const STOREFRONT_ORIGIN: string | null = import.meta.env.VITE_STOREFRONT_URL ?? null;
+// The customer website, for "View on website" links. Optional (NEXT_PUBLIC_STOREFRONT_URL).
+export const STOREFRONT_ORIGIN: string | null = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? null;
 
 export class ApiError extends Error {
   status: number;
@@ -45,7 +47,10 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 }
 
 export function apiUrl(path: string, query?: object): string {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  const url = new URL(
+    `${API_BASE_URL}${path}`,
+    typeof window === "undefined" ? "http://localhost" : window.location.origin,
+  );
   if (query) {
     for (const [key, value] of Object.entries(query as Record<string, QueryValue>)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -66,6 +71,10 @@ function errorFromBody(status: number, body: unknown): ApiError {
   const details = data.error?.details ?? [];
   let message =
     data.message || (typeof data.detail === "string" ? data.detail : "") || `HTTP ${status}`;
+
+  if (status >= 500 && (!message || message === "An unexpected error occurred")) {
+    message = `The server could not load this data (HTTP ${status}). Try again, and contact your system administrator if the problem continues.`;
+  }
 
   if (details.length > 0) {
     const fieldErrors = details
@@ -141,7 +150,7 @@ async function send(path: string, options: RequestOptions, retry: boolean): Prom
     });
   } catch {
     throw new ApiError(
-      `Could not reach the backend at ${BACKEND_ORIGIN}. Is it running, and is CORS allowing this origin?`,
+      "Could not reach the backend. Check your connection and try again.",
       0
     );
   }

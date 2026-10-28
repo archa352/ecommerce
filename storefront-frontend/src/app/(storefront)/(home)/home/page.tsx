@@ -1,7 +1,8 @@
 import HomeClient from "./_components/luxe/HomeClient";
 import { catalogueApi } from "@/lib/api/catalogue";
+import { cmsApi } from "@/lib/api/cms";
 import { couponApi } from "@/lib/api/orders";
-import type { CategoryStorefront, ProductStorefront } from "@/types/catalogue";
+import type { CategoryStorefront } from "@/types/catalogue";
 import type { Offer } from "@/types/orders";
 
 export const metadata = {
@@ -13,32 +14,28 @@ export const metadata = {
 /**
  * Newest first, so the grid moves as the catalogue does.
  *
- * The product page is wider than the four tiles the grid shows: the category
- * strip borrows a product image per category, and categories carry no image
- * of their own, so the extra rows are what give those tiles something to
- * show. Categories are optional -- a failure there costs the strip its live
+ * The product page feeds two four-column edits around the campaign, and the
+ * category carousel borrows a product image per category (categories carry
+ * no image of their own). Categories are optional -- a failure there costs the strip its live
  * labels, not the whole page.
  */
 const HomePage = async () => {
-  const [productsPage, categories, offers] = await Promise.all([
+  const [productsPage, categories, offers, cmsSections] = await Promise.all([
     catalogueApi.listProducts({ page_size: 24, sort: "newest" }),
     catalogueApi
-      .listCategories({ page_size: 12 })
+      .listCategories({ page_size: 100 })
       .then(page => page.items)
       .catch((): CategoryStorefront[] => []),
     couponApi.listOffers().catch((): Offer[] => []),
+    cmsApi.getHomepage().catch(() => []),
   ]);
+
+  const heroSection = cmsSections.find(section => section.section_type === "HERO_BANNER");
+  const hero = heroSection?.items[0] ?? null;
 
   const products = productsPage.items;
 
-  // The spotlight section shows one product full-detail (its own gallery,
-  // options and variants, not just the catalogue-tile thumbnail), so it
-  // needs the full record.
-  const spotlightProduct: ProductStorefront | null = products[0]
-    ? await catalogueApi.getProduct(products[0].id).catch(() => null)
-    : null;
-
-  return <HomeClient products={products} categories={categories} spotlightProduct={spotlightProduct} offers={offers} />;
+  return <HomeClient products={products} categories={categories} offers={offers} hero={hero ? { ...hero, title: heroSection?.title ?? null, subtitle: heroSection?.subtitle ?? null } : null} />;
 };
 
 export default HomePage;

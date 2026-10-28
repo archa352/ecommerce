@@ -17,11 +17,14 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import './StorefrontToast.css';
 
 import ScrollToTopButton from '@/constant/ScrollToTopButton';
 import { AuthProvider } from '@/context/AuthContext';
 import { CartProvider } from '@/context/CartContext';
+import { SignInModalProvider } from '@/context/SignInModalContext';
 import { WishlistProvider } from '@/context/WishlistContext';
+import CartDrawer from '@/components/luxe/CartDrawer';
 import type { UserProfile } from '@/types/auth';
 import type { Cart, Wishlist } from '@/types/cart';
 
@@ -82,12 +85,25 @@ export default function StorefrontShell({
   return (
     <>
       <AuthProvider user={user}>
-        <CartProvider initialCart={cart}>
-          <WishlistProvider initialWishlist={wishlist}>{children}</WishlistProvider>
-        </CartProvider>
+        <SignInModalProvider>
+          <CartProvider initialCart={cart}>
+            <WishlistProvider initialWishlist={wishlist}>
+              {children}
+              <CartDrawer />
+            </WishlistProvider>
+          </CartProvider>
+        </SignInModalProvider>
       </AuthProvider>
-      <ScrollToTopButton />
-      <ToastContainer position="top-right" autoClose={2500} />
+      {path !== '/' && path !== '/home' && <ScrollToTopButton />}
+      <ToastContainer
+        position="top-right"
+        autoClose={3200}
+        closeOnClick={false}
+        hideProgressBar
+        pauseOnFocusLoss
+        pauseOnHover
+        role="status"
+      />
     </>
   );
 }

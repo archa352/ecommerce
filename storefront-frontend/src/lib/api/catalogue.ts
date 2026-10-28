@@ -48,6 +48,13 @@ export const catalogueApi = {
     });
   },
 
+  getProductBySlug(slug: string): Promise<ProductStorefront> {
+    return apiRequest<ProductStorefront>(`/storefront/products/by-slug/${encodeURIComponent(slug)}`, {
+      revalidate: CATALOGUE_REVALIDATE,
+      tags: ['products', `product-slug:${slug}`],
+    });
+  },
+
   listProductVariants(productId: string, params: PageParams = {}): Promise<Page<VariantStorefront>> {
     return apiRequestPage<VariantStorefront>(`/storefront/products/${productId}/variants`, {
       query: { ...params },

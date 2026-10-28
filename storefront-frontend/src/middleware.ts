@@ -9,6 +9,7 @@ import {
   isTokenExpired,
   sessionCookieOptions,
 } from '@/lib/auth/cookies';
+import { SIGN_IN_PARAM } from '@/lib/auth/sign-in-url';
 
 /**
  * Routes that need a signed-in customer.
@@ -17,6 +18,9 @@ import {
  * is merged after sign-in, so they have to be able to see it.
  */
 const CUSTOMER_PREFIXES = [
+  '/account',
+  '/checkout',
+  '/order-confirmation',
   '/my-account',
   '/my-orders',
   '/check-out',
@@ -76,8 +80,8 @@ export async function middleware(request: NextRequest) {
 
   if (matches(pathname, CUSTOMER_PREFIXES) && !accessToken) {
     const url = request.nextUrl.clone();
-    url.pathname = '/signin';
-    url.search = `?next=${encodeURIComponent(pathname + search)}`;
+    url.pathname = '/';
+    url.search = `?${SIGN_IN_PARAM}=1&next=${encodeURIComponent(pathname + search)}`;
     response = NextResponse.redirect(url);
   } else if (refreshed) {
     /* The rotated token has to reach the render, not just the browser: a

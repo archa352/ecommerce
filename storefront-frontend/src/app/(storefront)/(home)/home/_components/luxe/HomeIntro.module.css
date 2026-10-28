@@ -1,0 +1,60 @@
+/* Opening title card on the home page; see HomeIntro. */
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.introVeil {
+  position: absolute;
+  inset: 0;
+  background: var(--zeen-ivory);
+}
+
+/* The primary lockup from the logo book: bird centred over the wordmark,
+   in the same 36:64 proportion the site header uses. */
+.introMark {
+  --intro-wordmark: clamp(180px, 22vw, 320px);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--intro-wordmark) * 0.06);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+
+.introSymbol,
+.introWordmark {
+  display: block;
+  opacity: 0;
+  transform-origin: center;
+  background: var(--zeen-midnight-navy);
+}
+
+.introSymbol {
+  width: calc(var(--intro-wordmark) * 0.5625);
+  aspect-ratio: 330 / 172;
+  -webkit-mask: url('/images/zeen-symbol.png') center / contain no-repeat;
+  mask: url('/images/zeen-symbol.png') center / contain no-repeat;
+}
+
+.introWordmark {
+  width: var(--intro-wordmark);
+  aspect-ratio: 674 / 135;
+  -webkit-mask: url('/images/zeen-wordmark.png') center / contain no-repeat;
+  mask: url('/images/zeen-wordmark.png') center / contain no-repeat;
+}
+
+.introDone {
+  display: none;
+}
+
+/* Hold the page still while the title card plays. */
+:global(html.zeen-intro-active):has(.intro) {
+  overflow: hidden;
+}

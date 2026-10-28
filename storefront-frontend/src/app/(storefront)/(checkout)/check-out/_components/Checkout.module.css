@@ -1,5 +1,5 @@
 .page {
-  background: #faf8f5;
+  background: var(--cream, #fbfaf8);
   min-height: 60vh;
   padding-bottom: 64px;
 }
@@ -962,4 +962,565 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+}
+
+/* ZEEN storefront finish shared with the product listing and detail pages. */
+.page {
+  --checkout-ink: var(--ink, #1a1714);
+  --checkout-muted: var(--muted, #8b857e);
+  --checkout-line: var(--line, #e7e2db);
+  font-family: Montserrat, Helvetica, sans-serif;
+  color: var(--checkout-ink);
+  background: var(--cream, #fbfaf8);
+}
+
+.page button,
+.page input,
+.page select,
+.page textarea {
+  font-family: inherit;
+}
+
+.breadcrumb,
+.subtitle,
+.addressLine,
+.methodDesc,
+.summaryRow,
+.secureNote {
+  color: var(--checkout-muted);
+}
+
+.breadcrumb a:hover,
+.manageLink,
+.addressEdit,
+.viewCouponsLink {
+  color: var(--checkout-ink);
+}
+
+.heading,
+.sectionTitle,
+.addressLabel,
+.methodTitle,
+.summaryTitle,
+.summaryItemName,
+.summaryItemPrice,
+.summaryTotalRow,
+.modalTitle {
+  color: var(--checkout-ink);
+}
+
+.card,
+.summaryCard,
+.trustPanel {
+  border-color: var(--checkout-line);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgb(26 23 20 / 4%);
+}
+
+.row {
+  border-color: var(--checkout-line);
+}
+
+.rowSelected,
+.couponSection,
+.couponCardItem {
+  background: #f4f1ec;
+}
+
+.formInput,
+.couponInput {
+  border-color: var(--checkout-line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.formInput:focus,
+.couponInput:focus {
+  outline: 1px solid var(--checkout-ink);
+  outline-offset: 1px;
+}
+
+.placeOrderBtn,
+.formSaveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  border: 0.5px solid var(--checkout-ink);
+  border-radius: 45px;
+  background: var(--checkout-ink);
+  color: #fff;
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.placeOrderBtn {
+  width: 100%;
+  padding: 0 22px;
+  margin-top: 24px;
+}
+
+.formSaveBtn {
+  padding: 0 26px;
+}
+
+.placeOrderBtn:hover:not(:disabled),
+.formSaveBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.placeOrderBtn:disabled,
+.formSaveBtn:disabled {
+  border-color: #bdbdbd;
+  background: #bdbdbd;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.formCancelBtn,
+.addAddressBtn {
+  border-color: var(--checkout-line);
+  border-radius: 45px;
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.addAddressBtn {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--checkout-line);
+  background: #fff;
+  color: var(--checkout-ink);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.addAddressBtn:hover:not(:disabled) {
+  border-color: var(--checkout-ink);
+  background: #f4f1ec;
+}
+
+.couponApplyBtn,
+.couponSelectBtn {
+  min-height: 40px;
+  border: 1px solid var(--checkout-ink);
+  border-radius: 45px;
+  background: #fff;
+  color: var(--checkout-ink);
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.couponApplyBtn:not(:disabled):hover,
+.couponSelectBtn:hover {
+  background: var(--checkout-ink);
+  color: #fff;
+}
+
+.couponApplyBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.summaryThumb {
+  border-radius: 6px;
+  background: #f4f1ec;
+}
+
+@media (max-width: 767.98px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .heading {
+    font-size: 28px;
+  }
+
+  .row {
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .addressActions {
+    gap: 2px;
+  }
+
+  .summaryCard {
+    padding: 16px;
+  }
+
+  .placeOrderBtn {
+    margin-top: 18px;
+  }
+}
+
+/* Shared product-page sizing and tokens for the complete checkout surface. */
+.page {
+  min-height: 60vh;
+  background: var(--cream, #fbfaf8);
+  color: var(--checkout-ink);
+  font-family: Montserrat, Helvetica, sans-serif;
+}
+
+.container {
+  max-width: 1320px;
+  padding: 36px 40px 0;
+}
+
+.breadcrumb {
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.breadcrumb a:hover {
+  color: var(--checkout-ink);
+}
+
+.heading {
+  margin: 0 0 6px;
+  color: var(--checkout-ink);
+  font-size: clamp(24px, 2.6vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin-bottom: 28px;
+  color: var(--checkout-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.error {
+  border: 1px solid #ead5cf;
+  border-radius: 6px;
+  background: #f8efec;
+  color: #8f3c2e;
+  font-size: 13px;
+}
+
+.grid {
+  gap: 24px;
+}
+
+.main {
+  gap: 24px;
+}
+
+.sidebar {
+  gap: 16px;
+}
+
+.sectionHeader {
+  margin-bottom: 12px;
+}
+
+.sectionTitle {
+  color: var(--checkout-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manageLink {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-underline-offset: 3px;
+}
+
+.card,
+.summaryCard,
+.trustPanel {
+  border: 1px solid var(--checkout-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.row {
+  gap: 12px;
+  padding: 15px 16px;
+  border-color: var(--checkout-line);
+}
+
+.rowSelected {
+  background: #f4f1ec;
+}
+
+.radio,
+.billingRow input,
+.formCheckboxRow input {
+  accent-color: #0d133c;
+}
+
+.addressLabel,
+.methodTitle {
+  color: var(--checkout-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.addressLine,
+.methodDesc {
+  color: var(--checkout-muted);
+  font-size: 12px;
+}
+
+.defaultBadge {
+  background: #0d133c;
+  color: #fff;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.addressEdit {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-underline-offset: 3px;
+}
+
+.addressDelete:hover:not(:disabled) {
+  color: #0d133c;
+  background: #f4f1ec;
+}
+
+.addAddressBtn {
+  margin-top: 8px;
+}
+
+.methodPrice {
+  color: var(--checkout-ink);
+  font-size: 12px;
+}
+
+.comingSoon {
+  background: #f4f1ec;
+  color: var(--checkout-muted);
+}
+
+.couponSection {
+  border: 1px solid var(--checkout-line);
+  border-radius: 8px;
+  background: #f4f1ec;
+}
+
+.couponInput,
+.formInput {
+  min-height: 44px;
+  border: 1px solid var(--checkout-line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--checkout-ink);
+}
+
+.couponInput::placeholder,
+.formInput::placeholder {
+  color: var(--checkout-muted);
+}
+
+.couponApplyBtn {
+  padding: 0 18px;
+}
+
+.couponApplied {
+  border: 1px solid var(--checkout-line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.couponAppliedIcon {
+  background: #0d133c;
+}
+
+.couponAppliedText strong,
+.couponAppliedText span,
+.couponRemoveBtn,
+.discountValue {
+  color: var(--checkout-ink);
+}
+
+.summaryCard {
+  padding: 20px;
+}
+
+.summaryHeader {
+  margin-bottom: 18px;
+}
+
+.summaryTitle {
+  color: var(--checkout-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryItem {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.summaryThumb {
+  width: 52px;
+  height: 69px;
+  border-radius: 0;
+  background: #f4f1ec;
+}
+
+.summaryThumb img {
+  object-fit: cover;
+  object-position: top center;
+}
+
+.summaryItemName {
+  color: var(--checkout-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.summaryItemMeta {
+  color: var(--checkout-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.summaryItemPrice {
+  color: var(--checkout-ink);
+  font-size: 12px;
+}
+
+.summaryTotals {
+  border-color: var(--checkout-line);
+}
+
+.summaryRow {
+  color: var(--checkout-ink);
+  font-size: 12px;
+}
+
+.summaryTotalRow {
+  border-color: var(--checkout-line);
+  color: var(--checkout-ink);
+  font-size: 15px;
+}
+
+.placeOrderBtn {
+  min-height: 44px;
+  border: 0.5px solid var(--checkout-ink);
+  border-radius: 45px;
+  background: var(--checkout-ink);
+  color: #fff;
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.secureNote {
+  color: var(--checkout-muted);
+  font-size: 11px;
+}
+
+.modalCard {
+  border: 1px solid var(--checkout-line);
+  border-radius: 8px;
+}
+
+.modalOverlay {
+  --checkout-ink: var(--ink, #1a1714);
+  --checkout-muted: var(--muted, #8b857e);
+  --checkout-line: var(--line, #e7e2db);
+  font-family: Montserrat, Helvetica, sans-serif;
+}
+
+.modalOverlay button,
+.modalOverlay input,
+.modalOverlay select,
+.modalOverlay textarea {
+  font-family: inherit;
+}
+
+.modalTitle {
+  color: var(--checkout-ink);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.formLabel {
+  color: var(--checkout-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.formActions .formCancelBtn {
+  min-height: 44px;
+  border-color: var(--checkout-line);
+  border-radius: 45px;
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding: 36px 40px 0;
+  }
+}
+
+@media (min-width: 992px) {
+  .container {
+    max-width: 1320px;
+    padding: 36px 40px 0;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .container {
+    padding: 24px 18px 0;
+  }
+
+  .grid,
+  .main {
+    gap: 20px;
+  }
+
+  .row {
+    padding: 13px 11px;
+  }
+
+  .summaryCard {
+    padding: 16px;
+  }
+
+  .summaryItemPrice {
+    white-space: nowrap;
+  }
 }

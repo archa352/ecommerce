@@ -6,7 +6,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, checking } = useAuth();
   const location = useLocation();
   if (checking) return <div className="state">Checking your session…</div>;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
   return <>{children}</>;
 }
 

@@ -6,9 +6,20 @@ export const metadata: Metadata = {
   description: 'E-commerce storefront for ZEEN.',
 };
 
+/**
+ * The only layout that renders the document itself. Nested layouts and the
+ * root not-found page render inside <body>; a second <html> there breaks
+ * hydration on every page.
+ */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

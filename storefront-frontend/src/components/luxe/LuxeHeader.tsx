@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 
 import styles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
 import {
@@ -16,77 +16,101 @@ import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 import { useCart } from '@/context/CartContext';
 
 const NAV_LINKS = [
-  { label: 'Shop', href: '/shop-list', chevron: true },
-  { label: 'Best Sellers', href: '/shop-list' },
+  { label: 'Shop', href: '/products', chevron: true },
+  { label: 'Best Sellers', href: '/products' },
   { label: 'About', href: '/about-us' },
   { label: 'Contact', href: '/contact-us-1' },
 ];
 
-/**
- * The Zeen header, shared by every page that opts into the luxe design
- * system. Lifted verbatim out of the Home page's header markup (Home.module.css
- * stays the single source of truth for its styling) so other pages can look
- * identical without the Home page itself importing or re-exporting anything.
- */
-export default function LuxeHeader() {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+function CartButton({ className }: { className: string }) {
   const { itemCount } = useCart();
+  return (
+    <Link
+      href="/cart"
+      className={className}
+      data-cart-trigger
+      aria-label={itemCount > 0 ? `Cart, ${itemCount} items` : 'My cart'}>
+      <BagIcon size={17} />
+      {itemCount > 0 && (
+        <span className={styles.headerBadge} aria-hidden="true">
+          {itemCount > 99 ? '99+' : itemCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+/**
+ * The editorial bar used on the home page: small-caps navigation on the
+ * left, the official stacked logo centred, utilities right.
+ * Same links, account, wishlist and cart as every other page.
+ */
+function HomeHeader() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <header className={styles.header}>
-      <div className={`${styles.container} ${styles.headerInner}`}>
-        <nav aria-label="Primary">
-          <ul className={styles.nav}>
-            {NAV_LINKS.map(link => (
-              <li key={link.label}>
+    <header className={styles.homeHeader} data-storefront-header>
+      <div className={styles.homeHeaderInner}>
+        <nav aria-label="Primary" className={styles.homeNavWrap}>
+          <ul className={styles.homeNav}>
+            {NAV_LINKS.map((link, i) => (
+              <li key={link.label} style={{ '--i': i } as CSSProperties}>
                 <Link href={link.href}>
                   {link.label}
-                  {link.chevron && <ChevronDownIcon size={12} />}
+                  {link.chevron && <ChevronDownIcon size={11} />}
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
 
-        <Link href="/" className={styles.logo}>
-          ZEEN
+        <button
+          type="button"
+          className={styles.homeMenuBtn}
+          aria-label="Toggle menu"
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen(v => !v)}
+        >
+          {mobileNavOpen ? <CloseIcon size={18} /> : <MenuIcon size={18} />}
+          Menu
+        </button>
+
+        <Link href="/" className={`${styles.homeLogo} ${styles.homeHeaderFade}`} aria-label="ZEEN home" data-home-logo>
+          <span className={styles.homeLogoSymbol} aria-hidden="true" />
+          <span className={styles.homeLogoMark} data-home-logo-wordmark aria-hidden="true" />
         </Link>
 
-        <div className={styles.headerRight}>
+        <div className={`${styles.homeHeaderRight} ${styles.homeHeaderFade}`}>
           <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
             <SearchIcon />
           </Link>
           <LuxeAccountNav />
           <LuxeWishlistButton />
-          <Link
-            href="/cart-items"
-            className={styles.headerRoundBtn}
-            aria-label={itemCount > 0 ? `Cart, ${itemCount} items` : 'My cart'}>
-            <BagIcon size={17} />
-            {itemCount > 0 && (
-              <span className={styles.headerBadge} aria-hidden="true">
-                {itemCount > 99 ? '99+' : itemCount}
-              </span>
-            )}
-          </Link>
-          <button
-            type="button"
-            className={styles.menuBtn}
-            aria-label="Toggle menu"
-            onClick={() => setMobileNavOpen(v => !v)}
-          >
-            {mobileNavOpen ? <CloseIcon /> : <MenuIcon />}
-          </button>
+          <CartButton className={styles.headerRoundBtn} />
         </div>
       </div>
 
-      <div className={`${styles.container} ${styles.mobileNav} ${mobileNavOpen ? styles.open : ''}`}>
+      <nav
+        aria-label="Mobile"
+        className={`${styles.homeMobileNav} ${mobileNavOpen ? styles.homeMobileNavOpen : ''}`}
+      >
         {NAV_LINKS.map(link => (
           <Link key={link.label} href={link.href} onClick={() => setMobileNavOpen(false)}>
             {link.label}
           </Link>
         ))}
-      </div>
+      </nav>
     </header>
   );
+}
+
+/**
+ * The Zeen header, shared by every page that opts into the luxe design
+ * system. Lifted verbatim out of the Home page's header markup (Home.module.css
+ * stays the single source of truth for its styling) so other pages can look
+ * identical without the Home page itself importing or re-exporting anything.
+ * The home page itself gets the editorial variant above.
+ */
+export default function LuxeHeader() {
+  return <HomeHeader />;
 }

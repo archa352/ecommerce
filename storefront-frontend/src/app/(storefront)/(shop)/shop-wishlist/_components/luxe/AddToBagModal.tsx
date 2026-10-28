@@ -10,6 +10,7 @@ import { useCart } from '@/context/CartContext';
 import { mediaUrl } from '@/lib/media';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
+import { sizeLabel } from '@/lib/catalogue/size';
 import { formatMoney } from '@/lib/format';
 import type { ProductStorefront, VariantStorefront } from '@/types/catalogue';
 import type { WishlistItem } from '@/types/cart';
@@ -34,7 +35,7 @@ function sizeChoicesFor(product: ProductStorefront, savedVariant: VariantStorefr
     .filter(variant => otherOptionNames.every(name => variant.options[name] === savedVariant?.options[name]))
     .map(variant => ({
       variant,
-      label: sizeOption ? variant.options[sizeOption.name] ?? variant.name : variant.name,
+      label: sizeOption && variant.options[sizeOption.name] ? sizeLabel(variant.options[sizeOption.name]) : variant.name,
     }))
     .filter(choice => choice.label);
 }
@@ -89,8 +90,11 @@ export default function AddToBagModal({ item, onClose }: { item: WishlistItem; o
 
   async function handleAddToBag() {
     if (!selectedVariantId) return;
-    await addToCart(selectedVariantId, 1);
-    toast.success('Added to your bag');
+    const failure = await addToCart(selectedVariantId, 1);
+    if (failure) {
+      toast.error(failure);
+      return;
+    }
     onClose();
   }
 

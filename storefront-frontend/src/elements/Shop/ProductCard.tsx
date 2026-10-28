@@ -28,7 +28,9 @@ export default function ProductCard({ product, rating = 0 }: ProductCardProps) {
   const router = useRouter();
   const { isProductSaved, toggleProduct, pending } = useWishlist();
 
-  const href = `/single-product/${product.id}`;
+  const href = product.slug
+    ? `/products/${encodeURIComponent(product.slug)}`
+    : `/single-product/${product.id}`;
   const image = product.primary_image;
   const saved = isProductSaved(product.id);
 
@@ -41,7 +43,7 @@ export default function ProductCard({ product, rating = 0 }: ProductCardProps) {
 
     if (error) toast.error(error);
     else if (wasSaved) toast.info('Removed from your wishlist');
-    else toast.success('Saved to your wishlist');
+    else toast.success('Added to your wishlist');
   }
 
   return (

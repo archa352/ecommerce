@@ -53,6 +53,11 @@ const STATUS_META: Record<PaymentStatus, StatusMeta> = {
     dotClassName: 'myorderDotAmber',
     textClassName: 'myorderTextAmber',
   },
+  PARTIALLY_PAID: {
+    label: 'Partially paid',
+    dotClassName: 'myorderDotAmber',
+    textClassName: 'myorderTextAmber',
+  },
   FAILED: {
     label: 'Failed',
     dotClassName: 'myorderDotRose',

@@ -9,6 +9,8 @@ export interface CategoryStorefront {
   id: string;
   name: string;
   description: string | null;
+  /** Set on a sub-category; a parent's listing includes its children's products. */
+  parent_id?: string | null;
 }
 
 export interface ProductImageStorefront {
@@ -24,7 +26,11 @@ export interface VariantStorefront {
   product_id: string;
   sku: string;
   name: string;
+  /** What the shopper pays now, sale included. */
   price: string;
+  /** The regular price; set only while a sale is on. */
+  compare_at_price?: string | null;
+  sale_ends_at?: string | null;
   options: Record<string, string>;
   in_stock: boolean;
   available_quantity: number;
@@ -38,6 +44,7 @@ export interface StorefrontOption {
 
 export interface ProductSummaryStorefront {
   id: string;
+  slug?: string;
   category_id: string;
   name: string;
   short_description: string | null;
@@ -46,16 +53,42 @@ export interface ProductSummaryStorefront {
   primary_image: ProductImageStorefront | null;
   price_from: string | null;
   price_to: string | null;
+  /** Sent by `/storefront/products`; carries no compare-at price to strike through. */
+  on_sale?: boolean;
   in_stock: boolean;
+}
+
+/** One size's measurements, already converted to both units by the API. */
+export interface SizeChartRow {
+  size: string;
+  values_in: Record<string, string>;
+  values_cm: Record<string, string>;
+}
+
+export interface SizeChart {
+  /** The unit the chart was entered in. */
+  unit: 'in' | 'cm';
+  measurements: string[];
+  rows: SizeChartRow[];
+  note: string | null;
 }
 
 export interface ProductStorefront {
   id: string;
+  slug?: string;
   category: CategoryStorefront;
   name: string;
   short_description: string | null;
   description: string | null;
   brand: string | null;
+  fabric?: string | null;
+  occasion?: string | null;
+  sleeve?: string | null;
+  neckline?: string | null;
+  fabric_details?: string | null;
+  washing_instructions?: string | null;
+  country_of_origin?: string | null;
+  size_chart?: SizeChart | null;
   is_featured: boolean;
   seo_title: string | null;
   seo_description: string | null;
@@ -64,6 +97,7 @@ export interface ProductStorefront {
   variants: VariantStorefront[];
   price_from: string | null;
   price_to: string | null;
+  on_sale?: boolean;
   in_stock: boolean;
 }
 

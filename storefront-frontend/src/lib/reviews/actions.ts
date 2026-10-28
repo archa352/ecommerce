@@ -20,47 +20,50 @@ function toState(error: unknown): CheckoutState {
   throw error;
 }
 
+export type CreateReviewResult =
+  | { status: 'success'; reviewId: string }
+  | { status: 'error'; message: string; fieldErrors?: Record<string, string> };
+
 /**
- * Write a review.
- *
- * The backend is the authority on eligibility -- only a delivered purchase
- * earns one, and only one per product -- so its rejection message is shown
- * as-is rather than guessed at here.
+ * Create the review itself (rating and text). Photos follow, one request
+ * each, through `/reviews/[reviewId]/photos` -- a server action's body limit
+ * is too small for them. Called from a submit handler, not a form action, so
+ * React never resets the form behind the customer's back.
  */
-export async function submitReview(
-  _previous: CheckoutState,
-  formData: FormData,
-): Promise<CheckoutState> {
+export async function createReview(input: {
+  productId: string;
+  rating: number;
+  title: string;
+  comment: string;
+}): Promise<CreateReviewResult> {
   const token = await getActionAccessToken();
   if (!token) return { status: 'error', message: 'Sign in to write a review.' };
 
-  const productId = String(formData.get('product_id') ?? '');
-  const rating = Number(formData.get('rating') ?? 0);
-  const title = String(formData.get('title') ?? '').trim();
-  const comment = String(formData.get('comment') ?? '').trim();
-
-  if (!productId) return { status: 'error', message: 'Missing product.' };
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    return {
-      status: 'error',
-      message: 'Choose a star rating.',
-      fieldErrors: { rating: 'Pick 1 to 5 stars' },
-    };
+  if (!input.productId) return { status: 'error', message: 'Missing product.' };
+  if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) {
+    return { status: 'error', message: 'Please select a star rating.', fieldErrors: { rating: 'Please select a star rating' } };
   }
 
   try {
-    await reviewApi.create(token, {
-      product_id: productId,
-      rating,
-      title: title || null,
-      comment: comment || null,
+    const review = await reviewApi.create(token, {
+      product_id: input.productId,
+      rating: input.rating,
+      title: input.title.trim() || null,
+      comment: input.comment.trim() || null,
     });
+    // No revalidation here: refreshing the page now would swap the form for
+    // the new review before its photos are uploaded. `refreshProductReviews`
+    // runs once they are in.
+    return { status: 'success', reviewId: review.id };
   } catch (error) {
-    return toState(error);
+    const state = toState(error);
+    return { status: 'error', message: state.message ?? 'Could not save your review.', fieldErrors: state.fieldErrors };
   }
+}
 
-  revalidateTag(`reviews:${productId}`);
-  return { status: 'success', message: 'Thanks — your review is live.' };
+/** Refresh the product's cached reviews once its photos are in. */
+export async function refreshProductReviews(productId: string): Promise<void> {
+  if (productId) revalidateTag(`reviews:${productId}`);
 }
 
 export async function deleteReview(

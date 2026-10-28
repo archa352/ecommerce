@@ -69,7 +69,15 @@ export default function EcommerceFooter() {
         <div className="footer-grid">
           {/* Brand + newsletter */}
           <div>
-            <p className="footer-brand-name">Zeen</p>
+            <div
+              className="footer-brand-name"
+              role="img"
+              aria-label="ZEEN"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}
+            >
+              <span className="footer-brand-symbol" aria-hidden="true" />
+              <span className="footer-brand-wordmark" aria-hidden="true" />
+            </div>
             <p className="footer-brand-tagline">
               Considered goods for everyday living. New arrivals and restock notices, roughly twice a month.
             </p>

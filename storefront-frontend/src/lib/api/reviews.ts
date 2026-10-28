@@ -21,7 +21,7 @@ export const reviewApi = {
     });
   },
 
-  /** Only a delivered product may be reviewed, and it starts unapproved. */
+  /** Only a delivered product may be reviewed, once per customer. */
   create(token: string, data: ReviewCreate): Promise<Review> {
     return apiRequest<Review>('/reviews', {
       method: 'POST',
@@ -35,6 +35,23 @@ export const reviewApi = {
     return apiRequest<Review>(`/reviews/${reviewId}`, {
       method: 'PATCH',
       body: data,
+      token,
+      cache: 'no-store',
+    });
+  },
+
+  /**
+   * Attach one photo to the caller's own review. The backend checks the
+   * author, the type (JPEG/PNG/WebP), that it decodes as an image, its size
+   * and the per-review limit; nothing about the file is trusted here.
+   */
+  uploadImage(token: string, reviewId: string, file: Blob, filename: string, altText: string | null): Promise<Review> {
+    const formData = new FormData();
+    formData.set('file', file, filename);
+    if (altText) formData.set('alt_text', altText);
+    return apiRequest<Review>(`/reviews/${reviewId}/images/upload`, {
+      method: 'POST',
+      formData,
       token,
       cache: 'no-store',
     });

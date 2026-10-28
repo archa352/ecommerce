@@ -10,6 +10,11 @@
   padding: 8px 0 88px;
 }
 
+/* Match the warm page canvas used by My Account and My Orders. */
+.page {
+  background: var(--cream, #fbfaf8);
+}
+
 .error {
   background: #fdecec;
   color: #b42318;
@@ -253,10 +258,38 @@
 }
 
 .checkoutBtn {
+  display: flex;
+  flex: none;
   width: 100%;
+  min-width: 0;
+  align-items: center;
   justify-content: center;
+  height: 44px;
   margin-top: 20px;
-  padding: 15px 26px;
+  padding: 0 22px;
+  border: 0.5px solid var(--ink, #1a1714);
+  border-radius: 45px;
+  background: var(--ink, #1a1714);
+  color: #fff;
+  font-family: Montserrat, Helvetica, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-align: center;
+  line-height: 1.6;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.checkoutBtn:hover {
+  opacity: 0.85;
+}
+
+.checkoutBtn:focus-visible {
+  outline: 2px solid var(--ink, #1a1714);
+  outline-offset: 2px;
 }
 
 /* -------------------------------- empty state -------------------------------- */

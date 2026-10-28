@@ -2,42 +2,26 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
-import { mediaUrl } from '@/lib/media';
 import { formatPriceRange } from '@/lib/format';
-import type { CategoryStorefront, ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
+import { mediaUrl } from '@/lib/media';
+import { categorySlug } from '@/lib/catalogue/slug';
+import { collectionPath } from '@/app/(storefront)/(shop)/collections/_components/collectionQuery';
+import type { CategoryStorefront, ProductSummaryStorefront } from '@/types/catalogue';
+import type { StorefrontBannerItem } from '@/types/cms';
 import type { Offer } from '@/types/orders';
 
 import styles from './Home.module.css';
 import { CampaignBanner } from './CampaignBanner';
-import {
-  ArrowRightIcon,
-  BagIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  GiftIcon,
-  HandshakeIcon,
-  MinusIcon,
-  PlusIcon,
-  StarIcon,
-  TruckIcon,
-} from './Icons';
-
-const ALL_FILTER = 'All';
+import { CampaignSplit } from './CampaignSplit';
+import { HomeIntro } from './HomeIntro';
+import { ArrowLeftIcon, ArrowRightIcon } from './Icons';
 
 const CATEGORY_FALLBACK = ['Casual Wear', 'Ethnic Wear', 'Cotton', 'Rayon', 'Printed'];
-const CATEGORY_IMAGES = [
-  '/home/home2.jpg',
-  '/home/home3.jpg',
-  '/home/home4.jpg',
-  '/home/home5.jpg',
-  '/home/home6.jpg',
-];
 
-const GRID_IMAGES = ['/home/home1.jpg', '/home/home2.jpg', '/home/home3.jpg', '/home/home4.jpg', '/home/home5.jpg'];
-
+/** Editorial fallbacks for the category strip when the catalogue cannot be read at all. */
 const CAMPAIGN_IMAGES = [
   '/home/home1.jpg',
   '/home/home2.jpg',
@@ -48,495 +32,220 @@ const CAMPAIGN_IMAGES = [
 ];
 
 /**
- * Stand in for the seeded catalogue's placeholder photography.
+ * The product's own photograph, or null when it has none worth showing.
  *
- * The dev catalogue ships picsum URLs -- landscapes and street scenes that
- * have nothing to do with the collection. Until real product shots are
- * loaded, those fall back to the brand's own campaign images so the page
- * reads as one shoot. Any real catalogue URL passes through untouched, so
- * this stops applying on its own once photography lands.
+ * The dev seed data ships picsum URLs -- landscapes and street scenes that
+ * have nothing to do with the garment. Those count as no photograph, so a
+ * product is never shown under another product's (or a campaign) image.
  */
-function campaignImage(url: string | null | undefined, index: number): string {
-  if (url && !url.includes('picsum.photos')) return mediaUrl(url);
-  return CAMPAIGN_IMAGES[index % CAMPAIGN_IMAGES.length];
+function productImage(product: ProductSummaryStorefront): string | null {
+  const url = product.primary_image?.url;
+  if (!url || url.includes('picsum.photos')) return null;
+  return mediaUrl(url) ?? url;
 }
 
-const SIZE_FALLBACK = ['S', 'M', 'L', 'XL'];
-const COLOR_SWATCHES = ['/home/home1.jpg', '/home/home2.jpg', '/home/home3.jpg', '/home/home4.jpg'];
-
-const TESTIMONIALS = [
-  {
-    quote:
-      '“Exactly what I was looking for — soft cotton, a clean fit, and comfortable enough to wear all day at work. It has become my everyday churidar.”',
-    name: 'Rosella Milly',
-    thumb: '/home/home3.jpg',
-  },
-  {
-    quote:
-      '“From the stitching to the finishing at the hem, every detail feels considered. Six washes in and the colour has not faded.”',
-    name: 'Amara Whitfield',
-    thumb: '/home/home2.jpg',
-  },
-  {
-    quote:
-      '“I ordered the wrong size and the exchange was picked up and replaced within days. Rare to see that kind of service from a new label.”',
-    name: 'Delphine Cross',
-    thumb: '/home/home5.jpg',
-  },
-];
-
-const COMMITMENTS = [
-  {
-    icon: GiftIcon,
-    title: 'Considered Fabrics',
-    text: 'Cotton, rayon and blends chosen for how they wear through the day.',
-  },
-  {
-    icon: TruckIcon,
-    title: 'Free Shipping Across India',
-    text: 'Complimentary delivery on every order, packed with care.',
-  },
-  {
-    icon: HandshakeIcon,
-    title: 'Secure Payment',
-    text: 'UPI, cards, net banking, wallets and Cash on Delivery.',
-  },
-];
-
-function money(product: { price_from: string | null; price_to: string | null } | null | undefined) {
-  if (!product) return '';
-  return formatPriceRange(product.price_from, product.price_to, STOREFRONT_CURRENCY);
+function money(product: { price_from: string | null; price_to: string | null }) {
+  // Same wording as the collection cards for a product with no priced variant yet.
+  return formatPriceRange(product.price_from, product.price_to, STOREFRONT_CURRENCY) || 'Price on request';
 }
 
-export default function HomeClient({
-  products,
-  categories,
-  spotlightProduct,
-  offers,
-}: {
-  products: ProductSummaryStorefront[];
-  categories: CategoryStorefront[];
-  spotlightProduct: ProductStorefront | null;
-  offers: Offer[];
-}) {
-  // The catalogue drives the option lists, so they are read before the state
-  // that has to be seeded from them.
-  const sizeOption = spotlightProduct?.options.find(option => /size/i.test(option.name));
-  const colorOption = spotlightProduct?.options.find(option => /colou?r/i.test(option.name));
-  const sizes = sizeOption?.values.length ? sizeOption.values : SIZE_FALLBACK;
+function badge(product: ProductSummaryStorefront): string | null {
+  if (product.is_featured) return 'Best seller';
+  if (!product.in_stock) return 'Sold out';
+  return null;
+}
 
-  /* Variants carry no imagery of their own, so each colour borrows one of the
-     product's photos and falls back to a stock swatch when there are fewer
-     photos than colours. */
-  const colors = colorOption?.values.length
-    ? colorOption.values.map((value, i) => ({
-        value,
-        image: campaignImage(spotlightProduct?.images[i]?.url ?? spotlightProduct?.images[0]?.url, i),
-      }))
-    : COLOR_SWATCHES.map((image, i) => ({ value: `Option ${i + 1}`, image }));
+/** Adds `revealed` to each tile as it enters the viewport (once). */
+function useReveal(deps: unknown[]) {
+  const ref = useRef<HTMLDivElement>(null);
 
-  const filters = [ALL_FILTER, ...categories.slice(0, 3).map(category => category.name)];
-
-  const [activeFilter, setActiveFilter] = useState(ALL_FILTER);
-  const [size, setSize] = useState(sizes[0]);
-  const [color, setColor] = useState(0);
-  const [qty, setQty] = useState(1);
-  const [testiIndex, setTestiIndex] = useState(0);
-  const pageRef = useRef<HTMLDivElement>(null);
-
-  const gridProducts = products.slice(0, 5);
-
-  // Filtering happens over the page already fetched, so switching tabs costs
-  // no round trip.
-  const activeCategory = categories.find(category => category.name === activeFilter);
-  const signatureProducts = (
-    activeCategory ? products.filter(product => product.category_id === activeCategory.id) : products
-  ).slice(0, 4);
-
-  /* The strip is the live taxonomy. Categories carry no image of their own,
-     so each tile borrows the primary photo of a product filed under it. */
-  const categoryImages = new Map<string, string>();
-  for (const product of products) {
-    const url = product.primary_image?.url;
-    if (url && !categoryImages.has(product.category_id)) categoryImages.set(product.category_id, url);
-  }
-
-  const strip = (
-    categories.length
-      ? categories.slice(0, 5).map(category => ({ label: category.name, id: category.id }))
-      : CATEGORY_FALLBACK.map(label => ({ label, id: label }))
-  ).map((category, i) => ({
-    label: category.label,
-    image: campaignImage(categoryImages.get(category.id), i + 1),
-  }));
-
-  const spotlightImages = spotlightProduct?.images?.length
-    ? spotlightProduct.images.slice(0, 3).map(img => img.url)
-    : [];
-  const spotlightMainImage = '/home/1.png';
-  const spotlightDetail1 = '/home/2.jpg';
-  const spotlightDetail2 = '/home/3.jpg';
-
-  const testimonial = TESTIMONIALS[testiIndex];
-
-  /*
-   * Scroll reveals run in CSS wherever the browser supports scroll-driven
-   * animations. This covers the browsers that do not: it flags the root,
-   * which is what switches the hidden state on, then reveals each element
-   * once. Nothing here runs -- and nothing is ever hidden -- otherwise.
-   */
   useEffect(() => {
-    const root = pageRef.current;
+    const root = ref.current;
     if (!root) return;
+    const tiles = Array.from(root.querySelectorAll<HTMLElement>('[data-tile]'));
+    const show = (tile: HTMLElement) => tile.classList.add(styles.tileRevealed);
 
-    const nativeTimelines =
-      typeof CSS !== 'undefined' &&
-      typeof CSS.supports === 'function' &&
-      CSS.supports('animation-timeline: view()');
-
-    if (nativeTimelines || typeof IntersectionObserver === 'undefined') return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    root.setAttribute('data-js-reveal', '');
+    if (
+      typeof IntersectionObserver === 'undefined' ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      tiles.forEach(show);
+      return;
+    }
 
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
-          entry.target.setAttribute('data-revealed', '');
+          show(entry.target as HTMLElement);
           observer.unobserve(entry.target);
         }
       },
-      { rootMargin: '0px 0px -10% 0px', threshold: 0.08 },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.12 },
     );
-
-    root.querySelectorAll('[data-reveal]').forEach(node => observer.observe(node));
+    tiles.forEach(tile => observer.observe(tile));
     return () => observer.disconnect();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return ref;
+}
+
+function ProductTiles({ products, label }: { products: { product: ProductSummaryStorefront; image: string }[]; label: string }) {
+  const gridRef = useReveal([products]);
 
   return (
-    <div className={styles.page} ref={pageRef}>
-      <CampaignBanner offers={offers} />
-
-      {/* ---------------------------------- Signature pieces ---------------------------------- */}
-      <section className={styles.section}>
-        <div className={styles.container}>
-          <div className={styles.sectionHead} data-reveal>
-            <div>
-              <span className={styles.eyebrow}>Featured</span>
-              <h2 className={styles.h2}>Our Signature Pieces</h2>
-            </div>
-            <div className={styles.filterRow}>
-              {filters.map(f => (
-                <button
-                  key={f}
-                  type="button"
-                  className={`${styles.filterPill} ${activeFilter === f ? styles.active : ''}`}
-                  onClick={() => setActiveFilter(f)}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {signatureProducts.length > 0 ? (
-            <div className={styles.productGrid}>
-              {signatureProducts.map((product, i) => (
-                <Link
-                  key={product.id}
-                  href={`/single-product/${product.id}`}
-                  className={styles.productCard}
-                  data-reveal
-                  style={{ '--reveal-delay': `${i * 80}ms` } as CSSProperties}
-                >
-                  <div className={styles.productMedia}>
-                    {product.primary_image ? (
-                      <Image
-                        src={campaignImage(product.primary_image.url, i)}
-                        alt={product.primary_image.alt_text ?? product.name}
-                        width={480}
-                        height={520}
-                      />
-                    ) : (
-                      <div className={styles.productMediaEmpty}>No image yet</div>
-                    )}
-                  </div>
-                  <p className={styles.productName}>{product.name}</p>
-                  <p className={styles.productPrice}>{money(product)}</p>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className={styles.productPrice}>New pieces are on their way — check back soon.</p>
-          )}
-        </div>
-      </section>
-
-      {/* ---------------------------------- Category price grid ---------------------------------- */}
-      <section className={styles.section}>
-        <div className={styles.container}>
-          <div className={styles.sectionHead} data-reveal>
-            <div>
-              <span className={styles.eyebrow}>Our Collection</span>
-              <h2 className={styles.h2}>Shop by Category</h2>
-            </div>
-          </div>
-
-          <div className={styles.priceCardGrid}>
-            <div className={styles.introCard} data-reveal>
-              <h3 className={styles.introTitle}>Made to Be Worn Often</h3>
-              <p className={styles.introText}>
-                Each design reflects our commitment to timeless style, exceptional craftsmanship, and everyday
-                functionality.
-              </p>
-              <Link href="/shop-list" className={styles.pill}>
-                Shop Now
-                <span className={styles.pillIcon}>
-                  <ArrowRightIcon size={15} />
-                </span>
-              </Link>
-            </div>
-
-            {gridProducts.map((product, i) => (
-              <Link
-                key={product.id}
-                href={`/single-product/${product.id}`}
-                className={styles.priceCard}
-                data-reveal
-                style={{ '--reveal-delay': `${(i + 1) * 80}ms` } as CSSProperties}
-              >
-                <div className={styles.priceMedia}>
-                  <img src={campaignImage(product.primary_image?.url, i)} alt={product.name} />
-                </div>
-                <div className={styles.priceRow}>
-                  <span className={styles.priceName}>{product.name}</span>
-                  <span className={styles.priceValue}>{money(product)}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------- Spotlight ---------------------------------- */}
-      <section className={styles.section}>
-        <div className={styles.container}>
-          <div className={styles.spotlightHead} data-reveal>
-            <span className={styles.eyebrow}>New Collection</span>
-            <h2 className={styles.h2}>Designed to Last Beyond Trends</h2>
-            <hr className={styles.spotlightRule} />
-          </div>
-
-          <div className={styles.spotlightGrid}>
-            <div className={styles.spotlightModel} data-reveal="scale">
-              <img src={spotlightMainImage} alt={spotlightProduct?.name ?? 'Featured piece'} />
-            </div>
-
-            <div className={styles.spotlightDetails} data-reveal>
-              <div className={styles.spotlightDetail}>
-                <img src={spotlightDetail1} alt="" />
+    <section className={`${styles.tiles} ${styles.editorialWrap}`} aria-label={label}>
+      <div className={styles.tileGrid} ref={gridRef}>
+        {products.map(({ product, image }, i) => {
+          const tag = badge(product);
+          return (
+            <Link
+              key={product.id}
+              href={product.slug ? `/products/${encodeURIComponent(product.slug)}` : `/single-product/${product.id}`}
+              className={`${styles.tile} ${styles.tileReveal}`}
+              data-tile
+              style={{ '--col': i % 4 } as CSSProperties}
+            >
+              <div className={styles.tileMedia}>
+                {tag && <span className={styles.tileBadge}>{tag}</span>}
+                <Image
+                  src={image}
+                  alt={product.primary_image?.alt_text ?? product.name}
+                  fill
+                  sizes="(max-width: 991px) 50vw, 25vw"
+                  className={styles.tileImage}
+                />
               </div>
-              <div className={styles.spotlightDetail}>
-                <img src={spotlightDetail2} alt="" />
-              </div>
-            </div>
-
-            <div className={styles.spotlightInfo} data-reveal>
-              <p className={styles.spotlightCategory}>{spotlightProduct?.category.name ?? 'Featured Piece'}</p>
-              <h3 className={styles.spotlightTitle}>{spotlightProduct?.name ?? 'The Signature Piece'}</h3>
-              <p className={styles.spotlightPrice}>{spotlightProduct ? money(spotlightProduct) : '—'}</p>
-
-              <div className={styles.optionRow}>
-                <span className={styles.optionLabel}>Size: {size}</span>
-                <span className={styles.sizeGuide}>Size Guide</span>
-              </div>
-              <div className={styles.sizeRow}>
-                {sizes.map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    className={`${styles.sizeBtn} ${size === s ? styles.active : ''}`}
-                    onClick={() => setSize(s)}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-
-              <div className={styles.optionRow}>
-                <span className={styles.optionLabel}>Color: {colors[color]?.value ?? '--'}</span>
-              </div>
-              <div className={styles.colorRow}>
-                {colors.map((swatch, i) => (
-                  <button
-                    key={swatch.value}
-                    type="button"
-                    className={`${styles.colorSwatch} ${color === i ? styles.active : ''}`}
-                    onClick={() => setColor(i)}
-                    aria-label={swatch.value}
-                  >
-                    <img src={swatch.image} alt="" />
-                  </button>
-                ))}
-              </div>
-
-              <div className={styles.buyRow}>
-                <div className={styles.qtyStepper}>
-                  <button type="button" onClick={() => setQty(v => Math.max(1, v - 1))} aria-label="Decrease quantity">
-                    <MinusIcon />
-                  </button>
-                  <span>{qty}</span>
-                  <button type="button" onClick={() => setQty(v => v + 1)} aria-label="Increase quantity">
-                    <PlusIcon />
-                  </button>
-                </div>
-                <Link href={spotlightProduct ? `/single-product/${spotlightProduct.id}` : '/shop-list'} className={styles.addToCartBtn}>
-                  <BagIcon size={15} />
-                  Add to Cart
-                </Link>
-              </div>
-              <Link href={spotlightProduct ? `/single-product/${spotlightProduct.id}` : '/shop-list'} className={styles.buyItNowBtn}>
-                Buy It Now
-                <ArrowRightIcon size={15} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------- Category strip ---------------------------------- */}
-      <section className={styles.sectionTight}>
-        <div className={styles.container}>
-          <div className={styles.catStrip}>
-            {strip.map((cat, i) => (
-              <Link
-                key={cat.label}
-                href="/shop-list"
-                className={styles.catCard}
-                data-reveal
-                style={{ '--reveal-delay': `${i * 70}ms` } as CSSProperties}
-              >
-                <div className={styles.catImage}>
-                  <img src={cat.image} alt={cat.label} />
-                </div>
-                <span className={styles.catLabel}>{cat.label}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------- Testimonials ---------------------------------- */}
-      <section className={styles.section}>
-        <div className={styles.container}>
-          <div className={styles.testiGrid}>
-            <div className={styles.testiLeft}>
-              <span className={styles.eyebrow}>Testimonial</span>
-              <h2 className={`${styles.h2} ${styles.testiHeading}`}>What Our Customers Say</h2>
-
-              <div className={styles.testiTop}>
-                <div className={styles.testiSub}>
-                  <span>Loved by Women Across India</span>
-                  <div className={styles.testiRule} />
-                </div>
-                <div className={styles.testiArrows}>
-                  <button
-                    type="button"
-                    className={styles.btnCircle}
-                    onClick={() => setTestiIndex(v => (v - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
-                    aria-label="Previous testimonial"
-                  >
-                    <ChevronLeftIcon size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.btnCircleDark}
-                    onClick={() => setTestiIndex(v => (v + 1) % TESTIMONIALS.length)}
-                    aria-label="Next testimonial"
-                  >
-                    <ChevronRightIcon size={15} />
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.testiCard} data-reveal>
-                <div className={styles.testiThumb}>
-                  <img src={testimonial.thumb} alt={testimonial.name} />
-                </div>
-                <div className={styles.stars}>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <StarIcon key={i} size={14} />
-                  ))}
-                </div>
-                <p className={styles.testiQuote}>{testimonial.quote}</p>
-                <p className={styles.testiName}>{testimonial.name}</p>
-              </div>
-            </div>
-
-            <div className={styles.testiHero} data-reveal="scale">
-              <img src="/home/home1.jpg" alt="Customer wearing a Zeen printed churidar" />
-              <div className={styles.testiBadge}>
-                <span className={styles.testiBadgeNum}>15K+</span>
-                <span className={styles.testiBadgeText}>
-                  Satisfied
-                  <br />
-                  Customers
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------- Commitment ---------------------------------- */}
-      <section className={`${styles.section} ${styles.commitment}`}>
-        <div className={styles.container}>
-          <div className={styles.commitmentHead} data-reveal>
-            <span className={styles.eyebrow}>Our Commitment</span>
-            <h2 className={styles.h2}>Luxury Beyond the Product</h2>
-          </div>
-
-          <div className={styles.commitGrid}>
-            {COMMITMENTS.map((item, i) => (
-              <div
-                key={item.title}
-                className={styles.commitItem}
-                data-reveal
-                style={{ '--reveal-delay': `${i * 110}ms` } as CSSProperties}
-              >
-                <div className={styles.commitIcon}>
-                  <item.icon />
-                </div>
-                <h3 className={styles.commitTitle}>{item.title}</h3>
-                <p className={styles.commitText}>{item.text}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className={styles.commitStrip}>
-            <div className={styles.commitStripImg}>
-              <img src="/home/home2.jpg" alt="" />
-            </div>
-            <div className={styles.commitStripImg}>
-              <img src="/home/home4.jpg" alt="" />
-            </div>
-            <div className={styles.commitStripImg}>
-              <img src="/home/home6.jpg" alt="" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------- CTA ---------------------------------- */}
-      <div className={styles.ctaWrap} data-reveal>
-        <Link href="/shop-list" className={styles.pill}>
-          Shop Now
-          <span className={styles.pillIcon}>
-            <ArrowRightIcon size={15} />
-          </span>
-        </Link>
+              <p className={styles.tileName}>{product.name}</p>
+              <p className={styles.tilePrice}>{money(product)}</p>
+            </Link>
+          );
+        })}
       </div>
+    </section>
+  );
+}
+
+function CategoryCarousel({ items }: { items: { label: string; href: string; image: string }[] }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: true, end: false });
+
+  const measure = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    setEdges({
+      start: track.scrollLeft <= 2,
+      end: track.scrollLeft + track.clientWidth >= track.scrollWidth - 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure, items.length]);
+
+  const step = (direction: 1 | -1) => {
+    const track = trackRef.current;
+    const card = track?.firstElementChild as HTMLElement | null;
+    if (!track || !card) return;
+    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+    track.scrollBy({ left: direction * (card.offsetWidth + gap), behavior: 'smooth' });
+  };
+
+  return (
+    <section className={`${styles.categorySection} ${styles.editorialWrap}`} aria-labelledby="home-categories">
+      <div className={styles.categoryHead}>
+        <h2 id="home-categories" className={styles.editorialTitle}>
+          Categories
+        </h2>
+        <div className={styles.categoryArrows}>
+          <button type="button" className={styles.categoryArrow} onClick={() => step(-1)} disabled={edges.start} aria-label="Previous categories">
+            <ArrowLeftIcon size={16} />
+          </button>
+          <button type="button" className={styles.categoryArrow} onClick={() => step(1)} disabled={edges.end} aria-label="Next categories">
+            <ArrowRightIcon size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.categoryTrack} ref={trackRef} onScroll={measure}>
+        {items.map((item, i) => (
+          <Link key={`${item.label}-${i}`} href={item.href} className={styles.categoryCard}>
+            <Image src={item.image} alt="" fill sizes="(max-width: 991px) 45vw, 20vw" className={styles.categoryImage} />
+            <span className={styles.categoryLabel}>{item.label}</span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function HomeClient({
+  products,
+  categories,
+  offers,
+  hero,
+}: {
+  products: ProductSummaryStorefront[];
+  categories: CategoryStorefront[];
+  offers: Offer[];
+  hero: (StorefrontBannerItem & { title: string | null; subtitle: string | null }) | null;
+}) {
+  const [entered, setEntered] = useState(false);
+  const onIntroDone = useCallback(() => setEntered(true), []);
+
+  /* Only products with their own photograph are shown, each under that
+     photograph and linking to that product. */
+  const photographed = products.flatMap(product => {
+    const image = productImage(product);
+    return image ? [{ product, image }] : [];
+  });
+
+  /* Categories carry no image of their own, so each card borrows the photo
+     of a product filed under it -- and a category with no photographed
+     product is left out rather than shown under an unrelated picture. */
+  const categoryImages = new Map<string, string>();
+  for (const { product, image } of photographed) {
+    if (!categoryImages.has(product.category_id)) categoryImages.set(product.category_id, image);
+  }
+
+  const categoryItems = categories.length
+    ? categories.flatMap(category => {
+        const image = categoryImages.get(category.id);
+        return image
+          ? [{ label: category.name, href: collectionPath(categorySlug(category.name)), image }]
+          : [];
+      })
+    : CATEGORY_FALLBACK.map((label, i) => ({
+        label,
+        href: '/products',
+        image: CAMPAIGN_IMAGES[(i + 1) % CAMPAIGN_IMAGES.length],
+      }));
+
+  const edit = photographed.slice(0, 8);
+
+  return (
+    <div className={styles.editorialHome} data-editorial-home>
+      <HomeIntro onDone={onIntroDone} />
+      <CampaignBanner offers={offers} hero={hero} entered={entered} />
+      <CategoryCarousel items={categoryItems} />
+
+      <section className={`${styles.brandStatement} ${styles.editorialWrap}`} aria-label="About ZEEN">
+        <p className={styles.brandStatementText}>
+          <span>Where timeless Indian traditions meet</span>{' '}
+          <span>
+            contemporary elegance, <span className={styles.brandStatementAccent}>ZEEN</span> brings
+          </span>{' '}
+          <span>you styles that celebrate your individuality</span>{' '}
+          <span>and make every moment beautiful.</span>
+        </p>
+      </section>
+
+      <CampaignSplit />
+
+      {edit.length > 0 && <ProductTiles products={edit} label="More from the collection" />}
     </div>
   );
 }

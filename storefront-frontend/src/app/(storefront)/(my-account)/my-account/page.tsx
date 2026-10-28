@@ -1,12 +1,10 @@
 import { redirect } from 'next/navigation';
 
-import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
-import LuxeFooter from '@/components/luxe/LuxeFooter';
-import LuxeHeader from '@/components/luxe/LuxeHeader';
 import MobileBottomNav from '@/components/luxe/MobileBottomNav';
 import { addressApi } from '@/lib/api/addresses';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import { getAccessToken } from '@/lib/auth/session';
+import { signInUrl } from '@/lib/auth/sign-in-url';
 
 import MyProfile from './_components/MyProfile';
 
@@ -17,16 +15,14 @@ export const metadata = {
 
 export default async function MyAccountPage() {
   const [token, user] = await Promise.all([getAccessToken(), getCurrentUser()]);
-  if (!token || !user) redirect('/signin?next=/my-account');
+  if (!token || !user) redirect(signInUrl('/account'));
 
   const addresses = await addressApi.list(token).catch(() => []);
 
   return (
-    <div className={homeStyles.page}>
-      <LuxeHeader />
+    <>
       <MyProfile user={user} initialAddresses={addresses} />
-      <LuxeFooter />
       <MobileBottomNav />
-    </div>
+    </>
   );
 }

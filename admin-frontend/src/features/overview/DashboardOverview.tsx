@@ -136,7 +136,7 @@ function DashboardOverview() {
         if (next >= 0) { event.preventDefault(); setTab(TABS[next].value); document.getElementById(`${tabId}-${TABS[next].value}`)?.focus(); }
       }}>{item.label}</button>)}
     </div>
-    {overview.error && <p className="status status-error" role="alert">Dashboard data is unavailable: {overview.error}</p>}
+    {overview.error && <div className="status status-error" role="alert"><span>Dashboard data is unavailable: {overview.error}</span> <button type="button" className="link" onClick={overview.reload}>Try again</button></div>}
     {overview.loading && !d && <p className="state" role="status">Loading dashboard…</p>}
     {d && <>
       {tab === "overview" && <div role="tabpanel" id={`${tabId}-overview-panel`} aria-labelledby={`${tabId}-overview`} className="dashboard-overview-tab">

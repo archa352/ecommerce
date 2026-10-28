@@ -35,7 +35,7 @@ export default function PayNowButton({ request, className }: { request: OnlinePa
 
     // Outside any try: on success the action redirects back here, freshly
     // loaded, and that redirect must reach Next rather than a catch block.
-    const result = await confirmOnlinePayment(request.orderId, outcome.verification);
+    const result = await confirmOnlinePayment(request.orderNumber, outcome.verification);
     if (result.status === 'error') toast.error(result.message ?? 'We could not confirm your payment yet.');
     setBusy(false);
   }

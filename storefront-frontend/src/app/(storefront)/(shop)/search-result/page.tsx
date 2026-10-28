@@ -1,17 +1,27 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
-import CommonBanner2 from '@/components/CommonBanner2';
 import ProductCard from '@/elements/Shop/ProductCard';
 import { catalogueApi } from '@/lib/api/catalogue';
 import { searchApi } from '@/lib/api/search';
 import { getAccessToken } from '@/lib/auth/session';
 import type { ProductStorefront, ProductSummaryStorefront } from '@/types/catalogue';
 
+import styles from './SearchResults.module.css';
+import SearchForm from './SearchForm';
+
 const PAGE_SIZE = 24;
+
+export const metadata: Metadata = {
+  title: 'Search | ZEEN',
+  description: 'Search ZEEN products by name, category, brand, or keyword.',
+};
 
 function toSummary(product: ProductStorefront): ProductSummaryStorefront {
   return {
     id: product.id,
+    slug: product.slug,
     category_id: product.category.id,
     name: product.name,
     short_description: product.short_description,
@@ -20,18 +30,20 @@ function toSummary(product: ProductStorefront): ProductSummaryStorefront {
     primary_image: product.images.find(image => image.is_primary) ?? product.images[0] ?? null,
     price_from: product.price_from,
     price_to: product.price_to,
+    on_sale: product.on_sale,
     in_stock: product.in_stock,
   };
 }
 
-/**
- * The search results grid.
- *
- * `/storefront/search-products` carries no image, so each match is resolved
- * against `/storefront/products/{id}` for the card the rest of the site
- * uses -- and, when the shopper is signed in, this is also what records the
- * query in their search history.
- */
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.8" cy="10.8" r="6.8" />
+      <path d="m16 16 4.3 4.3" />
+    </svg>
+  );
+}
+
 export default async function SearchResultPage({
   searchParams,
 }: {
@@ -41,63 +53,108 @@ export default async function SearchResultPage({
   const query = q.trim();
   const page = Math.max(1, Number(pageParam ?? 1) || 1);
 
-  const token = await getAccessToken();
+  if (query !== q) {
+    redirect(query ? `/search-result?q=${encodeURIComponent(query)}` : '/search-result');
+  }
 
-  const results = query
-    ? await searchApi.searchProducts({ q: query, page, size: PAGE_SIZE }, token).catch(() => null)
-    : null;
+  let searchFailed = false;
+  let products: ProductSummaryStorefront[] = [];
+  let total = 0;
 
-  const detailed = results
-    ? await Promise.all(results.items.map(item => catalogueApi.getProduct(item.id).catch(() => null)))
-    : [];
+  if (query) {
+    try {
+      const token = await getAccessToken();
+      const results = await searchApi.searchProducts({ q: query, page, size: PAGE_SIZE }, token);
+      total = results.meta.total_items;
+      const detailed = await Promise.all(results.items.map(item => catalogueApi.getProduct(item.id)));
+      products = detailed.map(toSummary);
+    } catch {
+      searchFailed = true;
+    }
+  }
 
-  const products = detailed
-    .filter((item): item is ProductStorefront => item !== null)
-    .map(toSummary);
+  const heading = query ? `Search results for “${query}”` : 'Search ZEEN';
 
   return (
-    <>
-      <CommonBanner2
-        parentText="Home"
-        currentText="Search"
-        mainText={query ? `Results for "${query}"` : 'Search'}
-      />
+    <main className={styles.page}>
+      <div className={styles.container}>
+        <nav className={styles.breadcrumb} aria-label="Breadcrumb">
+          <Link href="/">Home</Link>
+          <span aria-hidden="true">/</span>
+          <Link href="/products">Shop</Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">Search</span>
+        </nav>
 
-      <div className="container py-5">
-        {!query && <p>Enter a search term to find products.</p>}
+        <header>
+          <h1 className={styles.heading}>{heading}</h1>
+          <p className={styles.subheading}>
+            Find your next favourite by product name, category, brand, or keyword.
+          </p>
+        </header>
 
-        {query && products.length === 0 && <p>No products matched &quot;{query}&quot;.</p>}
+        <SearchForm initialQuery={query} />
 
-        {products.length > 0 && (
-          <div className="row gx-xl-4 g-3">
-            {products.map(product => (
-              <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={product.id}>
-                <ProductCard product={product} />
-              </div>
-            ))}
-          </div>
+        {!query && (
+          <section className={styles.prompt} aria-live="polite">
+            <div className={styles.emptyMark}>
+              <SearchIcon />
+            </div>
+            <h2>What are you looking for?</h2>
+            <p>Try a product name, a category such as kurta, or a keyword like cotton.</p>
+          </section>
         )}
 
-        {results && results.meta.total_pages > 1 && (
-          <div className="d-flex justify-content-center gap-3 mt-5">
-            {page > 1 && (
-              <Link
-                href={`/search-result?q=${encodeURIComponent(query)}&page=${page - 1}`}
-                className="btn btn-secondary btnhover">
-                Previous
-              </Link>
+        {query && searchFailed && (
+          <section className={styles.error} role="alert">
+            <h2>We couldn’t load search results</h2>
+            <p>Please check your connection and try searching again.</p>
+          </section>
+        )}
+
+        {query && !searchFailed && (
+          <section aria-label="Search results" aria-live="polite">
+            <p className={styles.resultMeta}>
+              {total} {total === 1 ? 'product' : 'products'} found
+            </p>
+
+            {products.length === 0 ? (
+              <div className={styles.empty}>
+                <div className={styles.emptyMark}>
+                  <SearchIcon />
+                </div>
+                <h2>No products found</h2>
+                <p>We couldn’t find a match for “{query}”. Try another name, category, or keyword.</p>
+                <Link href="/products" className={styles.continueButton}>
+                  Continue Shopping
+                </Link>
+              </div>
+            ) : (
+              <div className={styles.grid}>
+                {products.map(product => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
             )}
 
-            {page < results.meta.total_pages && (
-              <Link
-                href={`/search-result?q=${encodeURIComponent(query)}&page=${page + 1}`}
-                className="btn btn-secondary btnhover">
-                Next
-              </Link>
+            {total > PAGE_SIZE && (
+              <nav className={styles.pagination} aria-label="Search result pages">
+                {page > 1 && (
+                  <Link href={`/search-result?q=${encodeURIComponent(query)}&page=${page - 1}`}>
+                    Previous
+                  </Link>
+                )}
+                <span>Page {page}</span>
+                {page * PAGE_SIZE < total && (
+                  <Link href={`/search-result?q=${encodeURIComponent(query)}&page=${page + 1}`}>
+                    Next
+                  </Link>
+                )}
+              </nav>
             )}
-          </div>
+          </section>
         )}
       </div>
-    </>
+    </main>
   );
 }

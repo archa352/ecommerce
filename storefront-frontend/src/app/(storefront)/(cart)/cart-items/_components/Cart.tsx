@@ -172,7 +172,7 @@ export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
   async function handleClearCart() {
     if (!window.confirm('Remove everything from your cart?')) return;
     await clearCart();
-    toast.info('Cart cleared');
+    toast.info('Your cart is now empty');
   }
 
   const total = preview ? preview.total_amount : cart.subtotal;
@@ -181,7 +181,7 @@ export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
     // Scoped to `homeStyles.page` so the reused Home/Listing classes below
     // (crumb, h2, pill, --ink/--line/etc tokens) render correctly, without
     // wrapping -- or restyling -- the page's own header/footer.
-    <div className={homeStyles.page}>
+    <div className={`${homeStyles.page} ${styles.page}`}>
       <section className={listingStyles.banner}>
         <div className={homeStyles.container}>
           <p className={listingStyles.crumb}>
@@ -209,7 +209,7 @@ export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
               </div>
               <p className={styles.emptyHeading}>Your cart is empty</p>
               <p className={styles.emptyText}>Looks like you haven&apos;t added anything yet.</p>
-              <Link href="/shop-list" className={homeStyles.pillOutline}>
+              <Link href="/products" className={homeStyles.pillOutline}>
                 Continue Shopping
               </Link>
             </div>
@@ -278,11 +278,8 @@ export default function Cart({ preview }: { preview: CheckoutPreview | null }) {
                   <span>{formatMoney(total, STOREFRONT_CURRENCY)}</span>
                 </div>
 
-                <Link href="/check-out" className={`${homeStyles.pill} ${styles.checkoutBtn}`}>
+                <Link href="/check-out" className={styles.checkoutBtn}>
                   Proceed to Checkout
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M4 12h16M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
                 </Link>
               </div>
             </div>

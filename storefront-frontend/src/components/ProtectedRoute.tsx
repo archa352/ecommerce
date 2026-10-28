@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { useAuth } from '@/context/AuthContext';
+import { signInUrl } from '@/lib/auth/sign-in-url';
 
 /**
  * A second gate for pages that need a signed-in shopper.
@@ -23,7 +24,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (!isSignedIn) {
-      router.replace(`/signin?next=${encodeURIComponent(pathname)}`);
+      router.replace(signInUrl(pathname));
     }
   }, [isSignedIn, pathname, router]);
 

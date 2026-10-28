@@ -28,9 +28,9 @@ export default function MobileBottomNav() {
 
   const items = [
     { href: '/', label: 'Home', Icon: HomeIcon },
-    { href: '/shop-list', label: 'Shop', Icon: BagIcon },
-    { href: '/shop-wishlist', label: 'Wishlist', Icon: HeartIcon, badge: wishlistCount },
-    { href: '/my-account', label: 'Account', Icon: UserIcon },
+    { href: '/products', label: 'Shop', Icon: BagIcon },
+    { href: '/wishlist', label: 'Wishlist', Icon: HeartIcon, badge: wishlistCount },
+    { href: '/account', label: 'Account', Icon: UserIcon },
   ];
 
   return (

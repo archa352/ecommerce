@@ -148,18 +148,18 @@ export async function placeOrder(_previous: CheckoutState, formData: FormData): 
     return toState(error);
   }
 
-  revalidatePath('/my-orders');
+  revalidatePath('/account/orders');
   revalidatePath('/cart-items');
   revalidatePath('/', 'layout');
 
   const payment = pendingOnlinePayment(order);
   if (payment) return { status: 'pay', message: null, payment };
 
-  redirect(`/order-success/${order.id}`);
+  redirect(`/order-confirmation/${encodeURIComponent(order.order_number)}`);
 }
 
 export async function confirmOnlinePayment(
-  orderId: string,
+  orderNumber: string,
   verification: RazorpayVerification,
 ): Promise<CheckoutState> {
   const token = await getActionAccessToken();
@@ -170,9 +170,9 @@ export async function confirmOnlinePayment(
     return toState(error);
   }
 
-  revalidatePath(`/order-success/${orderId}`);
-  revalidatePath('/my-orders');
-  redirect(`/order-success/${orderId}`);
+  revalidatePath(`/order-confirmation/${encodeURIComponent(orderNumber)}`);
+  revalidatePath('/account/orders');
+  redirect(`/order-confirmation/${encodeURIComponent(orderNumber)}`);
 }
 
 export async function cancelOrder(_previous: CheckoutState, formData: FormData): Promise<CheckoutState> {
@@ -188,7 +188,7 @@ export async function cancelOrder(_previous: CheckoutState, formData: FormData):
   }
 
   revalidatePath(`/order-success/${orderId}`);
-  revalidatePath('/my-orders');
+  revalidatePath('/account/orders');
   return { status: 'success', message: 'Order cancelled' };
 }
 
@@ -214,7 +214,7 @@ export async function placeOrderWithAddress(
   const couponCode = String(formData.get('coupon_code') ?? '').trim() || null;
   const idempotencyKey = String(formData.get('idempotency_key') ?? '') || crypto.randomUUID();
 
-  let orderId: string;
+  let orderNumber: string;
 
   try {
     const saved = await addressApi.create(token, address);
@@ -223,7 +223,7 @@ export async function placeOrderWithAddress(
       couponCode,
       idempotencyKey,
     });
-    orderId = order.id;
+    orderNumber = order.order_number;
   } catch (error) {
     return toState(error);
   }
@@ -232,7 +232,7 @@ export async function placeOrderWithAddress(
   revalidatePath('/cart-items');
   revalidatePath('/', 'layout');
 
-  redirect(`/order-success/${orderId}`);
+  redirect(`/order-confirmation/${encodeURIComponent(orderNumber)}`);
 }
 
 export async function previewCheckout(couponCode: string | null): Promise<CheckoutPreview | null> {

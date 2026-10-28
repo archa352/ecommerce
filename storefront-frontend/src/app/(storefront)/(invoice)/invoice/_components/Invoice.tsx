@@ -1,238 +1,189 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 
 import { formatDate, formatMoney } from '@/lib/format';
-import type { Order } from '@/types/orders';
+import { paymentMethodLabel } from '@/lib/payments/online';
+import type { InvoiceRead, Order } from '@/types/orders';
 
-/**
- * The seller block.
- *
- * The backend exposes no tenant profile to the storefront -- name, address
- * and GSTIN live nowhere an API can be asked for them -- so they are
- * configured here rather than invented per render.
- */
-const SELLER = {
-  name: 'Zeen',
-  address: '4th Floor, Cinnamon House, Kozhikode, Kerala 673001',
-  gstin: '32AACCA1234B1Z8',
-  email: 'billing@zeen.com',
-  phone: '+91 495 123 4567',
-};
+import styles from './Invoice.module.css';
 
-/** An invoice for one order, rendered from the order the backend holds. */
-export default function Invoice({ order }: { order: Order }) {
-  const [isPrinting, setIsPrinting] = useState(false);
+function safeFilename(value: string): string {
+  return value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, '-').replace(/-+/g, '-');
+}
 
-  const seller = SELLER;
-  const address = order.delivery_address;
-  const money = (amount: string) => formatMoney(amount, order.currency);
+function filenameFromHeader(header: string | null): string | null {
+  if (!header) return null;
+  const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = header.match(/filename="?([^";]+)"?/i)?.[1];
+  const value = encoded ? decodeURIComponent(encoded) : plain;
+  return value ? safeFilename(value) : null;
+}
 
-  const handleDownloadPdf = () => {
-    setIsPrinting(true);
+export default function Invoice({ order, invoice }: { order: Order; invoice: InvoiceRead }) {
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const money = (value: string) => formatMoney(value, invoice.currency);
+  const payments = order.payments?.length ? order.payments : order.payment ? [order.payment] : [];
+  const downloadUrl = `/order-details/${encodeURIComponent(order.id)}/invoice`;
 
-    setTimeout(() => {
-      window.print();
+  async function downloadPdf() {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const response = await fetch(downloadUrl, { credentials: 'same-origin' });
+      const contentType = response.headers.get('Content-Type') ?? '';
+      if (!response.ok || !contentType.toLowerCase().includes('application/pdf')) {
+        const normalizedContentType = contentType.toLowerCase();
+        const detail = normalizedContentType.includes('text/plain') || normalizedContentType.includes('application/json')
+          ? (await response.text()).slice(0, 400)
+          : '';
+        throw new Error(detail.trim() || 'The invoice PDF could not be downloaded. Please try again.');
+      }
 
-      setTimeout(() => {
-        setIsPrinting(false);
-      }, 500);
-    }, 100);
-  };
+      const blob = await response.blob();
+      const filename = filenameFromHeader(response.headers.get('Content-Disposition')) ?? `${safeFilename(invoice.invoice_number)}.pdf`;
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'The invoice PDF could not be downloaded. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
-    <div className="invoice-page">
-      {/* Actions */}
-      <div className="invoice-actions print:hidden">
-        <button type="button" onClick={handleDownloadPdf} disabled={isPrinting} className="invoice-download-button">
-          {isPrinting ? 'Preparing...' : 'Download PDF'}
+    <main className={`${styles.page} ${styles.invoicePage}`}>
+      <div className={styles.actions}>
+        <button type="button" onClick={downloadPdf} disabled={downloading} className={styles.primaryButton}>
+          {downloading ? 'Preparing invoice…' : 'Download PDF'}
         </button>
-
-        <button type="button" onClick={() => window.print()} className="invoice-print-button">
-          Print
-        </button>
+        <button type="button" onClick={() => window.print()} className={styles.outlineButton}>Print Invoice</button>
       </div>
+      {downloadError && <p className={styles.downloadError} role="alert">{downloadError}</p>}
 
-      {/* Invoice */}
-      <div className="invoice-sheet">
-        {/* Header */}
-        <div className="invoice-header">
-          <div className="invoice-brand">
-            <div className="invoice-brand-mark">
-              <span>Z</span>
-            </div>
-
-            <div>
-              <p className="invoice-seller-name">{seller.name}</p>
-
-              <p className="invoice-seller-email">{seller.email}</p>
-            </div>
+      <article className={styles.sheet}>
+        <header className={styles.invoiceHeader}>
+          <div className={styles.brand}>
+            <Image src="/images/zeen-wordmark.png" alt="ZEEN" width={150} height={30} priority />
+            {invoice.seller.name && <p>{invoice.seller.name}</p>}
+            {invoice.seller.gstin && <p>GSTIN {invoice.seller.gstin}</p>}
           </div>
-
-          <div className="invoice-title-block">
-            <h1 className="invoice-title">INVOICE</h1>
-
-            <p className="invoice-number invoice-mono">{order.order_number}</p>
+          <div className={styles.titleBlock}>
+            <p className={styles.eyebrow}>ZEEN · TAX INVOICE</p>
+            <h1>Invoice</h1>
+            <strong>{invoice.invoice_number}</strong>
           </div>
-        </div>
+        </header>
 
-        {/* Details */}
-        <div className="invoice-details-grid">
-          {/* Billed From */}
-          <div className="invoice-bill-container">
-            <div>
-              <p className="invoice-label">Billed from</p>
-
-              <p className="invoice-party-name">{seller.name}</p>
-
-              <p className="invoice-party-line">{seller.address}</p>
-
-              <p className="invoice-party-line">{seller.phone}</p>
-
-              <p className="invoice-gstin">GSTIN: {seller.gstin}</p>
-            </div>
-
-            {/* Billed To */}
-            <div>
-              <p className="invoice-label">Billed to</p>
-
-              <p className="invoice-party-name">{address.full_name}</p>
-
-              <p className="invoice-party-line">
-                {address.address_line_1}
-                {address.address_line_2 ? `, ${address.address_line_2}` : ''}
-              </p>
-
-              <p className="invoice-party-line">
-                {address.city}, {address.state} {address.postal_code}
-              </p>
-
-              <p className="invoice-party-line">{address.phone}</p>
-            </div>
+        <section className={styles.detailsGrid} aria-label="Invoice details">
+          <div className={styles.party}>
+            <h2>From</h2>
+            <strong>{invoice.seller.name ?? '—'}</strong>
+            {invoice.seller.address && <p>{invoice.seller.address}</p>}
+            {invoice.seller.state && <p>{invoice.seller.state}{invoice.seller.state_code ? ` · ${invoice.seller.state_code}` : ''}</p>}
+            {invoice.seller.gstin && <p>GSTIN {invoice.seller.gstin}</p>}
           </div>
-
-          {/* Invoice Details */}
-          <div>
-            <p className="invoice-label">Invoice details</p>
-
-            <div className="invoice-meta-grid">
-              <span className="invoice-meta-key">Order ID</span>
-
-              <span className="invoice-meta-value invoice-mono">{order.order_number}</span>
-
-              <span className="invoice-meta-key">Issued</span>
-
-              <span className="invoice-meta-value">{formatDate(order.created_at)}</span>
-
-              <span className="invoice-meta-key">Status</span>
-
-              <span className="invoice-meta-value">{order.status}</span>
-            </div>
+          <div className={styles.party}>
+            <h2>Bill to</h2>
+            <strong>{invoice.buyer.name ?? '—'}</strong>
+            {invoice.buyer.address && <p>{invoice.buyer.address}</p>}
+            {invoice.buyer.state && <p>{invoice.buyer.state}{invoice.buyer.state_code ? ` · ${invoice.buyer.state_code}` : ''}</p>}
+            {order.contact_email && <p>{order.contact_email}</p>}
           </div>
-
-          {/* Payment */}
-          <div>
-            <p className="invoice-label">Payment</p>
-
-            <span className="invoice-status-badge">
-              <span className="invoice-status-dot" />
-
-              {order.payment_status}
-            </span>
-
-            <p className="invoice-payment-method">
-              {order.payment ? order.payment.provider : 'Cash on delivery'}
-            </p>
+          <div className={styles.meta}>
+            <h2>Invoice information</h2>
+            <dl>
+              <div><dt>Invoice no.</dt><dd>{invoice.invoice_number}</dd></div>
+              <div><dt>Order no.</dt><dd>{invoice.order_number}</dd></div>
+              <div><dt>Invoice date</dt><dd>{formatDate(invoice.invoice_date)}</dd></div>
+              <div><dt>Order status</dt><dd>{invoice.order_status.replaceAll('_', ' ')}</dd></div>
+              {invoice.place_of_supply && <div><dt>Place of supply</dt><dd>{invoice.place_of_supply}</dd></div>}
+            </dl>
           </div>
-        </div>
+          <div className={styles.meta}>
+            <h2>Payment information</h2>
+            <dl>
+              <div><dt>Method</dt><dd>{paymentMethodLabel(order)}</dd></div>
+              <div><dt>Status</dt><dd>{order.payment_status.replaceAll('_', ' ')}</dd></div>
+              {payments.map((payment, index) => (
+                <div key={payment.id}>
+                  <dt>{payments.length > 1 ? `Payment ${index + 1}` : payment.provider.replaceAll('_', ' ')}</dt>
+                  <dd>{payment.status.replaceAll('_', ' ')} · {formatMoney(payment.amount, payment.currency)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
 
-        {/* Items */}
-        <div className="invoice-items-section">
-          <div className="invoice-table-scroll">
-            <table className="invoice-table">
+        <section className={styles.shipping} aria-label="Shipping address">
+          <h2>Ship to</h2>
+          <p><strong>{order.delivery_address.full_name}</strong> · {order.delivery_address.address_line_1}{order.delivery_address.address_line_2 ? `, ${order.delivery_address.address_line_2}` : ''}, {order.delivery_address.city}, {order.delivery_address.state} {order.delivery_address.postal_code}, {order.delivery_address.country}</p>
+          <p>{order.delivery_address.phone}</p>
+        </section>
+
+        <section className={styles.itemsSection} aria-label="Invoice items">
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
               <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Size</th>
-                  <th className="invoice-th-center">Qty</th>
-                  <th className="invoice-th-right">Price</th>
-                  <th className="invoice-th-right">Amount</th>
-                </tr>
+                <tr><th>Item / Variant</th><th>Qty</th><th>Unit price</th><th>Discount</th><th>Taxable</th><th>GST</th><th>Total</th></tr>
               </thead>
-
               <tbody>
-                {order.items.map(item => (
-                  <tr key={item.variant_id}>
-                    <td className="invoice-item-title">{item.product_name}</td>
-
-                    <td className="invoice-item-muted">{item.variant_name}</td>
-
-                    <td className="invoice-item-muted invoice-td-center">{item.quantity}</td>
-
-                    <td className="invoice-item-muted invoice-td-right invoice-mono">
-                      {money(item.unit_price)}
+                {invoice.lines.map((line, index) => (
+                  <tr key={`${line.sku ?? line.description}-${index}`}>
+                    <td className={styles.description}>
+                      <strong>{line.description}</strong>
+                      {(line.sku || line.hsn_code) && <small>{[line.sku && `SKU ${line.sku}`, line.hsn_code && `HSN ${line.hsn_code}`].filter(Boolean).join(' · ')}</small>}
                     </td>
-
-                    <td className="invoice-item-amount invoice-td-right invoice-mono">
-                      {money(item.subtotal)}
+                    <td>{line.quantity}</td>
+                    <td>{money(line.unit_price)}</td>
+                    <td>{money(line.discount)}</td>
+                    <td>{money(line.taxable_value)}</td>
+                    <td className={styles.gstCell}>
+                      {invoice.tax_split_known ? (
+                        <>{line.gst_rate}%<small>CGST {money(line.cgst_amount)}<br />SGST {money(line.sgst_amount)}<br />IGST {money(line.igst_amount)}</small></>
+                      ) : '—'}
                     </td>
+                    <td className={styles.amount}>{money(line.total)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </section>
 
-          {/* Totals */}
-          <div className="invoice-totals-row">
-            <div className="invoice-totals-box">
-              <div className="invoice-totals-line">
-                <span>Subtotal</span>
+        <section className={styles.bottomGrid}>
+          <p className={styles.taxNote}>
+            {invoice.tax_split_known ? `GST type: ${invoice.gst_type ?? '—'}` : 'GST component split is not available for this order.'}
+          </p>
+          <dl className={styles.totals}>
+            <div><dt>Subtotal</dt><dd>{money(invoice.totals.subtotal)}</dd></div>
+            <div><dt>Discount</dt><dd>−{money(invoice.totals.discount)}</dd></div>
+            <div><dt>Shipping</dt><dd>{money(invoice.totals.shipping)}</dd></div>
+            {Number(invoice.totals.cod_fee) > 0 && <div><dt>COD fee</dt><dd>{money(invoice.totals.cod_fee)}</dd></div>}
+            <div><dt>Taxable value</dt><dd>{money(invoice.totals.taxable_value)}</dd></div>
+            {invoice.tax_split_known && <>
+              <div><dt>CGST</dt><dd>{money(invoice.totals.cgst_amount)}</dd></div>
+              <div><dt>SGST</dt><dd>{money(invoice.totals.sgst_amount)}</dd></div>
+              <div><dt>IGST</dt><dd>{money(invoice.totals.igst_amount)}</dd></div>
+            </>}
+            <div><dt>Total tax</dt><dd>{money(invoice.totals.tax_amount)}</dd></div>
+            <div className={styles.grandTotal}><dt>Invoice total</dt><dd>{money(invoice.totals.total)}</dd></div>
+          </dl>
+        </section>
 
-                <span className="invoice-totals-value invoice-mono">{money(order.subtotal)}</span>
-              </div>
-
-              {Number(order.discount_amount) > 0 && (
-                <div className="invoice-totals-line">
-                  <span>Discount{order.coupon_code ? ` (${order.coupon_code})` : ''}</span>
-
-                  <span className="invoice-totals-value invoice-mono">−{money(order.discount_amount)}</span>
-                </div>
-              )}
-
-              <div className="invoice-totals-line">
-                <span>Shipping</span>
-
-                <span className="invoice-totals-value invoice-mono">
-                  {Number(order.shipping_amount) === 0 ? 'Free' : money(order.shipping_amount)}
-                </span>
-              </div>
-
-              <div className="invoice-totals-line">
-                <span>Tax</span>
-
-                <span className="invoice-totals-value invoice-mono">{money(order.tax_amount)}</span>
-              </div>
-
-              <div className="invoice-grand-total">
-                <span className="invoice-grand-total-label">Total</span>
-
-                <span className="invoice-grand-total-value invoice-mono">{money(order.total_amount)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="invoice-footer">
-          <div>
-            <p className="invoice-thanks">Thank you for your business.</p>
-
-            <p className="invoice-contact">Questions about this invoice? Contact {seller.email}</p>
-          </div>
-
-          <p className="invoice-footer-number invoice-mono">{order.order_number}</p>
-        </div>
-      </div>
-    </div>
+        <footer className={styles.invoiceFooter}>
+          <span>Thank you for shopping with ZEEN.</span>
+          <span>{invoice.invoice_number}</span>
+        </footer>
+      </article>
+    </main>
   );
 }

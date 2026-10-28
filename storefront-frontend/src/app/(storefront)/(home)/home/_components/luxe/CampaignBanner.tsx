@@ -1,167 +1,145 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
 
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
+import { mediaUrl } from '@/lib/media';
+import type { StorefrontBannerItem } from '@/types/cms';
 import type { Offer } from '@/types/orders';
 
 import styles from './CampaignBanner.module.css';
 
-/* The headline figure of an offer, split the way the banner sets it: a big
-   number with a short word turned on its side next to it ("40%" + "OFF"). */
-function offerFigure(offer: Offer): { figure: string; side: string } {
+const FALLBACK_ART = '/home/footer.png';
+const FALLBACK_HEADLINE = 'Festive Collection';
+const ANNOUNCEMENTS = [
+  'The festive edit — embroidered by hand, made for moments',
+  'Complimentary shipping across India on every order',
+];
+const ROTATE_MS = 4500;
+
+function offerCondition(offer: Offer): string {
+  if (offer.discount_type === 'BOGO') return `buy ${offer.buy_quantity}, get ${offer.get_quantity}`;
+  if (offer.first_order_only) return 'on your first order';
+  if (offer.min_order_amount && Number(offer.min_order_amount) > 0) {
+    return `over ${formatMoney(offer.min_order_amount, offer.currency).replace(/\.00$/, '')}`;
+  }
+  if (offer.min_quantity) return `on ${offer.min_quantity}+ items`;
+  if (offer.category_ids.length) return 'on selected styles';
+  return 'sitewide';
+}
+
+function offerFigure(offer: Offer): string {
   const value = Number(offer.discount_value);
   switch (offer.discount_type) {
     case 'PERCENTAGE':
-      return { figure: `${value}%`, side: 'off' };
+      return `${value}%`;
     case 'FIXED_AMOUNT':
-      return {
-        figure: new Intl.NumberFormat('en-IN', {
-          style: 'currency',
-          currency: offer.currency,
-          maximumFractionDigits: 0,
-        }).format(value),
-        side: 'off',
-      };
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: offer.currency,
+        maximumFractionDigits: 0,
+      }).format(value);
     case 'FREE_SHIPPING':
-      return { figure: 'Free', side: 'ship' };
+      return 'Free';
     case 'BOGO':
-      return value === 100
-        ? { figure: `${offer.buy_quantity}+${offer.get_quantity}`, side: 'free' }
-        : { figure: `${value}%`, side: 'off' };
+      return value === 100 ? `${offer.buy_quantity}+${offer.get_quantity}` : `${value}%`;
   }
 }
 
-/* The small line set above the figure: who or what the offer is for. */
-function offerLabel(offer: Offer): string {
-  if (offer.discount_type === 'BOGO') return `Buy ${offer.buy_quantity}, get ${offer.get_quantity}`;
-  if (offer.first_order_only) return 'First order';
-  if (offer.min_order_amount && Number(offer.min_order_amount) > 0) {
-    return `Over ${formatMoney(offer.min_order_amount, offer.currency).replace(/\.00$/, '')}`;
-  }
-  if (offer.min_quantity) return `${offer.min_quantity}+ items`;
-  if (offer.category_ids.length) return 'Selected styles';
-  return 'Sitewide';
+function offerUnit(offer: Offer): string {
+  return offer.discount_type === 'FREE_SHIPPING' ? 'shipping' : 'off';
 }
 
-function offerTerms(offers: Offer[]): string {
-  const endings = offers
-    .flatMap(offer => (offer.expires_at ? [`${offerLabel(offer)} ends ${formatDate(offer.expires_at)}`] : []));
-  return ['No code needed. The best eligible offer applies automatically at checkout.', ...endings].join(' · ');
+function announcement(offer: Offer): string {
+  return `${offerFigure(offer)} ${offerUnit(offer)} ${offerCondition(offer)}${offer.code ? ` — use code ${offer.code}` : ''}`;
 }
 
-function Figure({ offer, small = false }: { offer: Offer; small?: boolean }) {
-  const { figure, side } = offerFigure(offer);
+/** The headline with each letter wrapped so it can fade in on its own beat. */
+function Letters({ text }: { text: string }) {
+  let index = 0;
+  const words = text.split(' ');
   return (
-    <span className={`${styles.figure} ${small ? styles.figureSmall : ''}`}>
-      <span className={styles.figureValue}>{figure}</span>
-      <span className={styles.figureSide}>{side}</span>
-    </span>
+    <>
+      {words.map((word, w) => (
+        <span key={w} style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
+          {Array.from(word).map(char => {
+            const i = index++;
+            return (
+              <span key={i} className={styles.heroLetter} style={{ '--i': i } as CSSProperties}>
+                {char}
+              </span>
+            );
+          })}
+          {w < words.length - 1 && ' '}
+        </span>
+      ))}
+    </>
   );
 }
 
-/* With no live offers the band still runs, carrying the campaign lines. */
-const TICKER_LINES = ['New festive arrivals', 'Made for moments', 'Embroidered by hand'];
+/**
+ * Announcement bar and editorial hero.
+ *
+ * A campaign image from the CMS takes over the frame; otherwise the house
+ * lineup shot carries the page with the headline in the clear band above it.
+ * Live offers drive both the rotating announcement and the promo corner.
+ */
+export function CampaignBanner({ offers, hero, entered }: {
+  offers: Offer[];
+  hero: (StorefrontBannerItem & { title: string | null; subtitle: string | null }) | null;
+  entered: boolean;
+}) {
+  const cmsImage = mediaUrl(hero?.image_url);
+  const mobileImageUrl = mediaUrl(hero?.mobile_image_url);
+  const headline = hero?.heading ?? hero?.title ?? FALLBACK_HEADLINE;
+  const lines = offers.length > 0 ? offers.map(announcement) : ANNOUNCEMENTS;
+  const [line, setLine] = useState(0);
 
-function TickerGroup({ offers, duplicate = false }: { offers: Offer[]; duplicate?: boolean }) {
+  useEffect(() => {
+    if (lines.length < 2) return;
+    const id = window.setInterval(() => setLine(i => (i + 1) % lines.length), ROTATE_MS);
+    return () => window.clearInterval(id);
+  }, [lines.length]);
+
+  const promoLink = hero?.link_url ?? '/products';
+
   return (
-    <div className={styles.tickerGroup} aria-hidden={duplicate || undefined}>
-      {offers.length > 0
-        ? offers.map(offer => (
-            <span className={styles.tickerOffer} key={offer.code}>
-              <span className={styles.tickerLabel}>{offerLabel(offer)}</span>
-              <Figure offer={offer} small />
+    <section className={entered ? styles.entered : undefined} aria-label="ZEEN festive campaign">
+      <div className={styles.announce}>
+        <div className={styles.announceInner}>
+          <p className={styles.announceText} aria-live="polite">
+            <span key={line} className={styles.announceRotor}>
+              {lines[line % lines.length]}
             </span>
-          ))
-        : TICKER_LINES.map(line => (
-            <span className={styles.tickerLabel} key={line}>{line}</span>
-          ))}
-      <span className={styles.tickerBrand}>The festive edit</span>
-    </div>
-  );
-}
+          </p>
+        </div>
+      </div>
 
-export function CampaignBanner({ offers }: { offers: Offer[] }) {
-  const [paused, setPaused] = useState(false);
-  const featured = offers.slice(0, 3);
-
-  return (
-    <section className={styles.campaign} aria-labelledby="campaign-title">
-      <div className={styles.stage}>
-        <div className={styles.imageWrap}>
+      <div className={styles.hero}>
+        <picture className={`${styles.heroArt} ${cmsImage ? styles.heroArtCms : styles.heroArtFallback} ${mobileImageUrl ? styles.heroArtMobile : ''}`}>
+          {mobileImageUrl && <source media="(max-width: 720px)" srcSet={mobileImageUrl} />}
           <Image
-            src="/images/banner.png"
-            alt="Two friends sharing a moment in embroidered Zeen ethnic wear."
+            src={cmsImage ?? FALLBACK_ART}
+            alt={hero?.alt_text ?? 'Six women in embroidered ZEEN kurta sets standing together.'}
             fill
-            className={styles.artworkImage}
-            sizes="(max-width: 720px) 100vw, 60vw"
             priority
+            sizes="100vw"
+            className={styles.heroImage}
+            unoptimized={Boolean(cmsImage)}
           />
-        </div>
+        </picture>
 
-        <div className={styles.content}>
-          <div className={styles.titleMark}>
-            <svg className={styles.ring} viewBox="0 0 120 120" aria-hidden="true">
-              <defs>
-                <path id="campaign-ring" d="M60 60 m-44 0 a44 44 0 1 1 88 0 a44 44 0 1 1 -88 0" />
-              </defs>
-              <text>
-                <textPath href="#campaign-ring">Zeen · Made for moments · Zeen · Made for moments ·</textPath>
-              </text>
-            </svg>
-            <h1 id="campaign-title" className={styles.title}>
-              Festive<br />edit
-            </h1>
-          </div>
+        <h1 className={`${styles.heroHeadline} ${cmsImage ? styles.heroHeadlineCms : ''}`} aria-label={headline}>
+          <span aria-hidden="true">
+            <Letters text={headline} />
+          </span>
+        </h1>
 
-          {featured.length > 0 ? (
-            <ul
-              className={styles.offers}
-              style={{ '--count': featured.length } as CSSProperties}
-              aria-label="Current offers"
-            >
-              {featured.map(offer => (
-                <li key={offer.code} className={styles.offer}>
-                  <span className={styles.offerLabel}>{offerLabel(offer)}</span>
-                  <Figure offer={offer} />
-                  <Link href="/shop-list" className={styles.offerButton}>
-                    Shop now
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.intro}>Everyday ease. A little celebration. Discover styles that feel like you.</p>
-          )}
-
-          {featured.length > 0 ? (
-            <p className={styles.terms}>{offerTerms(featured)}</p>
-          ) : (
-            <Link href="/shop-list" className={styles.offerButton}>
-              Explore the collection
-            </Link>
-          )}
-        </div>
-
-        <div className={styles.ticker} aria-label={offers.length > 0 ? 'Current offers' : 'Campaign highlights'}>
-          <div className={`${styles.tickerTrack} ${paused ? styles.paused : ''}`}>
-            <TickerGroup offers={offers} />
-            <TickerGroup offers={offers} duplicate />
-          </div>
-          <button
-            type="button"
-            className={styles.tickerControl}
-            onClick={() => setPaused(value => !value)}
-            aria-label={paused ? 'Play' : 'Pause'}
-            aria-pressed={paused}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              {paused ? <path d="M5 2.5 13 8l-8 5.5Z" /> : <path d="M4 3h3v10H4zm5 0h3v10H9z" />}
-            </svg>
-          </button>
-        </div>
+        <a className={styles.heroPromo} href={promoLink} aria-label="Timeless elegance. Limitless style.">
+          <span>TIMELESS ELEGANCE.</span>
+          <span>LIMITLESS STYLE.</span>
+        </a>
       </div>
     </section>
   );

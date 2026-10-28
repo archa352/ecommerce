@@ -1,94 +1,98 @@
+'use client';
+
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
 
 import styles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
-import {
-  InstagramIcon,
-  TikTokIcon,
-  XSocialIcon,
-} from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
 
-const FOOTER_COLUMNS = [
-  {
-    title: 'Shop',
-    links: [
-      { label: 'New Arrivals', href: '/shop-list' },
-      { label: 'Collections', href: '/shop-list' },
-      { label: 'Best Sellers', href: '/shop-list' },
-      { label: 'Gift Cards', href: '/our-gift-vouchers' },
-    ],
-  },
-  {
-    title: 'About',
-    links: [
-      { label: 'Our Story', href: '/about-us' },
-      { label: 'Sustainability', href: '/about-us' },
-      { label: 'Journal', href: '/blog-list-no-sidebar' },
-      { label: 'Contact Us', href: '/contact-us-1' },
-    ],
-  },
-  {
-    title: 'Customer Care',
-    links: [
-      { label: 'Shipping & Returns', href: '/faqs-1' },
-      { label: 'FAQs', href: '/faqs-1' },
-      { label: 'Product Care', href: '/faqs-1' },
-      { label: 'Track Order', href: '/my-orders' },
-    ],
-  },
+const SHOP_LINKS = [
+  { label: 'New Arrivals', href: '/products' },
+  { label: 'Collections', href: '/products' },
+  { label: 'Best Sellers', href: '/products' },
+  { label: 'Gift Cards', href: '/our-gift-vouchers' },
+  { label: 'Wishlist', href: '/wishlist' },
+  { label: 'Track Order', href: '/account/orders' },
 ];
 
-/** The Zeen footer, shared by every page in the luxe design system. See LuxeHeader for why it's a copy, not an import, of the Home page's own markup. */
-export default function LuxeFooter() {
-  return (
-    <footer className={styles.footer}>
-      <div className={styles.container}>
-        <div className={styles.footerTop}>
-          <div>
-            <p className={styles.footerBrand}>ZEEN</p>
-            <p className={styles.footerTagline}>
-              Everyday and ethnic wear for women, cut in considered fabrics with careful finishing and
-              quiet modern ease.
-            </p>
-            <div className={styles.footerSocials}>
-              <a href="#" aria-label="X (Twitter)">
-                <XSocialIcon size={21} />
-              </a>
-              <a href="#" aria-label="Instagram">
-                <InstagramIcon size={22} />
-              </a>
-              <a href="#" aria-label="TikTok">
-                <TikTokIcon size={21} />
-              </a>
-            </div>
-          </div>
+const ABOUT_LINKS = [
+  { label: 'Our Story', href: '/about-us' },
+  { label: 'Sustainability', href: '/about-us' },
+  { label: 'Journal', href: '/blog-list-no-sidebar' },
+  { label: 'FAQs', href: '/faqs-1' },
+  { label: 'Shipping & Returns', href: '/faqs-1' },
+  { label: 'Account', href: '/account' },
+];
 
-          {FOOTER_COLUMNS.map((col, i) => (
-            <div
-              key={col.title}
-              className={styles.footerCol}
-              data-reveal
-              style={{ '--reveal-delay': `${(i + 1) * 90}ms` } as CSSProperties}
-            >
-              <p className={styles.footerColTitle}>{col.title}</p>
-              <ul>
-                {col.links.map(link => (
-                  <li key={link.label}>
-                    <Link href={link.href}>{link.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+/** Payment options the storefront checkout already offers. */
+const PAYMENTS = ['UPI', 'Cards', 'Net Banking', 'Wallets', 'Cash on Delivery'];
+
+/**
+ * The home page's footer: a concise contact note above the existing link
+ * columns, closed by the ZEEN lockup in Champagne Gold.
+ */
+function HomeFooter() {
+  return (
+    <footer className={styles.homeFooter}>
+      <div className={styles.footerContact}>
+        <p className={styles.footerContactQuestion}>Have any questions or concerns?</p>
+        <p className={styles.footerContactCopy}>
+          For any assistance, reach out to us at{' '}
+          <a href="mailto:zeen@gmail.com" className={styles.footerContactEmail}>
+            zeen@gmail.com
+          </a>
+          .
+        </p>
       </div>
 
-      <div className={styles.footerImage}>
-        <img src="/home/footer.png" alt="Women wearing the Zeen collection" />
-        <span className={styles.footerWatermark} aria-hidden="true">
-          ZEEN
+      <div className={styles.footerGrid}>
+        <div>
+          <p className={styles.footerLabel}>Contact</p>
+          <p className={styles.footerBig}>
+            <Link href="/contact-us-1">Write to the ZEEN studio</Link>
+          </p>
+          <p className={styles.footerLabel}>Social</p>
+          <p className={styles.footerBig}>
+            <a href="#">Instagram</a> / <a href="#">X</a> / <a href="#">TikTok</a>
+          </p>
+        </div>
+        <ul className={styles.footerLinks}>
+          {SHOP_LINKS.map(link => (
+            <li key={link.label}>
+              <Link href={link.href}>{link.label}</Link>
+            </li>
+          ))}
+        </ul>
+        <ul className={styles.footerLinks}>
+          {ABOUT_LINKS.map(link => (
+            <li key={link.label}>
+              <Link href={link.href}>{link.label}</Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className={styles.footerBottom}>
+        <span className={styles.footerLogoLockup} role="img" aria-label="ZEEN">
+          <span className={styles.footerLogoSymbol} />
+          <span className={styles.footerLogoWordmark} />
         </span>
+        <div>
+          <p className={styles.footerLabel}>We accept</p>
+          <ul className={styles.footerPayments}>
+            {PAYMENTS.map(method => (
+              <li key={method}>{method}</li>
+            ))}
+          </ul>
+        </div>
+        <div className={styles.footerLegal}>
+          <p className={styles.footerLabel}>Legal</p>
+          <Link href="/faqs-1">Privacy policy</Link>
+        </div>
       </div>
     </footer>
   );
+}
+
+/** The Zeen footer, shared by every page in the luxe design system. See LuxeHeader for why it's a copy, not an import, of the Home page's own markup. */
+export default function LuxeFooter() {
+  return <HomeFooter />;
 }

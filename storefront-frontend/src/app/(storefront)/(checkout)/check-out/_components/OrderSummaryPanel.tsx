@@ -7,16 +7,26 @@ import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { CartItem } from '@/types/cart';
-import type { CheckoutPreview } from '@/types/orders';
+import type { CheckoutPreview, Offer } from '@/types/orders';
 
 import styles from './Checkout.module.css';
 
-// Mock list of available coupons (Replace or connect with backend API as required)
-const AVAILABLE_COUPONS = [
-  { code: 'WELCOME10', description: 'Get 10% off on your first purchase' },
-  { code: 'FREESHIP', description: 'Free shipping on orders above ₹499' },
-  { code: 'FESTIVE20', description: '20% discount on all orders' },
-];
+function offerDescription(offer: Offer): string {
+  const minimum = offer.min_order_amount
+    ? ` on orders above ${formatMoney(offer.min_order_amount, offer.currency)}`
+    : '';
+
+  switch (offer.discount_type) {
+    case 'PERCENTAGE':
+      return `${offer.discount_value}% off${minimum}`;
+    case 'FIXED_AMOUNT':
+      return `${formatMoney(offer.discount_value, offer.currency)} off${minimum}`;
+    case 'FREE_SHIPPING':
+      return `Free shipping${minimum}`;
+    case 'BOGO':
+      return `Buy ${offer.buy_quantity ?? 1}, get ${offer.get_quantity ?? 1} with ${offer.discount_value}% off${minimum}`;
+  }
+}
 
 function CheckIcon() {
   return (
@@ -100,6 +110,7 @@ function SupportIcon() {
 export default function OrderSummaryPanel({
   cartItems,
   preview,
+  availableOffers,
   couponInput,
   onCouponInputChange,
   onApplyCoupon,
@@ -113,6 +124,7 @@ export default function OrderSummaryPanel({
 }: {
   cartItems: CartItem[];
   preview: CheckoutPreview | null;
+  availableOffers: Offer[];
   couponInput: string;
   onCouponInputChange: (value: string) => void;
   onApplyCoupon: () => void;
@@ -332,11 +344,13 @@ export default function OrderSummaryPanel({
               </button>
             </div>
             <div className={styles.couponList}>
-              {AVAILABLE_COUPONS.map(coupon => (
+              {availableOffers.length === 0 ? (
+                <p className={styles.couponDescText}>No active coupons are available right now.</p>
+              ) : availableOffers.map(coupon => (
                 <div key={coupon.code} className={styles.couponCardItem}>
                   <div>
                     <strong className={styles.couponCodeText}>{coupon.code}</strong>
-                    <p className={styles.couponDescText}>{coupon.description}</p>
+                    <p className={styles.couponDescText}>{offerDescription(coupon)}</p>
                   </div>
                   <button
                     type="button"

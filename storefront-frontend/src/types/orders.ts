@@ -2,11 +2,17 @@ export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
   | 'PROCESSING'
+  | 'PACKED'
   | 'SHIPPED'
+  | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'RETURN_REQUESTED'
+  | 'RETURNED'
+  | 'REFUNDED';
 
-export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+/** PARTIALLY_PAID: a cash order whose advance is paid, with the balance still due. */
+export type PaymentStatus = 'PENDING' | 'PARTIALLY_PAID' | 'PAID' | 'FAILED' | 'REFUNDED';
 
 /**
  * How the money arrives: cash at the door, an advance recorded by the store,
@@ -30,11 +36,16 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 /** Which status an order may move to next. Mirrors ALLOWED_TRANSITIONS. */
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   PENDING: ['CONFIRMED', 'PROCESSING', 'CANCELLED'],
-  CONFIRMED: ['PROCESSING', 'CANCELLED'],
-  PROCESSING: ['SHIPPED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED'],
+  CONFIRMED: ['PROCESSING', 'PACKED', 'CANCELLED'],
+  PROCESSING: ['PACKED', 'SHIPPED', 'CANCELLED'],
+  PACKED: ['SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
+  SHIPPED: ['OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'RETURNED'],
   DELIVERED: [],
   CANCELLED: [],
+  RETURN_REQUESTED: [],
+  RETURNED: [],
+  REFUNDED: [],
 };
 
 export interface Payment {
@@ -90,6 +101,14 @@ export interface OrderItem {
   quantity: number;
   unit_price: string;
   subtotal: string;
+  /** This line's share of the order discount, when the order was priced line by line. */
+  discount_amount?: string | null;
+}
+
+export interface Shipment {
+  courier_name: string | null;
+  tracking_number: string | null;
+  tracking_url: string | null;
 }
 
 export interface Order {
@@ -102,8 +121,12 @@ export interface Order {
   coupon_code: string | null;
   discount_amount: string;
   shipping_amount: string;
+  /** Extra charged for paying cash. */
+  cod_fee?: string;
   tax_amount: string;
   total_amount: string;
+  /** The part of a cash order's total payable online up front. */
+  advance_amount?: string;
   currency: string;
   payment_method?: PaymentMethod;
   /** Whether the shopper may cancel it now. The backend decides; it also enforces it. */
@@ -112,7 +135,83 @@ export interface Order {
   /** Every payment on the order, e.g. a COD advance alongside the balance. */
   payments?: Payment[];
   delivery_address: DeliveryAddress;
+  contact_email?: string | null;
+  estimated_delivery_date?: string | null;
+  shipment?: Shipment;
+  return_reason?: string | null;
+  return_note?: string | null;
   created_at: string;
+}
+
+export type TrackingSource = 'SYSTEM' | 'ADMIN' | 'COURIER';
+
+export interface TrackingEvent {
+  status: OrderStatus | null;
+  description: string;
+  location: string | null;
+  source: TrackingSource;
+  occurred_at: string;
+}
+
+/** `GET /orders/{id}/tracking`: the order's recorded history, oldest first. */
+export interface OrderTracking {
+  order_number: string;
+  status: OrderStatus;
+  estimated_delivery_date: string | null;
+  shipment: Shipment;
+  events: TrackingEvent[];
+}
+
+export interface InvoiceParty {
+  name: string | null;
+  gstin: string | null;
+  address: string | null;
+  state: string | null;
+  state_code: string | null;
+}
+
+export interface InvoiceLine {
+  description: string;
+  sku: string | null;
+  hsn_code: string | null;
+  quantity: number;
+  unit_price: string;
+  discount: string;
+  taxable_value: string;
+  gst_rate: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  total: string;
+}
+
+export interface InvoiceTotals {
+  subtotal: string;
+  discount: string;
+  shipping: string;
+  cod_fee: string;
+  taxable_value: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  tax_amount: string;
+  total: string;
+}
+
+/** Exact invoice lines and totals returned by GET /orders/{id}/invoice. */
+export interface InvoiceRead {
+  invoice_number: string;
+  invoice_date: string;
+  order_number: string;
+  order_status: OrderStatus;
+  gst_type: string | null;
+  tax_split_known: boolean;
+  place_of_supply: string | null;
+  seller: InvoiceParty;
+  buyer: InvoiceParty;
+  lines: InvoiceLine[];
+  totals: InvoiceTotals;
+  currency: string;
 }
 
 /** A row in a list of orders. Carries no items, so listings stay cheap. */
@@ -123,6 +222,8 @@ export interface OrderSummary {
   payment_status: PaymentStatus;
   total_amount: string;
   currency: string;
+  payment_method?: PaymentMethod;
+  tracking_number?: string | null;
   created_at: string;
 }
 

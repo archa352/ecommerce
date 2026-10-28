@@ -3,59 +3,65 @@
 import Link from 'next/link';
 
 import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
-import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
-import { useWishlist } from '@/context/WishlistContext';
+import collectionStyles from '@/app/(storefront)/(shop)/collections/_components/Collection.module.css';
+import CollectionCard from '@/app/(storefront)/(shop)/collections/_components/CollectionCard';
+import type { ProductSummaryStorefront } from '@/types/catalogue';
+import type { WishlistItem } from '@/types/cart';
 
-import wishlistStyles from './luxe/Wishlist.module.css';
+import { useWishlist } from '@/context/WishlistContext';
 import WishlistCard from './luxe/WishlistCard';
 
-/**
- * The Wishlist page's content, styled to the same Zeen design system
- * as the Product Listing page (reusing its banner/breadcrumb and card media
- * classes directly -- see Wishlist.module.css). Real data throughout:
- * `wishlist` comes from `WishlistContext`, which the layout seeds from the
- * backend and every mutation (add/remove/toggle) keeps in sync with --
- * nothing here is mocked or static.
- */
-export default function ShopWishList() {
+export interface WishlistProductCardData {
+  itemId: string;
+  product: ProductSummaryStorefront;
+  colors: string[];
+}
+
+export default function ShopWishList({ products }: { products: WishlistProductCardData[] }) {
   const { wishlist } = useWishlist();
+  const productByItemId = new Map(products.map(product => [product.itemId, product]));
 
   return (
-    <>
-      <section className={listingStyles.banner}>
-        <div className={homeStyles.container}>
-          <p className={listingStyles.crumb}>
-            <Link href="/">Home</Link>
-            <span>/</span>
-            <span aria-current="page">Wishlist</span>
-          </p>
-          <h1 className={homeStyles.h2}>Wishlist</h1>
-          <p className={listingStyles.subtitle}>
-            {wishlist.items.length === 0
-              ? 'Nothing saved yet.'
-              : `${wishlist.items.length} saved item${wishlist.items.length === 1 ? '' : 's'}.`}
-          </p>
-        </div>
+    <main className={`${homeStyles.page} ${collectionStyles.page}`}>
+      <section className={`${homeStyles.container} ${collectionStyles.intro}`}>
+        <nav className={collectionStyles.crumb} aria-label="Breadcrumb">
+          <Link href="/">Home</Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">Wishlist</span>
+        </nav>
+        <h1 className={collectionStyles.title}>Wishlist</h1>
+        <p className={collectionStyles.description}>
+          {wishlist.item_count} saved {wishlist.item_count === 1 ? 'item' : 'items'}
+        </p>
       </section>
 
-      <section className={wishlistStyles.listingSection}>
-        <div className={homeStyles.container}>
-          {wishlist.items.length === 0 ? (
-            <div className={wishlistStyles.emptyState}>
-              <p>Your wishlist is empty.</p>
-              <Link href="/shop-list" className={homeStyles.pillOutline}>
-                Continue Shopping
-              </Link>
-            </div>
-          ) : (
-            <div className={wishlistStyles.grid}>
-              {wishlist.items.map(item => (
+      <section className={`${homeStyles.container} ${collectionStyles.listing}`} aria-label="Wishlist products">
+        {wishlist.items.length === 0 ? (
+          <div className={collectionStyles.empty}>
+            <p>Your wishlist is empty.</p>
+            <Link href="/products" className={collectionStyles.outlineButton}>
+              Continue Shopping
+            </Link>
+          </div>
+        ) : (
+          <div className={collectionStyles.grid}>
+            {wishlist.items.map((item: WishlistItem, index) => {
+              const productCard = productByItemId.get(item.id);
+              return productCard ? (
+                <CollectionCard
+                  key={item.id}
+                  product={productCard.product}
+                  colors={productCard.colors}
+                  priority={index < 4}
+                  wishlistItem={item}
+                />
+              ) : (
                 <WishlistCard key={item.id} item={item} />
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
-    </>
+    </main>
   );
 }

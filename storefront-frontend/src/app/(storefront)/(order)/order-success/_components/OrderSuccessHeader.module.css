@@ -18,7 +18,7 @@
 .logo {
   grid-area: logo;
   justify-self: center;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Montserrat, Helvetica, sans-serif;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.3em;

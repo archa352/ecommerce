@@ -12,6 +12,7 @@ interface DataTableProps<T> {
   rows: T[] | null;
   loading?: boolean;
   error?: string | null;
+  onRetry?: () => void;
   empty?: string;
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
@@ -19,8 +20,10 @@ interface DataTableProps<T> {
 }
 
 // A plain table with loading, error and empty states built in.
-function DataTable<T>({ columns, rows, loading, error, empty = "Nothing here yet.", rowKey, onRowClick, rowProps }: DataTableProps<T>) {
-  if (error) return <div className="status status-error">{error}</div>;
+function DataTable<T>({ columns, rows, loading, error, onRetry, empty = "Nothing here yet.", rowKey, onRowClick, rowProps }: DataTableProps<T>) {
+  if (error) return <div className="status status-error" role="alert">
+    <span>{error}</span>{onRetry && <> <button type="button" className="link" onClick={onRetry}>Try again</button></>}
+  </div>;
   if (loading && !rows) return <div className="state">Loading…</div>;
   if (!rows || rows.length === 0) return <div className="state muted">{empty}</div>;
   return (

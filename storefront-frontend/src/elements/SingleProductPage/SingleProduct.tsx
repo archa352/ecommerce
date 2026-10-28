@@ -9,6 +9,7 @@ import { useWishlist } from '@/context/WishlistContext';
 import { mediaUrl } from '@/lib/media';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney, formatPriceRange } from '@/lib/format';
+import { sizeLabel } from '@/lib/catalogue/size';
 import type { ProductStorefront, ProductSummaryStorefront, VariantStorefront } from '@/types/catalogue';
 
 import homeStyles from '@/app/(storefront)/(home)/home/_components/luxe/Home.module.css';
@@ -105,8 +106,8 @@ const SingleProduct = ({ product, rating, related }: Props) => {
       return;
     }
 
-    await addToCart(variant.id, quantity);
-    setMessage('Added to your cart');
+    const failure = await addToCart(variant.id, quantity);
+    setMessage(failure ?? 'Added to your cart');
   }
 
   async function handleToggleWishlist() {
@@ -222,7 +223,7 @@ const SingleProduct = ({ product, rating, related }: Props) => {
                     onClick={() => choose(sizeOption.name, value)}
                     className={`${productStyles.chip} ${selection[sizeOption.name] === value ? productStyles.chipActive : ''}`}
                   >
-                    {value}
+                    {sizeLabel(value)}
                   </button>
                 ))}
               </div>
@@ -319,7 +320,11 @@ const SingleProduct = ({ product, rating, related }: Props) => {
 
           <div className={homeStyles.productGrid}>
             {related.map(item => (
-              <Link key={item.id} href={`/single-product/${item.id}`} className={homeStyles.productCard}>
+              <Link
+                key={item.id}
+                href={item.slug ? `/products/${encodeURIComponent(item.slug)}` : `/single-product/${item.id}`}
+                className={homeStyles.productCard}
+              >
                 <div className={listingStyles.cardMedia}>
                   {item.primary_image ? (
                     <Image

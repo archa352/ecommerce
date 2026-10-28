@@ -12,12 +12,11 @@ import { payWithRazorpay } from '@/lib/payments/razorpay';
 import { STOREFRONT_CURRENCY } from '@/lib/currency';
 import { formatMoney } from '@/lib/format';
 import type { Address } from '@/types/addresses';
-import { PAYMENT_METHOD_LABELS, type CheckoutPreview, type PaymentMethod } from '@/types/orders';
+import { PAYMENT_METHOD_LABELS, type CheckoutPreview, type Offer, type PaymentMethod } from '@/types/orders';
 
 import AddressFormModal from './AddressFormModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
 import styles from './Checkout.module.css';
-import CheckoutHeader from './CheckoutHeader';
 import OrderSummaryPanel from './OrderSummaryPanel';
 
 function generateIdempotencyKey(): string {
@@ -360,9 +359,11 @@ function PaymentSection({
 export default function Checkout({
   initialAddresses,
   initialPreview,
+  availableOffers,
 }: {
   initialAddresses: Address[];
   initialPreview: CheckoutPreview | null;
+  availableOffers: Offer[];
 }) {
   const router = useRouter();
   const { items: cartItems } = useCart();
@@ -429,7 +430,7 @@ export default function Checkout({
     if (openedForRef.current === request.razorpayOrderId) return;
     openedForRef.current = request.razorpayOrderId;
 
-    const orderPage = `/order-success/${request.orderId}`;
+    const orderPage = `/order-confirmation/${encodeURIComponent(request.orderNumber)}`;
     setPaying(true);
 
     payWithRazorpay(request, { onAttemptFailed: message => toast.error(message) })
@@ -441,7 +442,7 @@ export default function Checkout({
         }
 
         startConfirm(async () => {
-          const result = await confirmOnlinePayment(request.orderId, outcome.verification);
+          const result = await confirmOnlinePayment(request.orderNumber, outcome.verification);
           if (result.status === 'error') {
             toast.error(result.message ?? 'We could not confirm your payment yet.');
             router.push(orderPage);
@@ -531,8 +532,6 @@ export default function Checkout({
 
   return (
     <div className={styles.page}>
-      <CheckoutHeader />
-
       <form action={placeFormAction} className={styles.container}>
         <input type="hidden" name="address_id" value={selectedAddressId ?? ''} />
         <input type="hidden" name="coupon_code" value={preview?.coupon_code ?? ''} />
@@ -579,6 +578,7 @@ export default function Checkout({
             <OrderSummaryPanel
               cartItems={cartItems}
               preview={preview}
+              availableOffers={availableOffers}
               couponInput={couponInput}
               onCouponInputChange={setCouponInput}
               onApplyCoupon={handleApplyCoupon}

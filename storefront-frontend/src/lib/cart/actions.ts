@@ -3,11 +3,13 @@
 import { revalidatePath } from 'next/cache';
 
 import { cartApi, wishlistApi } from '@/lib/api/cart';
+import { catalogueApi } from '@/lib/api/catalogue';
 import { ApiError, ApiUnreachableError } from '@/lib/api/errors';
 import { getActionAccessToken } from '@/lib/auth/session';
 import { addLine, clearGuestCart, readGuestCart, writeGuestCart } from '@/lib/cart/guest-cart';
 import { getCart } from '@/lib/cart/read';
 import type { CartActionState, CartMutation } from '@/lib/cart/state';
+import type { ProductSummaryStorefront, VariantStorefront } from '@/types/catalogue';
 
 function toState(error: unknown): CartActionState {
   if (error instanceof ApiError) {
@@ -165,8 +167,31 @@ async function mutate(apply: (token: string | null) => Promise<void>): Promise<C
   return { cart: await getCart(), error: null };
 }
 
+async function assertGuestStock(variantId: string, requestedQuantity: number): Promise<void> {
+  const variant = await catalogueApi.getVariant(variantId);
+
+  if (!variant.in_stock || variant.available_quantity < 1) {
+    throw new ApiError({
+      status: 409,
+      code: 'OUT_OF_STOCK',
+      message: 'This item is currently unavailable.',
+    });
+  }
+
+  if (requestedQuantity > variant.available_quantity) {
+    throw new ApiError({
+      status: 409,
+      code: 'INSUFFICIENT_STOCK',
+      message: `Only ${variant.available_quantity} available. Please adjust the quantity.`,
+    });
+  }
+}
+
 export async function addCartItem(variantId: string, quantity: number): Promise<CartMutation> {
   if (!variantId) return { cart: await getCart(), error: 'Choose an option first.' };
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return { cart: await getCart(), error: 'Choose a valid quantity.' };
+  }
 
   return mutate(async token => {
     if (token) {
@@ -175,6 +200,8 @@ export async function addCartItem(variantId: string, quantity: number): Promise<
     }
 
     const lines = await readGuestCart();
+    const existingQuantity = lines.find(line => line.variant_id === variantId)?.quantity ?? 0;
+    await assertGuestStock(variantId, existingQuantity + quantity);
     await writeGuestCart(addLine(lines, variantId, quantity));
   });
 }
@@ -189,6 +216,8 @@ export async function setCartItemQuantity(itemId: string, quantity: number): Pro
     }
 
     const lines = await readGuestCart();
+    const line = lines.find(item => item.variant_id === itemId);
+    if (line) await assertGuestStock(itemId, quantity);
     await writeGuestCart(
       lines.map(line => (line.variant_id === itemId ? { ...line, quantity } : line)),
     );
@@ -216,4 +245,28 @@ export async function clearCart(): Promise<CartMutation> {
 
     await clearGuestCart();
   });
+}
+
+/**
+ * Public catalogue data used only while the cart drawer is open. Variant
+ * stock/options come from the existing variant endpoint so the drawer can
+ * show the selected values and prevent quantity increments past live stock.
+ */
+export async function getCartDrawerContent(
+  excludedProductIds: string[],
+  variantIds: string[],
+): Promise<{ recommendations: ProductSummaryStorefront[]; variants: Record<string, VariantStorefront | null> }> {
+  const [page, ...variantResults] = await Promise.all([
+    catalogueApi.listProducts({ page_size: 20, sort: 'newest' }).catch(() => null),
+    ...[...new Set(variantIds)].map(id => catalogueApi.getVariant(id).catch(() => null)),
+  ]);
+
+  const excluded = new Set(excludedProductIds);
+  const recommendations = (page?.items ?? [])
+    .filter(product => product.in_stock && !excluded.has(product.id))
+    .slice(0, 4);
+  const ids = [...new Set(variantIds)];
+  const variants = Object.fromEntries(ids.map((id, index) => [id, variantResults[index] ?? null]));
+
+  return { recommendations, variants };
 }

@@ -1,7 +1,8 @@
 import { addressApi } from '@/lib/api/addresses';
-import { checkoutApi } from '@/lib/api/orders';
+import { checkoutApi, couponApi } from '@/lib/api/orders';
 import { getAccessToken } from '@/lib/auth/session';
 import type { Address } from '@/types/addresses';
+import type { Offer } from '@/types/orders';
 import Checkout from './_components/Checkout';
 
 /**
@@ -15,12 +16,13 @@ import Checkout from './_components/Checkout';
 export default async function CheckoutPageRoute() {
   const token = await getAccessToken();
 
-  const [addresses, preview] = token
+  const [addresses, preview, offers] = token
     ? await Promise.all([
         addressApi.list(token).catch((): Address[] => []),
         checkoutApi.preview(token).catch(() => null),
+        couponApi.listOffers().catch((): Offer[] => []),
       ])
-    : [[] as Address[], null];
+    : [[] as Address[], null, [] as Offer[]];
 
-  return <Checkout initialAddresses={addresses} initialPreview={preview} />;
+  return <Checkout initialAddresses={addresses} initialPreview={preview} availableOffers={offers} />;
 }

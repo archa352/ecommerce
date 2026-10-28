@@ -6,6 +6,8 @@ import type {
   Offer,
   Order,
   OrderSummary,
+  OrderTracking,
+  InvoiceRead,
   Payment,
   PaymentMethod,
   RazorpayVerification,
@@ -77,6 +79,15 @@ export const orderApi = {
 
   get(token: string, orderId: string): Promise<Order> {
     return apiRequest<Order>(`/orders/${orderId}`, { token, cache: 'no-store' });
+  },
+
+  /** The order's recorded tracking events and shipment details. Same ownership check as `get`. */
+  tracking(token: string, orderId: string): Promise<OrderTracking> {
+    return apiRequest<OrderTracking>(`/orders/${orderId}/tracking`, { token, cache: 'no-store' });
+  },
+
+  invoice(token: string, orderId: string): Promise<InvoiceRead> {
+    return apiRequest<InvoiceRead>(`/orders/${orderId}/invoice`, { token, cache: 'no-store' });
   },
 
   /** Allowed only while `order.can_cancel` is true: before processing, and not yet paid online. */
