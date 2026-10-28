@@ -21,6 +21,14 @@ async def test_global_search_by_brand(client, search_auth, search_test_catalogue
     assert body[0]["brand"] == "Puma"
 
 
+async def test_global_search_by_category_name(client, search_auth, search_test_catalogue):
+    response = await client.get(SEARCH, params={"q": "Apparel"}, headers=search_auth)
+
+    assert response.status_code == 200, response.text
+    names = {item["name"] for item in response.json()["data"]}
+    assert names == {"Running Sneaker", "Cotton T-Shirt", "Formal Shirt"}
+
+
 async def test_search_with_no_matches_returns_empty_list(client, search_auth, search_test_catalogue):
     response = await client.get(SEARCH, params={"q": "NonExistentItem999"}, headers=search_auth)
 

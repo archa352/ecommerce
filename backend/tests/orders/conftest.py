@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
+from app.auth.constants import UserRole
+from app.auth.permissions import Permission
 from tests.catalogue.factories import PRODUCTS, make_category, make_product
 from tests.conftest import headers_for
 from tests.helpers import load_data, sample
@@ -34,7 +36,7 @@ def customer_auth(customer) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def new_variant(client, admin_headers):
+async def new_variant(client, admin_headers, tax_ready):
     """Factory: `await new_variant(initial_quantity=3, price="1199.00")`."""
     counter = {"n": 0}
     category = await make_category(client, admin_headers, name="Order Test Category")
@@ -148,3 +150,50 @@ async def order(client, customer_auth, address, variant, add_to_cart, place_orde
     response = await place_order(customer_auth, address["id"])
     assert response.status_code == 201, response.text
     return response.json()["data"]
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def order_in(client, variant, add_to_cart, save_address):
+    """Factory: `await order_in(headers, quantity=1, state="Kerala")` -> a placed order.
+
+    Each call places one cash order for `variant`, delivered to a newly saved
+    address with any field overridden.
+    """
+
+    async def _order(headers, quantity: int = 1, **address) -> dict:
+        await add_to_cart(headers, variant["id"], quantity)
+        saved = await save_address(headers, **address)
+        response = await client.post(
+            CHECKOUT, json={"address_id": saved["id"]}, headers=headers
+        )
+        assert response.status_code == 201, response.text
+        return response.json()["data"]
+
+    return _order
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def set_status(client, admin_headers):
+    """Factory: `await set_status(order_id, "SHIPPED", expect=200, note=...)` -> body."""
+
+    async def _set(order_id, value: str, expect: int = 200, **fields) -> dict:
+        response = await client.patch(
+            f"{ADMIN_ORDERS}/{order_id}/status",
+            json={"status": value, **fields},
+            headers=admin_headers,
+        )
+        assert response.status_code == expect, response.text
+        return response.json()
+
+    return _set
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def staff_with_customers(make_user, tenant, session) -> dict[str, str]:
+    """Headers for a STAFF account that may see customers but not manage them."""
+    staff = await make_user(
+        tenant=tenant, email="customers-viewer@zeen.com", role=UserRole.STAFF.value
+    )
+    staff.permissions = [Permission.CUSTOMERS_VIEW.value]
+    await session.commit()
+    return headers_for(staff)

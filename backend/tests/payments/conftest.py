@@ -40,7 +40,7 @@ def customer_auth(customer) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def variant(client, admin_headers) -> dict:
+async def variant(client, admin_headers, tax_ready) -> dict:
     """An ACTIVE variant priced at 999.00 with 10 in stock."""
     category = await make_category(client, admin_headers, name="Payment Test Category")
     product = await make_product(

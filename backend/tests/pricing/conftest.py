@@ -56,21 +56,33 @@ async def set_shipping(client, admin_headers):
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def set_tax(client, admin_headers):
-    """Factory: `await set_tax(tax_percentage="5.00")`."""
+async def set_tax(client, admin_headers, tax_ready):
+    """Factory: `await set_tax(tax_percentage="5.00")`.
+
+    A saved rate is unconfirmed until the CA signs it off, so an active one is
+    confirmed too, and the goods are mapped to the same rate: one percentage
+    for the whole basket, as these tests price it.
+    """
 
     async def _set(**overrides):
-        response = await client.put(
-            TAX, json=tax_payload(**overrides), headers=admin_headers
+        payload = tax_payload(**overrides)
+        response = await client.put(TAX, json=payload, headers=admin_headers)
+        assert response.status_code == 200, response.text
+        if not payload.get("is_active", True):
+            return response.json()["data"]
+
+        response = await client.post(
+            f"{TAX}/confirm", json={"ca_confirmed": True}, headers=admin_headers
         )
         assert response.status_code == 200, response.text
+        await tax_ready.use_default_rate(payload["tax_percentage"])
         return response.json()["data"]
 
     return _set
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def variant(client, admin_headers) -> dict:
+async def variant(client, admin_headers, tax_ready) -> dict:
     """An ACTIVE variant priced at 1000.00 with 20 in stock."""
     category = await make_category(client, admin_headers, name="Pricing Test Category")
     product = await make_product(

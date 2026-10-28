@@ -5,7 +5,10 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.database import get_db
+from app.main import app
 from app.orders.models import Order
 from app.orders.repository import OrderRepository
 from app.payments import razorpay
@@ -138,7 +141,8 @@ async def test_payment_verification_is_scoped_to_tenant(
         headers=headers_for(other_customer),
     )
 
-    assert response.status_code == 404
+    # Another tenant's token is refused outright, before any order lookup.
+    assert response.status_code == 401
 
 
 async def test_different_payment_id_cannot_replace_a_paid_payment(
@@ -243,9 +247,18 @@ async def test_cancellation_is_rejected_when_gateway_captured_before_verificatio
 
 
 async def test_cancellation_waits_for_in_flight_payment_verification(
-    client, customer_auth, variant, make_order, monkeypatch
+    client, engine, customer_auth, variant, make_order, monkeypatch
 ):
     order = await _online_order(customer_auth, variant, make_order, monkeypatch)
+    # The two requests must race on their own connections, as they would in
+    # the app; the shared test session cannot run two statements at once.
+    factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def own_session():
+        async with factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = own_session
     monkeypatch.setattr(razorpay, "signature_is_valid", lambda *args: True)
     verification_in_gateway = asyncio.Event()
     release_gateway = asyncio.Event()

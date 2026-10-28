@@ -87,7 +87,7 @@ async def test_free_shipping_removes_the_delivery_charge(
 
 
 async def test_bogo_makes_the_cheaper_item_free(
-    client, admin_headers, customer_auth, add_to_cart
+    client, admin_headers, customer_auth, add_to_cart, tax_ready
 ):
     category = await make_category(client, admin_headers, name="BOGO Cat")
     dear = await _variant_in(client, admin_headers, category, "1000.00", "BOGO-DEAR")
@@ -148,7 +148,7 @@ async def test_a_first_order_coupon_works_only_once(
 
 
 async def test_a_category_coupon_discounts_only_that_category(
-    client, admin_headers, customer_auth, add_to_cart
+    client, admin_headers, customer_auth, add_to_cart, tax_ready
 ):
     ethnic = await make_category(client, admin_headers, name="Ethnic")
     kurtas = await make_category(client, admin_headers, name="Kurtas", parent_id=ethnic["id"])

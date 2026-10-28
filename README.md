@@ -51,7 +51,7 @@ Run from the repository root — no need to `cd` anywhere.
 | `npm run dev:storefront` | Starts the storefront frontend at http://localhost:3000 |
 | `npm run dev:admin` | Starts the admin frontend at http://localhost:5173 |
 | `npm run dev:all` | Starts the storefront + admin frontend together |
-| `make test` | Runs the full test suite |
+| `make test` | Runs the full backend test suite against a throwaway Postgres/Redis (needs Docker and the built API image); never touches the app database |
 | `make lint` | Runs `ruff` static checks |
 | `make check` | Full gate: compile, lint, migration drift (`alembic check`), tests |
 

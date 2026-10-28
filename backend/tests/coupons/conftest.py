@@ -16,7 +16,7 @@ from tests.catalogue.factories import make_category, make_product, make_variant
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def cart_worth(client: AsyncClient, admin_headers: dict):
+async def cart_worth(client: AsyncClient, admin_headers: dict, tax_ready):
     """Factory: put one item priced at `subtotal` in a customer's cart."""
 
     async def _fill(headers: dict, subtotal: str) -> None:

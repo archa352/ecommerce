@@ -21,7 +21,7 @@ class RazorpayFetchTests(unittest.IsolatedAsyncioTestCase):
 
         client_factory = httpx.AsyncClient
         with (
-            patch.object(razorpay, "credentials", return_value=razorpay.Credentials("key", "secret", "https://gateway.invalid/v1")),
+            patch.object(razorpay, "credentials", return_value=razorpay.Credentials("key", "secret", "https://gateway.invalid/v1", 5.0)),
             patch.object(razorpay.httpx, "AsyncClient", side_effect=lambda **kwargs: client_factory(transport=httpx.MockTransport(answer), **kwargs)),
         ):
             result = await razorpay.fetch_payment("pay_test")
@@ -33,7 +33,7 @@ class RazorpayFetchTests(unittest.IsolatedAsyncioTestCase):
     async def test_gateway_error_does_not_return_a_payment(self):
         client_factory = httpx.AsyncClient
         with (
-            patch.object(razorpay, "credentials", return_value=razorpay.Credentials("key", "secret", "https://gateway.invalid/v1")),
+            patch.object(razorpay, "credentials", return_value=razorpay.Credentials("key", "secret", "https://gateway.invalid/v1", 5.0)),
             patch.object(razorpay.httpx, "AsyncClient", side_effect=lambda **kwargs: client_factory(transport=httpx.MockTransport(lambda request: httpx.Response(503)), **kwargs)),
             self.assertRaises(ServiceUnavailableError),
         ):

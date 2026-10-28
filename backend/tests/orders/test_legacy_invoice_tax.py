@@ -43,6 +43,16 @@ def _order(*, gst_type: str | None, tax: str, item_tax: str | None):
         delivery_postal_code="560001",
         delivery_country="India",
         seller_gstin=None,
+        # Columns added with dynamic tax configuration: a legacy order has
+        # no snapshot of them, so they read back as their migration defaults.
+        seller_legal_name=None,
+        seller_address=None,
+        seller_state=None,
+        seller_state_code=None,
+        shipping_sac_code=None,
+        charges_gst_rate=None,
+        gst_registration_status=None,
+        tax_included_amount=Decimal("0.00"),
         invoice_prefix="INV-",
         subtotal=Decimal("100.00"),
         discount_amount=Decimal("0.00"),

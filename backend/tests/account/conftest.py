@@ -32,7 +32,7 @@ def shopper_auth(shopper) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def variant(client, admin_headers) -> dict:
+async def variant(client, admin_headers, tax_ready) -> dict:
     category = await make_category(client, admin_headers, name="Erasure Category")
     product = await make_product(
         client, admin_headers, category["id"], name="Erasure Tee", status="ACTIVE"

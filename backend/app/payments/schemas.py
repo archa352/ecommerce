@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.core.pagination import PageParams
 from app.core.schemas import StrictModel
-from app.payments.constants import PaymentProvider, PaymentStatus
+from app.payments.constants import PaymentProvider, PaymentPurpose, PaymentStatus
 
 
 class PaymentRead(BaseModel):
@@ -20,8 +20,11 @@ class PaymentRead(BaseModel):
     currency: str
     status: PaymentStatus
     provider: PaymentProvider
+    purpose: PaymentPurpose
     gateway_order_id: str | None = None
     gateway_payment_id: str | None = None
+    remitted_at: datetime | None = None
+    remittance_reference: str | None = None
     created_at: datetime
 
 

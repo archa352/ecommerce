@@ -101,7 +101,10 @@ async def upload_review_image(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(require_customer),
 ) -> ApiResponse[ReviewRead]:
-    data = await file.read()
+    # Read at most one byte past the limit, as the catalogue upload does:
+    # store_image rejects anything larger, and an oversized body is never
+    # pulled into memory in full.
+    data = await file.read(get_settings().max_upload_bytes + 1)
     review = await ReviewService(session, user.tenant_id).add_uploaded_image(
         review_id,
         user.id,

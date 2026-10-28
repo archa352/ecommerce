@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from tests.pricing.conftest import TAX, tax_payload
+from sqlalchemy import delete
+
+from app.pricing.models import GstSettings
+from tests.pricing.conftest import CHECKOUT, TAX, tax_payload
 
 
 async def test_tax_settings_can_be_read(client, staff_headers):
@@ -142,13 +145,18 @@ async def test_switching_tax_off_charges_none(set_shipping, set_tax, fill_cart, 
     assert Decimal(body["tax_amount"]) == Decimal("0.00")
 
 
-async def test_an_unconfigured_tenant_charges_no_tax(set_shipping, fill_cart, preview):
+async def test_an_unconfigured_tenant_cannot_price_a_basket(
+    client, session, tenant, customer_auth, set_shipping, fill_cart
+):
     await set_shipping(is_active=False)
     await fill_cart(1)
+    await session.execute(delete(GstSettings).where(GstSettings.tenant_id == tenant.id))
+    await session.commit()
 
-    body = await preview()
+    response = await client.post(f"{CHECKOUT}/preview", headers=customer_auth)
 
-    assert Decimal(body["tax_amount"]) == Decimal("0.00")
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "TAX_CONFIGURATION_INCOMPLETE"
 
 
 async def test_tax_is_rounded_to_two_places(set_shipping, set_tax, fill_cart, preview):

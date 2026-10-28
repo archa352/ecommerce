@@ -23,6 +23,7 @@ from app.models.registry import Base
 from app.tenants.models import Tenant, TenantDomain
 from app.users.models import User
 from tests.helpers import shared_data
+from tests.tax import TaxSetup, sign_off_tax
 
 settings = get_settings()
 
@@ -164,43 +165,49 @@ async def _isolated_redis(_test_targets: TestTargets) -> AsyncGenerator[None, No
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def engine(_test_targets: TestTargets, _isolated_redis):
-    # Each test gets a newly named schema. Existing databases and schemas are
-    # never dropped, truncated or recreated by the fixture.
+    # Each test gets a newly named schema, dropped again when the test ends.
+    # Only that schema is dropped: existing databases and schemas are never
+    # dropped, truncated or recreated by the fixture.
     schema = f"zeen_test_{uuid.uuid4().hex}"
-    setup_engine = create_async_engine(_test_targets.database_url)
-    try:
-        async with setup_engine.begin() as connection:
-            actual = (await connection.exec_driver_sql(
-                "SELECT current_database(), host(inet_server_addr()), inet_server_port()"
-            )).one()
-            if actual != (
-                _test_targets.database_name,
-                _test_targets.server_addr,
-                _test_targets.server_port,
-            ):
-                raise pytest.UsageError("PostgreSQL target does not match the verified allowlist")
-            await connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
-    finally:
-        await setup_engine.dispose()
 
-    engine = create_async_engine(
-        _test_targets.database_url,
-        connect_args={"server_settings": {"search_path": schema}},
-    )
+    async def on_allowed_target(connection, refusal: str) -> None:
+        actual = (await connection.exec_driver_sql(
+            "SELECT current_database(), host(inet_server_addr()), inet_server_port()"
+        )).one()
+        if actual != (
+            _test_targets.database_name,
+            _test_targets.server_addr,
+            _test_targets.server_port,
+        ):
+            raise pytest.UsageError(refusal)
+
+    admin_engine = create_async_engine(_test_targets.database_url)
     try:
-        async with engine.begin() as connection:
-            actual = (await connection.exec_driver_sql(
-                "SELECT current_database(), host(inet_server_addr()), inet_server_port()"
-            )).one()
-            if actual != (
-                _test_targets.database_name,
-                _test_targets.server_addr,
-                _test_targets.server_port,
-            ):
-                raise pytest.UsageError("PostgreSQL target changed before schema setup")
-        yield engine
+        async with admin_engine.begin() as connection:
+            await on_allowed_target(
+                connection, "PostgreSQL target does not match the verified allowlist"
+            )
+            await connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+
+        engine = create_async_engine(
+            _test_targets.database_url,
+            connect_args={"server_settings": {"search_path": schema}},
+        )
+        try:
+            async with engine.begin() as connection:
+                await on_allowed_target(
+                    connection, "PostgreSQL target changed before schema setup"
+                )
+            yield engine
+        finally:
+            await engine.dispose()
+            async with admin_engine.begin() as connection:
+                await on_allowed_target(
+                    connection, "PostgreSQL target changed before schema teardown"
+                )
+                await connection.exec_driver_sql(f'DROP SCHEMA "{schema}" CASCADE')
     finally:
-        await engine.dispose()
+        await admin_engine.dispose()
 
 
 @pytest_asyncio.fixture(loop_scope="session")
@@ -287,6 +294,15 @@ async def other_tenant(session: AsyncSession) -> Tenant:
     session.add(TenantDomain(tenant_id=tenant.id, domain=ACME_DOMAIN))
     await session.commit()
     return tenant
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def tax_ready(session: AsyncSession, tenant: Tenant) -> TaxSetup:
+    """The tenant's GST and HSN rates signed off, so checkout can price a basket.
+
+    Suites that check out request it autouse from their conftest; see tests/tax.py.
+    """
+    return await sign_off_tax(session, tenant)
 
 
 @pytest_asyncio.fixture(loop_scope="session")

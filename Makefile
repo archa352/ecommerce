@@ -55,12 +55,12 @@ dev:
 	@echo "Logs     $(COMPOSE) logs -f api"
 	@echo "Seed     $(COMPOSE) exec api python -m app.commands.seed"
 
+# Tests run against a throwaway PostgreSQL and Redis that exist only for the
+# run (see backend/scripts/test.sh), never against the app's database. The
+# suite's migration test builds a database from the history and runs
+# `alembic check` against it, so drift is caught there.
 test:
-	$(REQUIRE_VENV)
-	# Model/migration drift is invisible to the suite, which builds its schema
-	# with create_all -- so it is checked here rather than only in `make check`.
-	cd $(BACKEND) && $(VENV_BIN)/alembic check
-	cd $(BACKEND) && $(VENV_BIN)/pytest
+	$(BACKEND)/scripts/test.sh
 
 lint:
 	$(REQUIRE_VENV)
@@ -71,4 +71,4 @@ check:
 	cd $(BACKEND) && $(VENV_BIN)/python -m compileall -q app tests
 	cd $(BACKEND) && $(VENV_BIN)/ruff check .
 	cd $(BACKEND) && $(VENV_BIN)/alembic check
-	cd $(BACKEND) && $(VENV_BIN)/pytest
+	$(BACKEND)/scripts/test.sh

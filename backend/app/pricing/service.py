@@ -321,6 +321,7 @@ class GstService:
                 for field, value in values.items():
                     setattr(settings, field, value)
             await self.session.commit()
+        await self.session.refresh(settings)
 
         return settings
 
@@ -348,6 +349,8 @@ class GstService:
         settings.updated_by_id = actor_id
         async with conflict_on_integrity_error(self.session, SAVE_FAILED):
             await self.session.commit()
+        # updated_at is set by the database, so the commit leaves it expired.
+        await self.session.refresh(settings)
         return settings
 
     async def list_rate_configurations(self) -> list[dict]:

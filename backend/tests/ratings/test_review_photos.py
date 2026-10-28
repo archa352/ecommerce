@@ -66,6 +66,17 @@ async def test_only_images_are_accepted(client, buyer_auth, review):
     assert response.status_code == 400
 
 
+async def test_an_oversized_photo_is_refused(client, buyer_auth, review, monkeypatch):
+    monkeypatch.setattr(get_settings(), "max_upload_bytes", 100, raising=False)
+
+    response = await _upload(client, review["id"], buyer_auth)
+
+    assert response.status_code == 400, response.text
+    assert "MB or smaller" in response.json()["message"]
+    listed = await client.get(f"{REVIEWS}/product/{review['product_id']}")
+    assert listed.json()["data"][0]["images"] == []
+
+
 async def test_a_review_has_at_most_five_photos(client, buyer_auth, review):
     for _ in range(5):
         assert (await _upload(client, review["id"], buyer_auth)).status_code == 201

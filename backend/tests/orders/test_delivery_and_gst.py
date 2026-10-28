@@ -26,20 +26,32 @@ async def _shipping(client, headers, **overrides):
     assert response.status_code == 200, response.text
 
 
-async def _tax(client, headers, rate="18.00"):
+async def _tax(client, headers, tax_ready, rate="18.00"):
+    """Set and CA-confirm the charges rate, and map goods without a rate of their own to it."""
     response = await client.put(TAX, json={"tax_percentage": rate}, headers=headers)
     assert response.status_code == 200, response.text
+    response = await client.post(f"{TAX}/confirm", json={"ca_confirmed": True}, headers=headers)
+    assert response.status_code == 200, response.text
+    await tax_ready.use_default_rate(rate)
 
 
 async def _gst(client, headers, **overrides):
+    """Save the seller's GST details and, if they are accepted, activate them."""
     payload = {
         "gstin": "29ABCDE1234F1Z5",
         "legal_name": "Zeen Fashions Pvt Ltd",
         "address": "1 MG Road, Bengaluru",
         "state": "Karnataka",
+        "registration_status": "REGISTERED",
+        "shipping_sac_code": "996812",
         **overrides,
     }
-    return await client.put(GST, json=payload, headers=headers)
+    saved = await client.put(GST, json=payload, headers=headers)
+    if saved.status_code != 200:
+        return saved
+    activated = await client.post(f"{GST}/activate", json={"ca_confirmed": True}, headers=headers)
+    assert activated.status_code == 200, activated.text
+    return activated
 
 
 # ------------------------------------------------------------------ delivery
@@ -225,9 +237,9 @@ async def test_an_inter_state_order_charges_igst(client, admin_headers, customer
 
 
 async def test_a_product_rate_and_hsn_override_the_default(
-    client, admin_headers, customer_auth, add_to_cart, save_address, place_order
+    client, admin_headers, customer_auth, add_to_cart, save_address, place_order, tax_ready
 ):
-    await _tax(client, admin_headers, "18.00")
+    await _tax(client, admin_headers, tax_ready, "18.00")
     category = await make_category(
         client, admin_headers, name="Churidars", hsn_code="6204", gst_rate="5.00"
     )
@@ -325,10 +337,10 @@ async def test_the_gst_report_totals_orders_by_rate(client, admin_headers, custo
 
 
 async def test_gst_report_reconciles_shipping_and_legacy_item_tax(
-    client, admin_headers, customer_auth, order_in, session
+    client, admin_headers, customer_auth, order_in, session, tax_ready
 ):
     await _shipping(client, admin_headers)
-    await _tax(client, admin_headers)
+    await _tax(client, admin_headers, tax_ready)
     await _gst(client, admin_headers)
     order = await order_in(customer_auth, state="Karnataka")
     await session.execute(
@@ -351,9 +363,9 @@ async def test_gst_report_reconciles_shipping_and_legacy_item_tax(
 
 
 async def test_preview_without_an_address_has_no_gst_split(
-    client, admin_headers, customer_auth, variant, add_to_cart
+    client, admin_headers, customer_auth, variant, add_to_cart, tax_ready
 ):
-    await _tax(client, admin_headers)
+    await _tax(client, admin_headers, tax_ready)
     await add_to_cart(customer_auth, variant["id"], 1)
 
     body = (await client.post(f"{CHECKOUT}/preview", headers=customer_auth)).json()["data"]

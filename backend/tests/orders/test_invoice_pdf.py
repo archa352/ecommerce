@@ -20,7 +20,7 @@ def _text(response) -> str:
     return "\n".join(page.extract_text() for page in reader.pages)
 
 
-async def _gst(client, headers):
+async def _gst(client, headers, **overrides):
     response = await client.put(
         GST,
         json={
@@ -28,9 +28,14 @@ async def _gst(client, headers):
             "legal_name": "Zeen Fashions Pvt Ltd",
             "address": "1 MG Road, Bengaluru",
             "state": "Karnataka",
+            "registration_status": "REGISTERED",
+            "shipping_sac_code": "996812",
+            **overrides,
         },
         headers=headers,
     )
+    assert response.status_code == 200, response.text
+    response = await client.post(f"{GST}/activate", json={"ca_confirmed": True}, headers=headers)
     assert response.status_code == 200, response.text
 
 
@@ -175,9 +180,11 @@ async def test_a_malformed_order_id_is_rejected(client, admin_headers):
 
 
 async def test_an_unsafe_invoice_prefix_makes_a_safe_filename(
-    client, admin_headers, customer_auth, order
+    client, admin_headers, customer_auth, order_in
 ):
-    await client.put(GST, json={"invoice_prefix": 'ZN/2026"'}, headers=admin_headers)
+    # The prefix is frozen onto the order at checkout, so it is set first.
+    await _gst(client, admin_headers, invoice_prefix='ZN/2026"')
+    order = await order_in(customer_auth)
 
     response = await client.get(f"{ORDERS}/{order['id']}/invoice/pdf", headers=customer_auth)
 

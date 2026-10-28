@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Select, and_, case, delete, desc, func, or_, select, union
+from sqlalchemy import Select, and_, case, delete, desc, exists, func, or_, select, union
 from sqlalchemy.orm import aliased, selectinload
 
 from app.catalogue.constants import CatalogueStatus
@@ -107,8 +107,19 @@ class SearchFilterRepository(TenantScopedRepository[SearchHistory]):
             _clean(Product.brand).ilike(pattern, escape="\\"),
             _clean(Product.short_description).ilike(pattern, escape="\\"),
             _clean(Product.description).ilike(pattern, escape="\\"),
+            _clean(Product.fabric).ilike(pattern, escape="\\"),
+            _clean(Product.occasion).ilike(pattern, escape="\\"),
+            _clean(Product.sleeve).ilike(pattern, escape="\\"),
+            _clean(Product.neckline).ilike(pattern, escape="\\"),
             _clean(ProductVariant.sku).ilike(pattern, escape="\\"),
             _clean(Product.gender).ilike(pattern, escape="\\"),
+            exists(
+                select(1).where(
+                    Category.tenant_id == Product.tenant_id,
+                    Category.id == Product.category_id,
+                    func.replace(Category.name, "'", "").ilike(pattern, escape="\\"),
+                )
+            ),
         )
 
     def _average_rating(self):

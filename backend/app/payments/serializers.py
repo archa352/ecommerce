@@ -15,7 +15,10 @@ def payment_read(payment: Payment, currency: str) -> PaymentRead:
         currency=currency,
         status=payment.status,
         provider=payment.provider,
+        purpose=payment.purpose,
         gateway_order_id=payment.razorpay_order_id,
         gateway_payment_id=payment.razorpay_payment_id,
+        remitted_at=payment.remitted_at,
+        remittance_reference=payment.remittance_reference,
         created_at=payment.created_at,
     )

@@ -100,13 +100,16 @@ async def test_an_oversized_upload_is_refused(client, admin_headers, product, mo
     assert "MB or smaller" in response.json()["message"]
 
 
-async def test_a_large_image_is_scaled_down(client, admin_headers, product, monkeypatch):
+async def test_a_large_image_keeps_its_original_dimensions_and_bytes(
+    client, admin_headers, product, monkeypatch
+):
     settings = get_settings()
     monkeypatch.setattr(settings, "image_max_dimension", 100, raising=False)
+    original = _png(400, 200)
 
     response = await client.post(
         upload_url(product["id"]),
-        files={"file": ("wide.png", _png(400, 200), "image/png")},
+        files={"file": ("wide.png", original, "image/png")},
         headers=admin_headers,
     )
 
@@ -116,8 +119,8 @@ async def test_a_large_image_is_scaled_down(client, admin_headers, product, monk
         / response.json()["data"]["url"].split("/media/")[-1]
     )
     with Image.open(stored) as saved:
-        assert max(saved.size) == 100
-        assert saved.size == (100, 50)
+        assert saved.size == (400, 200)
+    assert stored.read_bytes() == original
 
 
 async def test_uploading_requires_an_admin(client, customer_headers, product):
@@ -189,15 +192,16 @@ async def test_the_extension_follows_the_content_not_the_declared_type(
         assert saved.format == "JPEG"
 
 
-async def test_hidden_payloads_do_not_survive_re_encoding(client, admin_headers, product):
+async def test_uploaded_image_metadata_and_bytes_are_preserved(client, admin_headers, product):
+    original = _png_carrying("<script>alert(1)</script>")
     response = await client.post(
         upload_url(product["id"]),
-        files={"file": ("x.png", _png_carrying("<script>alert(1)</script>"), "image/png")},
+        files={"file": ("x.png", original, "image/png")},
         headers=admin_headers,
     )
 
     assert response.status_code == 201, response.text
-    assert b"<script>" not in _stored(response.json()["data"]["url"]).read_bytes()
+    assert _stored(response.json()["data"]["url"]).read_bytes() == original
 
 
 async def test_an_allowed_type_wrapping_another_format_is_refused(

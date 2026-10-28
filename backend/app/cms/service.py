@@ -147,8 +147,8 @@ class CmsService:
     async def upload_media(
         self, *, filename: str, content_type: str, data: bytes, alt_text: str | None, user: User
     ) -> CmsMedia:
-        # Same validation and storage as product images: JPEG/PNG/WebP,
-        # size-capped, very large images shrunk, files outside the database.
+        # Same validation and original-byte storage as product images:
+        # JPEG/PNG/WebP, size-capped, with files outside the database.
         url = await store_image(self.tenant_id, content_type, data)
         media = CmsMedia(
             tenant_id=self.tenant_id,

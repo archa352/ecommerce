@@ -121,10 +121,11 @@ async def bootstrap_tenant(session: AsyncSession, settings: Settings) -> Tenant:
             TaxSettings(
                 tenant_id=tenant.id,
                 tax_percentage=SEED_TAX_PERCENTAGE,
-                is_active=True,
+                is_active=False,
+                confirmed_by_ca=False,
             )
         )
-        print(f"Created tax settings: {SEED_TAX_PERCENTAGE}%")
+        print(f"Created pending tax settings: {SEED_TAX_PERCENTAGE}%")
     else:
         print("Tax settings already exist")
 

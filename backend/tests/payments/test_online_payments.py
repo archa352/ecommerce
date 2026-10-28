@@ -141,7 +141,7 @@ async def test_a_forged_signature_changes_nothing(client, customer_auth, online_
     response = await client.post(VERIFY, json=forged, headers=customer_auth)
 
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert response.json()["error"]["code"] == "PAYMENT_INVALID_SIGNATURE"
     order = await _order(client, customer_auth, online_order["id"])
     assert order["payment_status"] == "PENDING"
     assert order["status"] == "PENDING"
