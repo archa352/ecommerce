@@ -107,3 +107,22 @@
 }
 .addBtn:hover { border-color: var(--champagne); color: var(--champagne); }
 .plus { font-size: 14px; line-height: 1; }
+
+/* On the two-column phone grid a card is ~160px wide: the rating and the
+   "Add to Cart" button no longer fit side by side, so stack the footer and
+   let the button take the full width. */
+@media (max-width: 520px) {
+  .body { padding-top: 12px; }
+  .name { font-size: 13px; }
+  .price { font-size: 13px; }
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .addBtn {
+    justify-content: center;
+    width: 100%;
+    padding: 9px 12px;
+  }
+}
