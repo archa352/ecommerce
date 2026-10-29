@@ -1,7 +1,7 @@
 .page {
   --ink: #1a1714;
   --ink-soft: #55504b;
-  --champagne: #b8945f;
+  --accent: #8f5a3c;
   --cream: #fbfaf8;
   min-height: 70vh;
   display: grid;
@@ -18,7 +18,7 @@
   font-weight: 500;
   font-size: clamp(88px, 22vw, 180px);
   line-height: 1;
-  color: var(--champagne);
+  color: var(--accent);
   margin: 0;
 }
 .title {
@@ -45,4 +45,4 @@
   border-radius: 2px;
   transition: background 0.2s ease;
 }
-.btn:hover { background: var(--champagne); }
+.btn:hover { background: var(--accent); }

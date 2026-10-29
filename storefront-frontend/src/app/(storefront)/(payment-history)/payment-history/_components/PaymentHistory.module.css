@@ -4,7 +4,7 @@
   --muted: #8b857e;
   --line: #e7e2db;
   --cream: #fbfaf8;
-  --champagne: #b8945f;
+  --accent: #8f5a3c;
   background: var(--cream);
   color: var(--ink);
   font-family: Montserrat, Helvetica, sans-serif;
@@ -35,7 +35,7 @@
   border-radius: 2px;
   transition: all 0.2s ease;
 }
-.filterButton:hover { border-color: var(--champagne); color: var(--champagne); }
+.filterButton:hover { border-color: var(--accent); color: var(--accent); }
 .filterButtonActive { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 .tableCard {
   border: 1px solid var(--line);

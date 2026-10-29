@@ -1,6 +1,15 @@
-/* Minimal base reset for the storefront.
-   Replaces the base layer the old template stylesheet used to provide;
-   all real styling lives in the luxe CSS modules. */
+/* Minimal base layer for the storefront.
+   Replaces the base + theme-token layer the old template stylesheet
+   provided; all real styling lives in the luxe CSS modules. */
+
+/* Brand theme tokens consumed globally by the luxe design (header, footer,
+   buttons, contrast sections). Previously defined in the template's
+   global stylesheet. */
+:root {
+  --zeen-midnight-navy: #0D133C;
+  --zeen-champagne-gold: #F6E4CF;
+}
+
 *,
 *::before,
 *::after {

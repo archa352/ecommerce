@@ -6,7 +6,7 @@
   --muted: #8b857e;
   --line: #e7e2db;
   --cream: #fbfaf8;
-  --champagne: #b8945f;
+  --accent: #8f5a3c;
   background: var(--cream);
   color: var(--ink);
   font-family: Montserrat, Helvetica, sans-serif;
@@ -22,7 +22,7 @@
   font-size: 12px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--champagne);
+  color: var(--accent);
   margin: 0 0 18px;
 }
 
@@ -87,7 +87,7 @@
   margin: 0;
 }
 .contactValue a { color: var(--ink); text-decoration: none; }
-.contactValue a:hover { color: var(--champagne); }
+.contactValue a:hover { color: var(--accent); }
 
 /* FAQ */
 .faqItem {

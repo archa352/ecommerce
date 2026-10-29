@@ -3,7 +3,7 @@
   --ink-soft: #55504b;
   --muted: #8b857e;
   --line: #e7e2db;
-  --champagne: #b8945f;
+  --accent: #8f5a3c;
   --card: #f4f1ec;
   position: relative;
   display: flex;
@@ -88,7 +88,7 @@
   justify-content: space-between;
   gap: 10px;
 }
-.rating { display: inline-flex; gap: 2px; color: var(--champagne); }
+.rating { display: inline-flex; gap: 2px; color: var(--accent); }
 .starEmpty { color: var(--line); }
 .addBtn {
   display: inline-flex;
@@ -105,7 +105,7 @@
   border-radius: 2px;
   transition: border-color 0.2s ease, color 0.2s ease;
 }
-.addBtn:hover { border-color: var(--champagne); color: var(--champagne); }
+.addBtn:hover { border-color: var(--accent); color: var(--accent); }
 .plus { font-size: 14px; line-height: 1; }
 
 /* On the two-column phone grid a card is ~160px wide: the rating and the
