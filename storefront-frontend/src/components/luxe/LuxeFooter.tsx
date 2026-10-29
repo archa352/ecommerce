@@ -8,17 +8,15 @@ const SHOP_LINKS = [
   { label: 'New Arrivals', href: '/products' },
   { label: 'Collections', href: '/products' },
   { label: 'Best Sellers', href: '/products' },
-  { label: 'Gift Cards', href: '/our-gift-vouchers' },
   { label: 'Wishlist', href: '/wishlist' },
   { label: 'Track Order', href: '/account/orders' },
 ];
 
 const ABOUT_LINKS = [
-  { label: 'Our Story', href: '/about-us' },
-  { label: 'Sustainability', href: '/about-us' },
-  { label: 'Journal', href: '/blog-list-no-sidebar' },
-  { label: 'FAQs', href: '/faqs-1' },
-  { label: 'Shipping & Returns', href: '/faqs-1' },
+  { label: 'Our Story', href: '/about' },
+  { label: 'Sustainability', href: '/about' },
+  { label: 'FAQs', href: '/faq' },
+  { label: 'Shipping & Returns', href: '/faq' },
   { label: 'Account', href: '/account' },
 ];
 
@@ -47,7 +45,7 @@ function HomeFooter() {
         <div>
           <p className={styles.footerLabel}>Contact</p>
           <p className={styles.footerBig}>
-            <Link href="/contact-us-1">Write to the ZEEN studio</Link>
+            <Link href="/contact">Write to the ZEEN studio</Link>
           </p>
           <p className={styles.footerLabel}>Social</p>
           <p className={styles.footerBig}>
@@ -85,7 +83,7 @@ function HomeFooter() {
         </div>
         <div className={styles.footerLegal}>
           <p className={styles.footerLabel}>Legal</p>
-          <Link href="/faqs-1">Privacy policy</Link>
+          <Link href="/faq">Privacy policy</Link>
         </div>
       </div>
     </footer>

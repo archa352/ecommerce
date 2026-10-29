@@ -56,8 +56,8 @@ export async function saveAddress(_previous: CheckoutState, formData: FormData):
     return toState(error);
   }
 
-  revalidatePath('/check-out');
-  revalidatePath('/my-account');
+  revalidatePath('/checkout');
+  revalidatePath('/account');
   return { status: 'success', message: 'Address saved' };
 }
 
@@ -86,8 +86,8 @@ export async function updateAddress(_previous: CheckoutState, formData: FormData
     return toState(error);
   }
 
-  revalidatePath('/check-out');
-  revalidatePath('/my-account');
+  revalidatePath('/checkout');
+  revalidatePath('/account');
   return { status: 'success', message: 'Address updated' };
 }
 
@@ -101,7 +101,7 @@ export async function deleteAddress(_previous: CheckoutState, formData: FormData
     return toState(error);
   }
 
-  revalidatePath('/my-account');
+  revalidatePath('/account');
   return { status: 'success', message: 'Address removed' };
 }
 
@@ -115,7 +115,7 @@ export async function applyCoupon(_previous: CheckoutState, formData: FormData):
 
   try {
     const result = await couponApi.apply(token, code);
-    revalidatePath('/check-out');
+    revalidatePath('/checkout');
     return { status: 'success', message: `${result.code} applied`, couponCode: result.code };
   } catch (error) {
     return toState(error);
@@ -149,7 +149,7 @@ export async function placeOrder(_previous: CheckoutState, formData: FormData): 
   }
 
   revalidatePath('/account/orders');
-  revalidatePath('/cart-items');
+  revalidatePath('/cart');
   revalidatePath('/', 'layout');
 
   const payment = pendingOnlinePayment(order);
@@ -229,7 +229,7 @@ export async function placeOrderWithAddress(
   }
 
   revalidatePath('/my-orders');
-  revalidatePath('/cart-items');
+  revalidatePath('/cart');
   revalidatePath('/', 'layout');
 
   redirect(`/order-confirmation/${encodeURIComponent(orderNumber)}`);

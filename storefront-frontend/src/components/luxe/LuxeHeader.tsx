@@ -11,6 +11,7 @@ import {
   MenuIcon,
   SearchIcon,
 } from '@/app/(storefront)/(home)/home/_components/luxe/Icons';
+import HeaderSearch from '@/components/luxe/HeaderSearch';
 import LuxeAccountNav from '@/components/luxe/LuxeAccountNav';
 import LuxeWishlistButton from '@/components/luxe/LuxeWishlistButton';
 import { useCart } from '@/context/CartContext';
@@ -18,8 +19,8 @@ import { useCart } from '@/context/CartContext';
 const NAV_LINKS = [
   { label: 'Shop', href: '/products', chevron: true },
   { label: 'Best Sellers', href: '/products' },
-  { label: 'About', href: '/about-us' },
-  { label: 'Contact', href: '/contact-us-1' },
+  { label: 'About', href: '/about' },
+  { label: 'Contact', href: '/contact' },
 ];
 
 function CartButton({ className }: { className: string }) {
@@ -47,6 +48,7 @@ function CartButton({ className }: { className: string }) {
  */
 function HomeHeader() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <header className={styles.homeHeader} data-storefront-header>
@@ -81,9 +83,14 @@ function HomeHeader() {
         </Link>
 
         <div className={`${styles.homeHeaderRight} ${styles.homeHeaderFade}`}>
-          <Link href="/search-result" className={styles.headerIconBtn} aria-label="Search">
+          <button
+            type="button"
+            className={styles.headerIconBtn}
+            aria-label="Search"
+            aria-expanded={searchOpen}
+            onClick={() => setSearchOpen(v => !v)}>
             <SearchIcon />
-          </Link>
+          </button>
           <LuxeAccountNav />
           <LuxeWishlistButton />
           <CartButton className={styles.headerRoundBtn} />
@@ -100,6 +107,8 @@ function HomeHeader() {
           </Link>
         ))}
       </nav>
+
+      <HeaderSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }

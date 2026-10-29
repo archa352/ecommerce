@@ -1,17 +1,6 @@
 'use client';
 
-import 'lightgallery/css/lightgallery.css';
-import 'lightgallery/css/lg-zoom.css';
-import 'lightgallery/css/lg-thumbnail.css';
-import 'lightgallery/css/lg-autoplay.css';
-import 'lightgallery/css/lg-fullscreen.css';
-import 'lightgallery/css/lg-share.css';
 
-import '../../public/assets/icons/iconly/index.min.css';
-import '../../public/assets/vendor/swiper/swiper-bundle.min.css';
-import '../../public/assets/vendor/animate/animate.css';
-import '../../public/assets/css/style.css';
-import '../../public/assets/css/skin/skin-1.css';
 
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';

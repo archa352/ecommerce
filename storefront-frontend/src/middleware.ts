@@ -14,16 +14,14 @@ import { SIGN_IN_PARAM } from '@/lib/auth/sign-in-url';
 /**
  * Routes that need a signed-in customer.
  *
- * /cart-items is deliberately absent: guests keep a cookie-backed cart that
+ * /cart is deliberately absent: guests keep a cookie-backed cart that
  * is merged after sign-in, so they have to be able to see it.
  */
 const CUSTOMER_PREFIXES = [
   '/account',
   '/checkout',
   '/order-confirmation',
-  '/my-account',
   '/my-orders',
-  '/check-out',
   '/order-success',
   '/invoice',
   '/payment-history',
@@ -62,7 +60,7 @@ export async function middleware(request: NextRequest) {
      arrives, `exp` from the API's when the token was signed. In the window
      between them the cookie was sent, so nothing rotated, and every call the
      page made came back 401 -- a signed-in customer rendered as a guest,
-     with /my-account bouncing them to sign-in. */
+     with /account bouncing them to sign-in. */
   if (isTokenExpired(accessToken) && refreshToken) {
     try {
       const tokens = await authApi.refresh(refreshToken);

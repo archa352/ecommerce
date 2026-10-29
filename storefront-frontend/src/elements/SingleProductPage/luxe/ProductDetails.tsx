@@ -411,7 +411,7 @@ export default function ProductDetails({ product, initialVariantId }: Props) {
         <Accordion title="Shipping & returns">
           <p className={styles.prose}>
             Delivery times, charges and how to return an item are set out in our{' '}
-            <Link href="/faqs-1">shipping &amp; returns policy</Link>.
+            <Link href="/faq">shipping &amp; returns policy</Link>.
           </p>
         </Accordion>
       </div>

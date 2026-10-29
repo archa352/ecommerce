@@ -39,7 +39,7 @@ async function mutate(apply: (token: string) => Promise<Wishlist>): Promise<Wish
 
   try {
     const wishlist = await apply(token);
-    revalidatePath('/shop-wishlist');
+    revalidatePath('/wishlist');
     return { wishlist, error: null };
   } catch (error) {
     return { wishlist: await getWishlist(), error: toMessage(error) };
@@ -75,7 +75,7 @@ export async function toggleWishlistByProduct(productId: string): Promise<Wishli
 
     if (existing) {
       const wishlist = await wishlistApi.removeItem(token, existing.id);
-      revalidatePath('/shop-wishlist');
+      revalidatePath('/wishlist');
       return { wishlist, error: null };
     }
 
@@ -84,7 +84,7 @@ export async function toggleWishlistByProduct(productId: string): Promise<Wishli
     if (!variant) return { wishlist: current, error: 'This product has no option to save.' };
 
     const wishlist = await wishlistApi.addItem(token, variant.id);
-    revalidatePath('/shop-wishlist');
+    revalidatePath('/wishlist');
     return { wishlist, error: null };
   } catch (error) {
     return { wishlist: await getWishlist(), error: toMessage(error) };

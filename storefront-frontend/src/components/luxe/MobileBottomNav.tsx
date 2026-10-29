@@ -9,7 +9,7 @@ import { useWishlist } from '@/context/WishlistContext';
 // Shared with the Product Listing page, which already needs it for its own
 // grid/card styles -- this reuses `.mobileBottomNav`/`.mobileNavItem`/etc.
 // from there rather than duplicating the CSS.
-import listingStyles from '@/app/(storefront)/(shop)/shop-list/_components/luxe/Listing.module.css';
+import listingStyles from '@/components/luxe/Listing.module.css';
 
 /**
  * App-style bottom tab bar (Home/Shop/Wishlist/Account), shown only on small

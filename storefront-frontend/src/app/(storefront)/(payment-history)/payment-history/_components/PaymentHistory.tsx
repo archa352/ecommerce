@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { formatMoney } from '@/lib/format';
 import type { PaymentStatus } from '@/types/orders';
 
+import styles from './PaymentHistory.module.css';
+
 function PackageSearchIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -43,31 +45,11 @@ interface StatusMeta {
 }
 
 const STATUS_META: Record<PaymentStatus, StatusMeta> = {
-  PAID: {
-    label: 'Paid',
-    dotClassName: 'myorderDotEmerald',
-    textClassName: 'myorderTextEmerald',
-  },
-  PENDING: {
-    label: 'Pending',
-    dotClassName: 'myorderDotAmber',
-    textClassName: 'myorderTextAmber',
-  },
-  PARTIALLY_PAID: {
-    label: 'Partially paid',
-    dotClassName: 'myorderDotAmber',
-    textClassName: 'myorderTextAmber',
-  },
-  FAILED: {
-    label: 'Failed',
-    dotClassName: 'myorderDotRose',
-    textClassName: 'myorderTextRose',
-  },
-  REFUNDED: {
-    label: 'Refunded',
-    dotClassName: 'myorderDotBlue',
-    textClassName: 'myorderTextBlue',
-  },
+  PAID: { label: 'Paid', dotClassName: styles.dotEmerald, textClassName: styles.textEmerald },
+  PENDING: { label: 'Pending', dotClassName: styles.dotAmber, textClassName: styles.textAmber },
+  PARTIALLY_PAID: { label: 'Partially paid', dotClassName: styles.dotAmber, textClassName: styles.textAmber },
+  FAILED: { label: 'Failed', dotClassName: styles.dotRose, textClassName: styles.textRose },
+  REFUNDED: { label: 'Refunded', dotClassName: styles.dotBlue, textClassName: styles.textBlue },
 };
 
 type FilterValue = 'all' | PaymentStatus;
@@ -80,16 +62,14 @@ export default function PaymentHistory({ payments: allPayments }: { payments: Pa
   const payments = filter === 'all' ? allPayments : allPayments.filter(p => p.status === filter);
 
   return (
-    <div className="myorderPage">
-      <div className="myorderContainer">
-        <div className="myorderHeader">
-          <div>
-            <h1 className="myorderTitle">Payments</h1>
-          </div>
+    <div className={styles.page}>
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>Payments</h1>
         </div>
 
         {payments.length !== 0 && (
-          <div className="myorderFilters">
+          <div className={styles.filters}>
             {FILTERS.map(f => {
               const active = filter === f;
               const label = f === 'all' ? 'All' : STATUS_META[f].label;
@@ -98,7 +78,7 @@ export default function PaymentHistory({ payments: allPayments }: { payments: Pa
                   key={f}
                   type="button"
                   onClick={() => setFilter(f)}
-                  className={`myorderFilterButton ${active ? 'myorderFilterButtonActive' : ''}`}>
+                  className={`${styles.filterButton} ${active ? styles.filterButtonActive : ''}`}>
                   {label}
                 </button>
               );
@@ -106,17 +86,16 @@ export default function PaymentHistory({ payments: allPayments }: { payments: Pa
           </div>
         )}
 
-        <div className="myorderTableCard">
-          {/* Horizontal scroll wrapper: keeps the table usable on narrow screens */}
-          <div className="myorderTableScroll">
-            <table className="myorderTable">
+        <div className={styles.tableCard}>
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
               <thead>
-                <tr className="myorderHeadRow">
-                  <th className="myorderTh">Order ID</th>
-                  <th className="myorderTh">Payment ID</th>
-                  <th className="myorderTh">Method</th>
-                  <th className="myorderTh">Amount</th>
-                  <th className="myorderTh">Status</th>
+                <tr className={styles.headRow}>
+                  <th className={styles.th}>Order ID</th>
+                  <th className={styles.th}>Payment ID</th>
+                  <th className={styles.th}>Method</th>
+                  <th className={styles.th}>Amount</th>
+                  <th className={styles.th}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,16 +103,16 @@ export default function PaymentHistory({ payments: allPayments }: { payments: Pa
                   const meta = STATUS_META[payment.status];
                   const isLast = i === payments.length - 1;
                   return (
-                    <tr key={payment.orderId} className={`myorderRow ${!isLast ? 'myorderRowBorder' : ''}`}>
-                      <td className="myorderTd myorderTdOrderId">{payment.orderNumber}</td>
-                      <td className="myorderTd myorderTdDate">{payment.paymentId}</td>
-                      <td className="myorderTd myorderTdDate">{payment.method}</td>
-                      <td className="myorderTd myorderTdAmount">
+                    <tr key={payment.orderId} className={`${styles.row} ${!isLast ? styles.rowBorder : ''}`}>
+                      <td className={`${styles.td} ${styles.tdOrderId}`}>{payment.orderNumber}</td>
+                      <td className={styles.td}>{payment.paymentId}</td>
+                      <td className={styles.td}>{payment.method}</td>
+                      <td className={`${styles.td} ${styles.tdAmount}`}>
                         {formatMoney(payment.amount, payment.currency)}
                       </td>
-                      <td className="myorderTd">
-                        <span className={`myorderStatusBadge ${meta.textClassName}`}>
-                          <span className={`myorderStatusDot ${meta.dotClassName}`} />
+                      <td className={styles.td}>
+                        <span className={`${styles.statusBadge} ${meta.textClassName}`}>
+                          <span className={`${styles.statusDot} ${meta.dotClassName}`} />
                           {meta.label}
                         </span>
                       </td>
@@ -145,9 +124,9 @@ export default function PaymentHistory({ payments: allPayments }: { payments: Pa
           </div>
 
           {payments.length === 0 && (
-            <div className="myorderEmptyState">
-              <PackageSearchIcon className="myorderEmptyIcon" />
-              <p className="myorderEmptyText">No payment transactions found.</p>
+            <div className={styles.emptyState}>
+              <PackageSearchIcon className={styles.emptyIcon} />
+              <p className={styles.emptyText}>No payment transactions found.</p>
             </div>
           )}
         </div>

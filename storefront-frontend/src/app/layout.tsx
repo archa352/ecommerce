@@ -1,9 +1,16 @@
-import type { Metadata } from 'next';
+import './globals.css';
+
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = {
   title: 'ZEEN',
   description: 'E-commerce storefront for ZEEN.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 /**

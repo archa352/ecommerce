@@ -25,7 +25,7 @@ function toState(error: unknown): CartActionState {
 }
 
 function refreshCartViews(): void {
-  revalidatePath('/cart-items');
+  revalidatePath('/cart');
   revalidatePath('/', 'layout');
 }
 
@@ -141,12 +141,12 @@ export async function toggleWishlist(
   try {
     if (itemId) {
       await wishlistApi.removeItem(token, itemId);
-      revalidatePath('/shop-wishlist');
+      revalidatePath('/wishlist');
       return { status: 'success', message: 'Removed from your wishlist' };
     }
 
     await wishlistApi.addItem(token, variantId);
-    revalidatePath('/shop-wishlist');
+    revalidatePath('/wishlist');
     return { status: 'success', message: 'Saved to your wishlist' };
   } catch (error) {
     return toState(error);
