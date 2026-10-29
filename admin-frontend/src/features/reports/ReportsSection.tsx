@@ -112,7 +112,7 @@ function Overview({ range, compare }: { range: Range; compare: boolean }) {
     {sales.loading ? <div className="panel state">Loading order-value trend…</div> : sales.data && <RevenuePanel rows={sales.data.rows} range={range} compare={compare} title="Booked order value" />}
     <div className="reports-secondary">
       <div className="panel">{sales.loading ? <p className="muted">Loading order trend…</p> : sales.error ? <p className="muted">Order trend unavailable.</p> : <TrendChart title="Orders trend" rows={sales.data?.rows ?? []} field="orders" />}</div>
-      <div className="panel"><h3>Prepaid vs COD orders</h3>{analytics.error ? <p className="muted">Payment split unavailable.</p> : analytics.loading ? <p className="muted">Loading…</p> : <DonutChart title="Order payment type" parts={[{ label: "Prepaid", value: Number(analytics.data?.prepaid_orders) || 0, color: "var(--accent)" }, { label: "COD", value: Number(analytics.data?.cod_orders) || 0, color: "#a59a8c" }]} />}</div>
+      <div className="panel"><h3>Prepaid vs COD orders</h3>{analytics.error ? <p className="muted">Payment split unavailable.</p> : analytics.loading ? <p className="muted">Loading…</p> : <DonutChart title="Order payment type" parts={[{ label: "Prepaid", value: Number(analytics.data?.prepaid_orders) || 0, color: "var(--accent)" }, { label: "COD", value: Number(analytics.data?.cod_orders) || 0, color: "var(--chart-secondary)" }]} />}</div>
       <div className="panel"><h3>Top-performing products</h3>{analytics.error ? <p className="muted">Product ranking unavailable.</p> : analytics.loading ? <p className="muted">Loading…</p> : <BarChart title="Top products by revenue" rows={analytics.data?.top_products ?? []} labelKey="product_name" valueKey="net_sales" currency />}</div>
       <div className="panel"><h3>New vs returning customers</h3>{analytics.error ? <p className="muted">Customer split unavailable.</p> : analytics.loading ? <p className="muted">Loading…</p> : <BarChart title="Customers who ordered" rows={[{ name: "New", count: analytics.data?.new_customers ?? 0 }, { name: "Returning", count: analytics.data?.returning_customers ?? 0 }]} labelKey="name" valueKey="count" />}</div>
     </div>
@@ -241,7 +241,7 @@ function PaymentSplit({ range }: { range: Range }) {
   const report = useApi(() => getReport<Row>("analytics", range), [range.start_date, range.end_date]);
   const d = report.data;
   return <div className="panel"><h3>Prepaid vs COD orders · selected period</h3><p className="muted">Order payment type, not card, UPI, bank or settled cash.</p>
-    {report.error ? <p role="alert" className="status status-error">{report.error}</p> : report.loading ? <div className="state">Loading…</div> : <DonutChart title="Prepaid and COD order distribution" parts={[{ label: "Prepaid", value: Number(d?.prepaid_orders) || 0, color: "var(--accent)" }, { label: "COD", value: Number(d?.cod_orders) || 0, color: "#a59a8c" }]} />}
+    {report.error ? <p role="alert" className="status status-error">{report.error}</p> : report.loading ? <div className="state">Loading…</div> : <DonutChart title="Prepaid and COD order distribution" parts={[{ label: "Prepaid", value: Number(d?.prepaid_orders) || 0, color: "var(--accent)" }, { label: "COD", value: Number(d?.cod_orders) || 0, color: "var(--chart-secondary)" }]} />}
   </div>;
 }
 function CodSummary({ range }: { range: Range }) {

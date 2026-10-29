@@ -27,7 +27,7 @@
 .admin-detail-page .muted { font-size: 12px; }
 .admin-detail-page :is(th, td) { padding: 8px 9px; font-size: 12px; }
 .admin-detail-page .detail-table-panel .table-wrap { max-height: min(29dvh, 265px); overflow: auto; overscroll-behavior: contain; min-width: 0; }
-.admin-detail-page .detail-table-panel .table-wrap th { position: sticky; top: 0; z-index: 1; background: #faf8f5; }
+.admin-detail-page .detail-table-panel .table-wrap th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 .admin-detail-page .detail-scroll-list { max-height: min(20dvh, 180px); overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .admin-detail-page .pagination { margin-top: 0; padding-top: 8px; border-top: 1px solid var(--line); }
 

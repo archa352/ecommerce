@@ -11,7 +11,7 @@ export function TrendChart({ title, rows, field, compare, currency = false }: { 
   const x = (i: number) => 46 + (count > 1 ? i / (count - 1) * 590 : 295);
   const y = (value: number) => 152 - value / max * 112;
   const series: Series[] = [{ name: "Selected period", values: current, color: "var(--accent)" }];
-  if (compare) series.push({ name: "Previous period", values: previous, color: "#a59a8c" });
+  if (compare) series.push({ name: "Previous period", values: previous, color: "var(--chart-secondary)" });
   return <figure className="report-chart" aria-label={title}>
     <figcaption>{title}</figcaption>
     {!count ? <div className="report-chart-empty">No recorded data in this period.</div> : <>
