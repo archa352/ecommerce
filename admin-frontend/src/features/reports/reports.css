@@ -34,7 +34,7 @@
 .zeen-reports .filters input { max-width: 270px; }
 .zeen-reports .filters select { max-width: 160px; }
 .zeen-reports .table-wrap { max-height: min(38vh, 360px); overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
-.zeen-reports .table-wrap th { position: sticky; top: 0; z-index: 1; background: #fdfbf8; }
+.zeen-reports .table-wrap th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 .zeen-reports th, .zeen-reports td { padding: 8px 10px; font-size: 12px; }
 .zeen-reports .report-customer-id { display: inline-block; max-width: 150px; overflow-wrap: anywhere; font-size: 11px; line-height: 1.3; }
 .zeen-reports .pagination { margin-top: 8px; }
