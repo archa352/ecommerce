@@ -27,8 +27,8 @@ function useAutoCarousel(direction: 1 | -1, itemCount: number) {
   const trackRef = useRef<HTMLDivElement>(null);
   const loopStart = useRef(0);
   const loopEnd = useRef(0);
+  const position = useRef(0);
   const visible = useRef(false);
-  const hovered = useRef(false);
   const interacting = useRef(false);
   const lastInputAt = useRef(0);
   const drag = useRef<{ pointerId: number; x: number; scrollLeft: number; moved: boolean } | null>(null);
@@ -41,10 +41,14 @@ function useAutoCarousel(direction: 1 | -1, itemCount: number) {
     const originalStart = track.querySelector<HTMLElement>('[data-cycle-start="3"]');
     const followingStart = track.querySelector<HTMLElement>('[data-cycle-start="4"]');
     if (!originalStart || !followingStart) return;
-    const width = followingStart.offsetLeft - originalStart.offsetLeft;
-    loopStart.current = originalStart.offsetLeft;
+    const trackLeft = track.getBoundingClientRect().left;
+    const originalLeft = originalStart.getBoundingClientRect().left;
+    const followingLeft = followingStart.getBoundingClientRect().left;
+    const width = followingLeft - originalLeft;
+    loopStart.current = originalLeft - trackLeft + track.scrollLeft;
     loopEnd.current = loopStart.current + width;
-    track.scrollLeft = loopStart.current;
+    position.current = loopStart.current;
+    track.scrollLeft = position.current;
   }, []);
 
   useEffect(() => {
@@ -60,25 +64,32 @@ function useAutoCarousel(direction: 1 | -1, itemCount: number) {
       previous = 0;
     };
     const tick = (now: number) => {
-      if (previous && visible.current && !hovered.current && !interacting.current &&
+      const trackElement = trackRef.current;
+      if (previous && visible.current && !trackElement?.matches(':hover, :focus-within') && !interacting.current &&
           !reduceMotion.current && now - lastInputAt.current > 900 && loopEnd.current > loopStart.current) {
-        const trackElement = trackRef.current;
         if (trackElement) {
           const delta = Math.min(now - previous, 40) * CAROUSEL_SPEED / 1000;
-          trackElement.scrollLeft += direction * delta;
           const cycle = loopEnd.current - loopStart.current;
-          if (trackElement.scrollLeft < loopStart.current || trackElement.scrollLeft >= loopEnd.current) {
-            const offset = trackElement.scrollLeft - loopStart.current;
+          let next = position.current + direction * delta;
+          if (next < loopStart.current || next >= loopEnd.current) {
+            const offset = next - loopStart.current;
             const wrappedOffset = ((offset % cycle) + cycle) % cycle;
-            trackElement.scrollLeft = loopStart.current + wrappedOffset;
+            next = loopStart.current + wrappedOffset;
           }
+          position.current = next;
+          trackElement.scrollLeft = next;
         }
+      } else if (trackElement) {
+        position.current = trackElement.scrollLeft;
       }
       previous = now;
       frame = requestAnimationFrame(tick);
     };
     const start = () => {
-      if (!frame && visible.current && !reduceMotion.current) frame = requestAnimationFrame(tick);
+      if (!frame && visible.current && !reduceMotion.current) {
+        position.current = track.scrollLeft;
+        frame = requestAnimationFrame(tick);
+      }
     };
     const onMotionChange = () => {
       reduceMotion.current = motionQuery.matches;
@@ -149,8 +160,8 @@ function useAutoCarousel(direction: 1 | -1, itemCount: number) {
       onPointerDown, onPointerMove, onPointerUp,
       onPointerCancel: onPointerUp,
       onClickCapture,
-      onMouseEnter: () => { hovered.current = true; },
-      onMouseLeave: () => { hovered.current = false; interact(); },
+      onMouseLeave: interact,
+      onBlur: interact,
       onWheel: interact,
       onTouchStart: () => { interacting.current = true; interact(); },
       onTouchEnd: () => { interacting.current = false; interact(); },
