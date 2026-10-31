@@ -11,7 +11,6 @@ from __future__ import annotations
 from enum import Enum
 
 
-
 class Permission(str, Enum):
     DASHBOARD_VIEW = "dashboard.view"
     ORDERS_VIEW = "orders.view"

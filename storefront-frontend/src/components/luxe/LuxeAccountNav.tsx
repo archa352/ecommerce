@@ -50,7 +50,7 @@ export default function LuxeAccountNav() {
         aria-haspopup={user ? 'menu' : undefined}
         aria-expanded={user ? open : undefined}
         onClick={() => (user ? setOpen(value => !value) : openSignIn())}>
-        <UserIcon size={18} />
+        <UserIcon size={20} />
       </button>
 
       {user && open && (

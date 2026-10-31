@@ -31,7 +31,7 @@ function CartButton({ className }: { className: string }) {
       className={className}
       data-cart-trigger
       aria-label={itemCount > 0 ? `Cart, ${itemCount} items` : 'My cart'}>
-      <BagIcon size={17} />
+      <BagIcon size={20} />
       {itemCount > 0 && (
         <span className={styles.headerBadge} aria-hidden="true">
           {itemCount > 99 ? '99+' : itemCount}
@@ -69,12 +69,11 @@ function HomeHeader() {
         <button
           type="button"
           className={styles.homeMenuBtn}
-          aria-label="Toggle menu"
+          aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileNavOpen}
           onClick={() => setMobileNavOpen(v => !v)}
         >
-          {mobileNavOpen ? <CloseIcon size={18} /> : <MenuIcon size={18} />}
-          Menu
+          {mobileNavOpen ? <CloseIcon size={21} /> : <MenuIcon size={21} />}
         </button>
 
         <Link href="/" className={`${styles.homeLogo} ${styles.homeHeaderFade}`} aria-label="ZEEN home" data-home-logo>
@@ -89,7 +88,7 @@ function HomeHeader() {
             aria-label="Search"
             aria-expanded={searchOpen}
             onClick={() => setSearchOpen(v => !v)}>
-            <SearchIcon />
+            <SearchIcon size={20} />
           </button>
           <LuxeAccountNav />
           <LuxeWishlistButton />

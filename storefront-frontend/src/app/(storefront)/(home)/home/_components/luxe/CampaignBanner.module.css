@@ -52,6 +52,8 @@
   --art-h: calc(100vw / 3.252);
   --band: clamp(124px, 9vw, 150px);
   position: relative;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   isolation: isolate;
   height: calc(var(--art-h) + var(--band));
@@ -196,7 +198,7 @@
   }
 
   .heroArtFallback {
-    aspect-ratio: 1600 / 492;
+    aspect-ratio: 16 / 9;
   }
 
   .heroArtCms {

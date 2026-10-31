@@ -2,6 +2,8 @@
 
 .split {
   position: relative;
+  width: 100%;
+  min-width: 0;
   height: 320vh;
   height: 320svh;
   background: var(--zeen-ivory);

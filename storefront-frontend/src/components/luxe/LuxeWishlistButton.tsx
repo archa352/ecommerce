@@ -22,7 +22,7 @@ export default function LuxeWishlistButton() {
         className={styles.headerRoundBtn}
         aria-label="Wishlist"
         onClick={() => openSignIn('/wishlist')}>
-        <HeartIcon />
+        <HeartIcon size={20} />
       </button>
     );
   }
@@ -32,7 +32,7 @@ export default function LuxeWishlistButton() {
       href="/wishlist"
       className={styles.headerRoundBtn}
       aria-label={count > 0 ? `Wishlist, ${count} saved` : 'Wishlist'}>
-      <HeartIcon />
+      <HeartIcon size={20} />
       {count > 0 && (
         <span className={styles.headerBadge} aria-hidden="true">
           {count > 99 ? '99+' : count}
